@@ -1,4 +1,5 @@
 import { assertReadOnlySql } from '../../context/connections/read-only-sql.js';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 import {
@@ -26,7 +27,6 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import sql from 'mssql';
-import { KtxSqlServerDialect } from './dialect.js';
 
 export interface KtxSqlServerConnectionConfig {
   driver?: string;
@@ -156,6 +156,21 @@ function tableScopeSql(
     return `@${key}`;
   });
   return { clause: `AND ${columnExpression} IN (${placeholders.join(', ')})`, params };
+}
+
+/** @internal */
+export function prepareSqlServerReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: Record<string, unknown> } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  let parameterizedQuery = sql;
+  for (const key of Object.keys(params)) {
+    parameterizedQuery = parameterizedQuery.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
+  }
+  return { sql: parameterizedQuery, params };
 }
 
 class DefaultSqlServerPoolFactory implements KtxSqlServerPoolFactory {
@@ -349,7 +364,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
   private readonly poolFactory: KtxSqlServerPoolFactory;
   private readonly endpointResolver?: KtxSqlServerEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxSqlServerDialect();
+  private readonly dialect = getDialectForDriver('sqlserver');
   private pool: KtxSqlServerPool | null = null;
   private resolvedEndpoint: KtxSqlServerResolvedEndpoint | null = null;
 
@@ -427,7 +442,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxSqlServerReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForSqlServerExecution(input.sql, input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareSqlServerReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }
@@ -517,6 +532,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
       params,
     );
     return rows.map((row) => ({
+      catalog: this.poolConfig.database,
       schema: row.schema_name,
       name: row.table_name,
       kind: row.table_type === 'VIEW' ? ('view' as const) : ('table' as const),

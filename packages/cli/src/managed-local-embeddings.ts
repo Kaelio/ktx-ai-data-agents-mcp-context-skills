@@ -1,5 +1,6 @@
 import type { KtxEmbeddingConfig } from './llm/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { writePrefixedLines } from './clack.js';
 import {
   ensureManagedPythonCommandRuntime,
   type KtxManagedPythonInstallPolicy,
@@ -73,7 +74,7 @@ export async function ensureManagedLocalEmbeddingsDaemon(
   });
 
   const verb = daemon.status === 'started' ? 'Started' : 'Using';
-  options.io.stderr.write(`${verb} KTX daemon: ${daemon.baseUrl}\n`);
+  writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} KTX daemon: ${daemon.baseUrl}`);
 
   return {
     baseUrl: daemon.baseUrl,

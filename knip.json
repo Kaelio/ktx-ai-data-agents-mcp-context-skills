@@ -14,8 +14,8 @@
         "src/telemetry/schema-writer.ts!",
         "src/telemetry/index.ts!",
         "scripts/**/*.mjs",
-        "src/**/*.test-utils.ts",
-        "src/**/acceptance-fixtures.ts",
+        "test/**/*.test-utils.ts",
+        "test/**/acceptance-fixtures.ts",
         "src/context/scan/relationship-benchmarks.ts!",
         "src/context/scan/relationship-benchmark-report.ts!"
       ]

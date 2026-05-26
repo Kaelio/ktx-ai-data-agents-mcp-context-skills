@@ -89,3 +89,41 @@ enough reason to fix it even when the local code "works."
   (`loadX` vs `loadHigherX`, `createY` vs `createDefaultY`, `xClient`
   vs `xService`), assume callers will pick the wrong one. Unify, or
   document inline why both must exist.
+
+## Dispatch and contract leaks across per-variant layers
+
+Layers with multiple per-variant implementations (warehouse drivers,
+dialects, LLM providers, ingest adapters, historic-SQL probes) drift
+toward parallel switches and informal contracts. The patterns below
+look locally reasonable per file but multiply with the number of
+variants times the number of consumers — every fix has to be applied
+N times, and silent drift between variants is invisible until a user
+hits it.
+
+- **MUST NOT**: Maintain two or more files that switch on the same
+  enum or string union to dispatch to per-variant behavior. Promote
+  the dispatch to a single registry table keyed by the union, exposed
+  through one resolution function. If you find yourself writing the
+  third such switch, the second one was already a bug.
+- **MUST**: When every variant of an abstraction implements the same
+  method, the method belongs on the shared interface. An informal
+  contract that every implementation happens to satisfy is a leak
+  waiting to happen — callers will reach for the concrete class
+  instead of the contract, and the next variant added will silently
+  forget to implement it.
+- **MUST**: When a layer has both a thin shared interface and rich
+  per-variant concrete classes, they must agree. Either widen the
+  interface so callers never need the concrete class, or make the
+  concrete class private (test-only `/** @internal */` JSDoc plus a
+  boundary check in `scripts/check-boundaries.mjs`). A class that is
+  public AND has methods the interface does not expose is the exact
+  configuration that produces leaks.
+
+The warehouse driver / dialect layer in
+`packages/cli/src/connectors/<driver>/` plus
+`packages/cli/src/context/connections/{dialects,drivers}.ts` is the
+canonical worked example: per-driver dialect classes carry
+`/** @internal */`, `scripts/check-boundaries.mjs` enforces the import
+boundary, and dispatch lives in the two registry files. Apply the
+same shape to any other per-variant layer that grows beyond two
+implementations.

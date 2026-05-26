@@ -137,8 +137,10 @@ Enabling query history makes deep ingest readiness matter for later
 When query history is enabled for PostgreSQL, Snowflake, or BigQuery,
 `ktx setup` runs a non-blocking readiness probe after the connection test
 passes. A failed probe still writes setup changes, prints the warehouse-specific
-grant or extension remediation, and leaves query-history ingest disabled until
-you fix the prerequisite.
+grant or extension remediation, and skips query-history processing until you
+fix the prerequisite. If the later schema-context build also fails, interactive
+setup offers **Disable query history and retry** so you can finish database
+setup with `connections.<id>.context.queryHistory.enabled: false`.
 
 For BigQuery, the remediation tells you to grant `roles/bigquery.resourceViewer`
 on the BigQuery project, or grant a custom role that contains

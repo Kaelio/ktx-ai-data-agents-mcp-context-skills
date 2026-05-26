@@ -68,6 +68,13 @@ const contextProductionLlmBoundaryPatterns = [
   },
 ];
 
+const concreteDialectImportPatterns = [
+  /from\s+['"][^'"]*connectors\/[^'"]+\/dialect\.js['"]/,
+  /import\s*\(\s*['"][^'"]*connectors\/[^'"]+\/dialect\.js['"]\s*\)/,
+  /from\s+['"]\.\/dialect\.js['"]/,
+  /import\s*\(\s*['"]\.\/dialect\.js['"]\s*\)/,
+];
+
 function normalizePath(filePath) {
   return filePath.split(path.sep).join('/');
 }
@@ -97,6 +104,13 @@ function isTestSource(relativePath) {
 
 function scansForContextProductionLlmBoundaries(relativePath) {
   return scansForLlmBoundaries(relativePath) && !isTestSource(relativePath);
+}
+
+function scansForConcreteDialectImportBoundaries(relativePath) {
+  return (
+    relativePath.startsWith('packages/cli/src/context/scan/') ||
+    /^packages\/cli\/src\/connectors\/[^/]+\/connector\.ts$/.test(relativePath)
+  );
 }
 
 function scansForForbiddenIdentifiers(relativePath) {
@@ -146,6 +160,19 @@ export function scanFileContent(relativePath, content) {
           file: normalizedPath,
           kind: 'llm-boundary',
           message: `Forbidden ${llmBoundaryPattern.label}; use getModel(role) inside context modules`,
+        });
+      }
+    }
+  }
+
+  if (scansForConcreteDialectImportBoundaries(normalizedPath)) {
+    for (const pattern of concreteDialectImportPatterns) {
+      if (pattern.test(content)) {
+        violations.push({
+          file: normalizedPath,
+          kind: 'dialect-boundary',
+          message:
+            'Forbidden concrete connector dialect import; use getDialectForDriver() from context/connections/dialects.ts',
         });
       }
     }

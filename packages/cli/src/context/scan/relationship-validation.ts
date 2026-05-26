@@ -1,13 +1,12 @@
+import type { KtxDialect } from '../connections/dialects.js';
 import type { KtxRelationshipEndpoint } from './enrichment-types.js';
 import { applyKtxRelationshipValidationBudget, type KtxRelationshipValidationBudget } from './relationship-budget.js';
 import type { KtxRelationshipDiscoveryCandidate } from './relationship-candidates.js';
 import {
-  formatKtxRelationshipTableRef,
   type KtxRelationshipProfileArtifact,
   type KtxRelationshipReadOnlyExecutor,
-  quoteKtxRelationshipIdentifier,
 } from './relationship-profiling.js';
-import type { KtxConnectionDriver, KtxQueryResult, KtxScanContext } from './types.js';
+import type { KtxQueryResult, KtxScanContext, KtxTableRef } from './types.js';
 
 type KtxValidatedRelationshipStatus = 'accepted' | 'review' | 'rejected';
 
@@ -45,7 +44,7 @@ export interface KtxValidatedRelationshipDiscoveryCandidate
 
 export interface ValidateKtxRelationshipDiscoveryCandidatesInput {
   connectionId: string;
-  driver: KtxConnectionDriver;
+  dialect: KtxDialect;
   candidates: readonly KtxRelationshipDiscoveryCandidate[];
   profiles: KtxRelationshipProfileArtifact;
   executor: KtxRelationshipReadOnlyExecutor | null;
@@ -104,38 +103,28 @@ function numberAt(result: KtxQueryResult, header: string): number {
   return 0;
 }
 
-function limitSql(driver: KtxConnectionDriver, limit: number): string {
-  if (driver === 'sqlserver') {
-    return '';
-  }
-  return ` LIMIT ${Math.max(1, Math.floor(limit))}`;
-}
-
-function topSql(driver: KtxConnectionDriver, limit: number): string {
-  if (driver === 'sqlserver') {
-    return ` TOP (${Math.max(1, Math.floor(limit))})`;
-  }
-  return '';
+function sqlSuffix(fragment: string): string {
+  return fragment ? ` ${fragment}` : '';
 }
 
 function buildCoverageSql(input: {
-  driver: KtxConnectionDriver;
-  childTable: string;
+  dialect: KtxDialect;
+  childTable: KtxTableRef;
   childColumn: string;
-  parentTable: string;
+  parentTable: KtxTableRef;
   parentColumn: string;
   maxDistinctSourceValues: number;
 }): string {
-  const childTable = formatKtxRelationshipTableRef(input.driver, { catalog: null, db: null, name: input.childTable });
-  const parentTable = formatKtxRelationshipTableRef(input.driver, { catalog: null, db: null, name: input.parentTable });
-  const childColumn = quoteKtxRelationshipIdentifier(input.driver, input.childColumn);
-  const parentColumn = quoteKtxRelationshipIdentifier(input.driver, input.parentColumn);
-  const limit = limitSql(input.driver, input.maxDistinctSourceValues);
-  const top = topSql(input.driver, input.maxDistinctSourceValues);
+  const childTable = input.dialect.formatTableName(input.childTable);
+  const parentTable = input.dialect.formatTableName(input.parentTable);
+  const childColumn = input.dialect.quoteIdentifier(input.childColumn);
+  const parentColumn = input.dialect.quoteIdentifier(input.parentColumn);
+  const limit = sqlSuffix(input.dialect.getLimitOffsetClause(input.maxDistinctSourceValues));
+  const top = input.dialect.getTopClause(input.maxDistinctSourceValues);
 
   return [
     'WITH child_values AS (',
-    `SELECT DISTINCT${top} ${childColumn} AS value FROM ${childTable} WHERE ${childColumn} IS NOT NULL${limit}`,
+    `SELECT DISTINCT${top ? ` ${top}` : ''} ${childColumn} AS value FROM ${childTable} WHERE ${childColumn} IS NOT NULL${limit}`,
     '), parent_values AS (',
     `SELECT DISTINCT ${parentColumn} AS value FROM ${parentTable} WHERE ${parentColumn} IS NOT NULL`,
     ')',
@@ -271,10 +260,10 @@ export async function validateKtxRelationshipDiscoveryCandidates(
       {
         connectionId: input.connectionId,
         sql: buildCoverageSql({
-          driver: input.driver,
-          childTable: candidate.from.table.name,
+          dialect: input.dialect,
+          childTable: candidate.from.table,
           childColumn: sourceColumn,
-          parentTable: candidate.to.table.name,
+          parentTable: candidate.to.table,
           parentColumn: targetColumn,
           maxDistinctSourceValues: settings.maxDistinctSourceValues,
         }),

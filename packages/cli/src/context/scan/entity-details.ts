@@ -1,7 +1,7 @@
 import type { KtxLocalProject } from '../../context/project/project.js';
+import { getDialectForDriver, type KtxDialect } from '../connections/dialects.js';
 import { readLocalScanStructuralSnapshot } from './local-structural-artifacts.js';
 import type {
-  KtxConnectionDriver,
   KtxScanReport,
   KtxSchemaColumn,
   KtxSchemaSnapshot,
@@ -88,59 +88,23 @@ function refsEqual(left: KtxTableRef, right: KtxTableRef): boolean {
   );
 }
 
-function cleanIdentifierPart(part: string): string {
-  return part.trim().replace(/^["'`\[]|["'`\]]$/g, '');
-}
-
-function splitDisplay(display: string): string[] {
-  return display
-    .trim()
-    .split('.')
-    .map(cleanIdentifierPart)
-    .filter(Boolean);
-}
-
-function displayForTable(driver: KtxConnectionDriver, table: KtxTableRef): string {
-  if (driver === 'sqlite') {
-    return table.name;
-  }
-  return [table.catalog, table.db, table.name].filter((part): part is string => Boolean(part)).join('.');
-}
-
 function tableRef(table: KtxSchemaTable): KtxTableRef {
   return { catalog: table.catalog, db: table.db, name: table.name };
 }
 
 function candidateList(
-  driver: KtxConnectionDriver,
+  dialect: KtxDialect,
   tables: KtxSchemaTable[],
 ): Array<{ tableRef: KtxTableRef; display: string }> {
   return tables
     .map((table) => ({
       tableRef: tableRef(table),
-      display: displayForTable(driver, table),
+      display: dialect.formatDisplayRef(table),
     }))
     .sort((left, right) => left.display.localeCompare(right.display));
 }
 
-function parseDisplayRef(driver: KtxConnectionDriver, display: string): KtxTableRef | null {
-  const parts = splitDisplay(display);
-  if (driver === 'sqlite') {
-    return parts.length === 1 ? { catalog: null, db: null, name: parts[0]! } : null;
-  }
-  if (driver === 'bigquery' || driver === 'snowflake' || driver === 'sqlserver') {
-    return parts.length === 3 ? { catalog: parts[0]!, db: parts[1]!, name: parts[2]! } : null;
-  }
-  if (parts.length === 2) {
-    return { catalog: null, db: parts[0]!, name: parts[1]! };
-  }
-  if (parts.length === 3) {
-    return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
-  }
-  return null;
-}
-
-function resolveTable(snapshot: KtxSchemaSnapshot, input: KtxEntityDetailsTableInput): ResolveResult {
+function resolveTable(snapshot: KtxSchemaSnapshot, input: KtxEntityDetailsTableInput, dialect: KtxDialect): ResolveResult {
   if (typeof input !== 'string') {
     const table = snapshot.tables.find((candidate) => refsEqual(candidate, input)) ?? null;
     return table
@@ -149,13 +113,13 @@ function resolveTable(snapshot: KtxSchemaSnapshot, input: KtxEntityDetailsTableI
           table: null,
           error: {
             code: 'table_not_found',
-            message: `Table not found in latest scan: ${displayForTable(snapshot.driver, input)}`,
-            candidates: candidateList(snapshot.driver, snapshot.tables),
+            message: `Table not found in latest scan: ${dialect.formatDisplayRef(input)}`,
+            candidates: candidateList(dialect, snapshot.tables),
           },
         };
   }
 
-  const parsed = parseDisplayRef(snapshot.driver, input);
+  const parsed = dialect.parseDisplayRef(input);
   if (parsed) {
     const table = snapshot.tables.find((candidate) => refsEqual(candidate, parsed)) ?? null;
     return table
@@ -165,7 +129,7 @@ function resolveTable(snapshot: KtxSchemaSnapshot, input: KtxEntityDetailsTableI
           error: {
             code: 'table_not_found',
             message: `Table not found in latest scan: ${input}`,
-            candidates: candidateList(snapshot.driver, snapshot.tables),
+            candidates: candidateList(dialect, snapshot.tables),
           },
         };
   }
@@ -180,7 +144,7 @@ function resolveTable(snapshot: KtxSchemaSnapshot, input: KtxEntityDetailsTableI
       error: {
         code: 'ambiguous_table',
         message: `Table name "${input}" is ambiguous across schemas/catalogs; pass a structured table ref.`,
-        candidates: candidateList(snapshot.driver, byName),
+        candidates: candidateList(dialect, byName),
       },
     };
   }
@@ -189,7 +153,7 @@ function resolveTable(snapshot: KtxSchemaSnapshot, input: KtxEntityDetailsTableI
     error: {
       code: 'table_not_found',
       message: `Table not found in latest scan: ${input}`,
-      candidates: candidateList(snapshot.driver, snapshot.tables),
+      candidates: candidateList(dialect, snapshot.tables),
     },
   };
 }
@@ -261,9 +225,10 @@ export function createKtxEntityDetailsService(project: KtxLocalProject) {
       }
 
       const info = snapshotInfo(scan.report, scan.snapshot);
+      const dialect = getDialectForDriver(scan.snapshot.driver);
       const results: KtxEntityDetailsResponse['results'] = [];
       for (const entity of input.entities) {
-        const resolved = resolveTable(scan.snapshot, entity.table);
+        const resolved = resolveTable(scan.snapshot, entity.table, dialect);
         if (!resolved.table) {
           results.push({
             ok: false,
@@ -289,7 +254,7 @@ export function createKtxEntityDetailsService(project: KtxLocalProject) {
             snapshot: info,
             error: {
               code: 'column_not_found',
-              message: `Column(s) not found on ${displayForTable(scan.snapshot.driver, resolved.table)}: ${missing.join(', ')}`,
+              message: `Column(s) not found on ${dialect.formatDisplayRef(resolved.table)}: ${missing.join(', ')}`,
               candidates: resolved.table.columns.map((column) => column.name),
             },
           });
@@ -300,7 +265,7 @@ export function createKtxEntityDetailsService(project: KtxLocalProject) {
           ok: true,
           connectionId: input.connectionId,
           tableRef: tableRef(resolved.table),
-          display: displayForTable(scan.snapshot.driver, resolved.table),
+          display: dialect.formatDisplayRef(resolved.table),
           kind: resolved.table.kind,
           comment: resolved.table.comment,
           estimatedRows: resolved.table.estimatedRows,

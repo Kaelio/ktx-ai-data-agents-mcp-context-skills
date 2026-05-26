@@ -2,6 +2,7 @@ import mysql, { type FieldPacket, type Pool, type RowDataPacket } from 'mysql2/p
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import {
   constraintDiscoveryWarning,
@@ -30,7 +31,6 @@ import {
   type KtxTableSampleInput,
   type KtxTableSampleResult,
 } from '../../context/scan/types.js';
-import { KtxMysqlDialect } from './dialect.js';
 
 export interface KtxMysqlConnectionConfig {
   driver?: string;
@@ -303,6 +303,25 @@ function queryParams(params: Record<string, unknown> | unknown[] | undefined): u
   return Array.isArray(params) ? params : Object.values(params);
 }
 
+/** @internal */
+export function prepareMysqlReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: unknown[] } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  const values: unknown[] = [];
+  const parameterizedQuery = sql.replace(/:([A-Za-z_][A-Za-z0-9_]*)\b/g, (placeholder, key: string) => {
+    if (!(key in params)) {
+      return placeholder;
+    }
+    values.push(params[key]);
+    return '?';
+  });
+  return { sql: parameterizedQuery, params: values };
+}
+
 export function isKtxMysqlConnectionConfig(
   connection: KtxMysqlConnectionConfig | undefined,
 ): connection is KtxMysqlConnectionConfig {
@@ -376,7 +395,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
   private readonly poolFactory: KtxMysqlPoolFactory;
   private readonly endpointResolver?: KtxMysqlEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxMysqlDialect();
+  private readonly dialect = getDialectForDriver('mysql');
   private pool: KtxMysqlPool | null = null;
   private resolvedEndpoint: KtxMysqlResolvedEndpoint | null = null;
 
@@ -550,7 +569,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
     const prepared = Array.isArray(input.params)
       ? { sql: limitedSql, params: input.params }
-      : this.dialect.prepareQuery(limitedSql, input.params);
+      : prepareMysqlReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }
@@ -625,6 +644,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
       filterSchemas,
     );
     return rows.map((row) => ({
+      catalog: null,
       schema: row.TABLE_SCHEMA,
       name: row.TABLE_NAME,
       kind: row.TABLE_TYPE === 'VIEW' ? ('view' as const) : ('table' as const),

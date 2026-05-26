@@ -14,7 +14,7 @@ import {
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const ktxRoot = resolve(scriptDir, '..');
-const fixtureRoot = join(ktxRoot, 'packages/cli/src/test/fixtures/relationship-benchmarks');
+const fixtureRoot = join(ktxRoot, 'packages/cli/test/fixtures/relationship-benchmarks');
 
 async function buildDetector() {
   const backend = process.env.KTX_BENCHMARK_LLM_BACKEND;

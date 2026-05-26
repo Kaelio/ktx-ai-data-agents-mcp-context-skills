@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import { describeError } from './error-message.js';
 import {
   installManagedPythonRuntime,
   managedPythonDaemonLayout,
@@ -15,6 +16,17 @@ import {
   type ManagedPythonRuntimeInstallResult,
 } from './managed-python-runtime.js';
 import { sanitizeChildProxyEnv } from './proxy-env.js';
+
+export class ManagedPythonDaemonStartError extends Error {
+  readonly detail: string;
+  readonly stderrLog: string;
+  constructor(detail: string, stderrLog: string) {
+    super(`KTX daemon failed to start: ${detail}. stderr: ${stderrLog}`);
+    this.name = 'ManagedPythonDaemonStartError';
+    this.detail = detail;
+    this.stderrLog = stderrLog;
+  }
+}
 
 export interface ManagedPythonDaemonState {
   schemaVersion: 1;
@@ -237,7 +249,7 @@ async function healthOk(input: {
     }
     return { ok: true };
   } catch (error) {
-    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+    return { ok: false, detail: describeError(error) };
   }
 }
 
@@ -328,7 +340,7 @@ async function waitForHealth(input: {
     return;
   }
   lastDetail = finalHealth.detail;
-  throw new Error(`KTX daemon failed to start: ${lastDetail}. stderr: ${input.state.stderrLog}`);
+  throw new ManagedPythonDaemonStartError(lastDetail, input.state.stderrLog);
 }
 
 async function removeState(layout: ManagedPythonDaemonLayout): Promise<void> {
@@ -721,13 +733,21 @@ export async function startManagedPythonDaemon(
       stdoutLog: layout.daemonStdoutPath,
       stderrLog: layout.daemonStderrPath,
     };
-    await waitForHealth({
-      state,
-      cliVersion: options.cliVersion,
-      fetch: fetchImpl,
-      timeoutMs: options.startupTimeoutMs ?? 10_000,
-      pollIntervalMs: options.pollIntervalMs ?? 100,
-    });
+    try {
+      await waitForHealth({
+        state,
+        cliVersion: options.cliVersion,
+        fetch: fetchImpl,
+        timeoutMs: options.startupTimeoutMs ?? 30_000,
+        pollIntervalMs: options.pollIntervalMs ?? 100,
+      });
+    } catch (error) {
+      if (processAlive(state.pid)) {
+        killProcess(state.pid);
+      }
+      await removeState(layout);
+      throw error;
+    }
     await writeState(layout.daemonStatePath, state);
     return { status: 'started', layout, state, baseUrl: baseUrl(state) };
   } finally {

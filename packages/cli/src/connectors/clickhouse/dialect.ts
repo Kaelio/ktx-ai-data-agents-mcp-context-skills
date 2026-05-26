@@ -1,9 +1,18 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  limitOffsetClause,
+  parseDialectDisplayRef,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type ClickHouseTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxClickHouseDialect {
-  readonly type = 'clickhouse';
+/** @internal */
+export class KtxClickHouseDialect implements KtxDialect {
+  readonly type = 'clickhouse' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     date: 'time',
@@ -45,9 +54,19 @@ export class KtxClickHouseDialect {
   }
 
   formatTableName(table: ClickHouseTableNameRef): string {
-    return table.db
-      ? `${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`
-      : this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'ansi');
+  }
+
+  formatDisplayRef(table: ClickHouseTableNameRef): string {
+    return formatDialectDisplayRef(table, 'ansi');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'ansi');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('ansi');
   }
 
   mapDataType(nativeType: string): string {
@@ -97,29 +116,6 @@ export class KtxClickHouseDialect {
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND trim(toString(${quotedColumn})) != '' LIMIT ${limit}`;
   }
 
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: Record<string, unknown> } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-
-    let parameterizedQuery = sql;
-    const queryParams: Record<string, unknown> = {};
-    const sortedKeys = Object.keys(params).sort((a, b) => b.length - a.length);
-
-    for (const key of sortedKeys) {
-      const placeholder = `:${key}`;
-      if (parameterizedQuery.includes(placeholder)) {
-        parameterizedQuery = parameterizedQuery.replace(
-          new RegExp(`:${key}\\b`, 'g'),
-          `{${key}:${this.inferClickHouseType(params[key])}}`,
-        );
-        queryParams[key] = params[key];
-      }
-    }
-
-    return { sql: parameterizedQuery, params: queryParams };
-  }
-
   getRandomSampleFilter(samplePct: number): string {
     if (samplePct <= 0 || samplePct >= 1) {
       return '';
@@ -132,7 +128,11 @@ export class KtxClickHouseDialect {
   }
 
   getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+    return limitOffsetClause(limit, offset);
+  }
+
+  getTopClause(_limit: number): string {
+    return '';
   }
 
   getNullCountExpression(column: string): string {
@@ -141,6 +141,18 @@ export class KtxClickHouseDialect {
 
   getDistinctCountExpression(column: string): string {
     return `COUNT(DISTINCT ${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `length(toString(${columnSql}))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `toString(${columnSql})`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT arrayStringConcat(groupArray(toString(value)), '\\x1F') FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -181,99 +193,9 @@ export class KtxClickHouseDialect {
       )
     `;
   }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    timezone?: string,
-  ): string {
-    const tz = timezone ? `, '${timezone}'` : '';
-    switch (granularity) {
-      case 'day':
-        return `toStartOfDay(${column}${tz})`;
-      case 'week':
-        return `toStartOfWeek(${column}, 1${tz})`;
-      case 'month':
-        return `toStartOfMonth(${column}${tz})`;
-      case 'quarter':
-        return `toStartOfQuarter(${column}${tz})`;
-      case 'year':
-        return `toStartOfYear(${column}${tz})`;
-    }
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, timezone?: string): string {
-    const col = timezone ? `toTimezone(${column}, '${timezone}')` : column;
-    const [rawAmount, rawUnit] = interval.split(' ');
-    const amount = Number(rawAmount);
-    const unit = rawUnit!.toLowerCase();
-    const originExpr = origin ? `toDateTime('${origin}')` : "toDateTime('1970-01-01')";
-    const calendarUnit = this.toClickHouseDateDiffUnit(unit);
-    if (calendarUnit) {
-      return `dateAdd(${calendarUnit}, intDiv(dateDiff(${calendarUnit}, ${originExpr}, ${col}), ${amount}) * ${amount}, ${originExpr})`;
-    }
-    const seconds = this.intervalToSeconds(amount, unit);
-    return `addSeconds(${originExpr}, intDiv(toUInt64(dateDiff('second', ${originExpr}, ${col})), ${seconds}) * ${seconds})`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    const [amount, unit] = interval.split(' ');
-    return `INTERVAL ${amount} ${unit!.toUpperCase()}`;
-  }
-
   private unwrapClickHouseType(value: string, wrapper: string): string {
     const prefix = `${wrapper}(`;
     return value.startsWith(prefix) && value.endsWith(')') ? value.slice(prefix.length, -1) : value;
   }
 
-  private inferClickHouseType(value: unknown): string {
-    if (value === null || value === undefined) {
-      return 'String';
-    }
-    if (typeof value === 'boolean') {
-      return 'Bool';
-    }
-    if (typeof value === 'number') {
-      return Number.isInteger(value) ? 'Int64' : 'Float64';
-    }
-    if (value instanceof Date) {
-      return 'DateTime';
-    }
-    return 'String';
-  }
-
-  private toClickHouseDateDiffUnit(unit: string): string | null {
-    if (unit === 'month' || unit === 'months') {
-      return "'month'";
-    }
-    if (unit === 'quarter' || unit === 'quarters') {
-      return "'quarter'";
-    }
-    if (unit === 'year' || unit === 'years') {
-      return "'year'";
-    }
-    return null;
-  }
-
-  private intervalToSeconds(amount: number, unit: string): number {
-    switch (unit) {
-      case 'second':
-      case 'seconds':
-        return amount;
-      case 'minute':
-      case 'minutes':
-        return amount * 60;
-      case 'hour':
-      case 'hours':
-        return amount * 3600;
-      case 'day':
-      case 'days':
-        return amount * 86400;
-      case 'week':
-      case 'weeks':
-        return amount * 604800;
-      default:
-        return amount * 86400;
-    }
-  }
 }

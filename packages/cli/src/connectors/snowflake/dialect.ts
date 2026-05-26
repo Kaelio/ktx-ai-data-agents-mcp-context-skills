@@ -1,9 +1,18 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  limitOffsetClause,
+  parseDialectDisplayRef,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type SnowflakeTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxSnowflakeDialect {
-  readonly type = 'snowflake';
+/** @internal */
+export class KtxSnowflakeDialect implements KtxDialect {
+  readonly type = 'snowflake' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     TIMESTAMP_NTZ: 'time',
@@ -45,13 +54,19 @@ export class KtxSnowflakeDialect {
   }
 
   formatTableName(table: SnowflakeTableNameRef): string {
-    if (table.catalog && table.db) {
-      return `${this.quoteIdentifier(table.catalog)}.${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`;
-    }
-    if (table.db) {
-      return `${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`;
-    }
-    return this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'three-part');
+  }
+
+  formatDisplayRef(table: SnowflakeTableNameRef): string {
+    return formatDialectDisplayRef(table, 'three-part');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'three-part');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('three-part');
   }
 
   mapDataType(nativeType: string): string {
@@ -96,10 +111,6 @@ export class KtxSnowflakeDialect {
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND TRIM(CAST(${quotedColumn} AS STRING)) != '' LIMIT ${limit}`;
   }
 
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: unknown[] } {
-    return { sql, params: params ? Object.values(params) : undefined };
-  }
-
   getRandomSampleFilter(samplePct: number): string {
     if (samplePct <= 0 || samplePct >= 1) {
       return '';
@@ -115,7 +126,11 @@ export class KtxSnowflakeDialect {
   }
 
   getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+    return limitOffsetClause(limit, offset);
+  }
+
+  getTopClause(_limit: number): string {
+    return '';
   }
 
   getNullCountExpression(column: string): string {
@@ -124,6 +139,18 @@ export class KtxSnowflakeDialect {
 
   getDistinctCountExpression(column: string): string {
     return `APPROX_COUNT_DISTINCT(${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `LENGTH(CAST(${columnSql} AS TEXT))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `CAST(${columnSql} AS VARCHAR)`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT LISTAGG(CAST(value AS VARCHAR), '\\x1f') FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -163,25 +190,5 @@ export class KtxSnowflakeDialect {
       SELECT COUNT(DISTINCT val) AS cardinality
       FROM sampled
     `;
-  }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    timezone?: string,
-  ): string {
-    const target = timezone ? `CONVERT_TIMEZONE('UTC', '${timezone}', ${column})` : column;
-    return `DATE_TRUNC('${granularity}', ${target})`;
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, timezone?: string): string {
-    const target = timezone ? `CONVERT_TIMEZONE('UTC', '${timezone}', ${column})` : column;
-    const [amount, unit] = interval.split(' ');
-    const originExpr = origin ? `'${origin}'::TIMESTAMP` : `'1970-01-01'::TIMESTAMP`;
-    return `DATEADD(${unit}, FLOOR(DATEDIFF(${unit}, ${originExpr}, ${target}) / ${amount}) * ${amount}, ${originExpr})`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    return `INTERVAL '${interval}'`;
   }
 }

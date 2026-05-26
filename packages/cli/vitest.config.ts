@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     root: '.',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     testTimeout: 30_000,
   },
 });

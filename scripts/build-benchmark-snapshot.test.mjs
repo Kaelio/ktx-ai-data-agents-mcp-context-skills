@@ -257,7 +257,7 @@ describe('buildBenchmarkSnapshot', () => {
 
     assert.equal(
       packageJson.scripts['relationships:benchmarks:test'],
-      'KTX_RUN_RELATIONSHIP_BENCHMARKS=1 vitest run src/context/scan/relationship-benchmarks.test.ts',
+      'KTX_RUN_RELATIONSHIP_BENCHMARKS=1 vitest run test/context/scan/relationship-benchmarks.test.ts',
     );
   });
 });

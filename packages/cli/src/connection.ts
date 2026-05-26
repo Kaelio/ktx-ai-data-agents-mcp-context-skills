@@ -9,6 +9,7 @@ import { metabaseRuntimeConfigFromLocalConnection } from './context/ingest/adapt
 import { createGoogleDocsClients } from './context/ingest/adapters/gdrive/gdrive-client.js';
 import { GDRIVE_DOC_MIME_TYPE, gdriveServiceAccountKeySchema } from './context/ingest/adapters/gdrive/types.js';
 import { testRepoConnection } from './context/ingest/repo-fetch.js';
+import { getDriverRegistration } from './context/connections/drivers.js';
 import { parseNotionConnectionConfig, resolveNotionConnectionAuthToken } from './context/connections/notion-config.js';
 import { resolveKtxConfigReference } from './context/core/config-reference.js';
 import { type KtxLocalProject, loadKtxProject } from './context/project/project.js';
@@ -323,15 +324,7 @@ async function testConnectionByDriver(
     return { driver, detailKey: 'Repo', detailValue: result.repoUrl };
   }
 
-  if (
-    driver === 'sqlite' ||
-    driver === 'postgres' ||
-    driver === 'mysql' ||
-    driver === 'clickhouse' ||
-    driver === 'sqlserver' ||
-    driver === 'bigquery' ||
-    driver === 'snowflake'
-  ) {
+  if (getDriverRegistration(driver)) {
     const result = await testNativeConnection(
       project,
       connectionId,

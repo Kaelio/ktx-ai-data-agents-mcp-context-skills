@@ -1,4 +1,4 @@
-import { getDialectForDriver } from '../../context/connections/dialects.js';
+import { getDialectForDriver, type KtxDialect } from '../connections/dialects.js';
 import type { KtxFileStorePort } from '../../context/core/file-store.js';
 import type {
   KtxConnectionDriver,
@@ -128,46 +128,22 @@ function splitDisplay(display: string): string[] {
     .filter(Boolean);
 }
 
-function formatDisplay(driver: CatalogDriver, table: KtxTableRef): string {
-  if (driver === 'sqlite') {
-    return table.name;
-  }
-  return [table.catalog, table.db, table.name].filter((part): part is string => Boolean(part)).join('.');
+function formatDisplay(dialect: KtxDialect, table: KtxTableRef): string {
+  return dialect.formatDisplayRef(table);
 }
 
-function parseDisplay(driver: CatalogDriver, display: string): KtxTableRef | null {
+function parseDisplay(dialect: KtxDialect, display: string): KtxTableRef | null {
+  const parsed = dialect.parseDisplayRef(display);
+  if (parsed) {
+    return parsed;
+  }
   const parts = splitDisplay(display);
-  if (driver === 'sqlite') {
-    return parts.length === 1 ? { catalog: null, db: null, name: parts[0]! } : null;
-  }
-  if (driver === 'bigquery' || driver === 'snowflake' || driver === 'sqlserver') {
-    if (parts.length !== 3) {
-      return null;
-    }
-    return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
-  }
-  if (parts.length === 2) {
-    return { catalog: null, db: parts[0]!, name: parts[1]! };
-  }
-  if (parts.length === 3) {
-    return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
-  }
   return parts.length === 1 ? { catalog: null, db: null, name: parts[0]! } : null;
 }
 
-function expectedDisplayPartCount(driver: CatalogDriver): number {
-  if (driver === 'sqlite') {
-    return 1;
-  }
-  if (driver === 'bigquery' || driver === 'snowflake' || driver === 'sqlserver') {
-    return 3;
-  }
-  return 2;
-}
-
-function parseColumnDisplay(driver: CatalogDriver, display: string): (KtxTableRef & { column: string }) | null {
+function parseColumnDisplay(dialect: KtxDialect, display: string): (KtxTableRef & { column: string }) | null {
   const parts = splitDisplay(display);
-  const tablePartCount = expectedDisplayPartCount(driver);
+  const tablePartCount = dialect.columnDisplayTablePartCount();
   if (parts.length !== tablePartCount + 1) {
     return null;
   }
@@ -175,7 +151,7 @@ function parseColumnDisplay(driver: CatalogDriver, display: string): (KtxTableRe
   if (!column) {
     return null;
   }
-  const table = parseDisplay(driver, parts.slice(0, -1).join('.'));
+  const table = dialect.parseDisplayRef(parts.slice(0, -1).join('.'));
   return table ? { ...table, column } : null;
 }
 
@@ -272,6 +248,7 @@ export class WarehouseCatalogService {
     if (!table) {
       return null;
     }
+    const dialect = getDialectForDriver(catalog.driver);
     const profileTables = catalog.profile?.tables ?? [];
     const profileTable = profileTables.find((candidate) => candidate.table && refsEqual(candidate.table, table));
     const profileColumns = catalog.profile?.columns ?? {};
@@ -281,7 +258,7 @@ export class WarehouseCatalogService {
       catalog: table.catalog,
       db: table.db,
       name: table.name,
-      display: formatDisplay(catalog.driver, table),
+      display: formatDisplay(dialect, table),
       kind: table.kind,
       comment: table.comment,
       description: firstDescription(table.descriptions),
@@ -321,16 +298,21 @@ export class WarehouseCatalogService {
     if (!catalog) {
       return { resolved: null, candidates: [], dialect: 'unknown' };
     }
-    const dialect = getDialectForDriver(catalog.driver).type;
-    const parsed = parseDisplay(catalog.driver, display);
+    const dialect = getDialectForDriver(catalog.driver);
+    const parsed = parseDisplay(dialect, display);
     if (!parsed) {
-      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
+      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect: dialect.type };
     }
-    const table = catalog.tables.find((candidate) => refsEqual(candidate, parsed));
+    const exactTable = catalog.tables.find((candidate) => refsEqual(candidate, parsed));
+    const looseNameMatches =
+      parsed.catalog === null && parsed.db === null
+        ? catalog.tables.filter((candidate) => normalize(candidate.name) === normalize(parsed.name))
+        : [];
+    const table = exactTable ?? (looseNameMatches.length === 1 ? looseNameMatches[0] : undefined);
     if (!table) {
-      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
+      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect: dialect.type };
     }
-    return { resolved: { catalog: table.catalog, db: table.db, name: table.name }, candidates: [], dialect };
+    return { resolved: { catalog: table.catalog, db: table.db, name: table.name }, candidates: [], dialect: dialect.type };
   }
 
   async resolveDisplayTarget(connectionId: string, display: string): Promise<DisplayTargetResolution> {
@@ -339,20 +321,20 @@ export class WarehouseCatalogService {
       return { resolved: null, candidates: [], dialect: 'unknown' };
     }
 
-    const dialect = getDialectForDriver(catalog.driver).type;
+    const dialect = getDialectForDriver(catalog.driver);
     const tableResolution = await this.resolveDisplay(connectionId, display);
     if (tableResolution.resolved) {
       return tableResolution;
     }
 
-    const parsedColumn = parseColumnDisplay(catalog.driver, display);
+    const parsedColumn = parseColumnDisplay(dialect, display);
     if (!parsedColumn) {
-      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
+      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect: dialect.type };
     }
 
     const table = catalog.tables.find((candidate) => refsEqual(candidate, parsedColumn));
     if (!table) {
-      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect };
+      return { resolved: null, candidates: bestCandidates(catalog.tables, display), dialect: dialect.type };
     }
 
     return {
@@ -363,7 +345,7 @@ export class WarehouseCatalogService {
         column: parsedColumn.column,
       },
       candidates: [],
-      dialect,
+      dialect: dialect.type,
     };
   }
 
@@ -372,6 +354,7 @@ export class WarehouseCatalogService {
     if (!catalog) {
       return [];
     }
+    const dialect = getDialectForDriver(catalog.driver);
     const hits: RawSchemaHit[] = [];
     for (const table of catalog.tables as TableWithDescriptions[]) {
       const tableMatch = matchedOnTable(table, query);
@@ -380,7 +363,7 @@ export class WarehouseCatalogService {
           kind: 'table',
           connectionId,
           ref: { catalog: table.catalog, db: table.db, name: table.name },
-          display: formatDisplay(catalog.driver, table),
+          display: formatDisplay(dialect, table),
           matchedOn: tableMatch,
         });
       }
@@ -393,7 +376,7 @@ export class WarehouseCatalogService {
           kind: 'column',
           connectionId,
           ref: { catalog: table.catalog, db: table.db, name: table.name, column: column.name },
-          display: `${formatDisplay(catalog.driver, table)}.${column.name}`,
+          display: `${formatDisplay(dialect, table)}.${column.name}`,
           matchedOn: columnMatch,
         });
       }

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -26,7 +27,6 @@ import {
   type KtxTableSampleResult,
 } from '../../context/scan/types.js';
 import { Pool } from 'pg';
-import { KtxPostgresDialect } from './dialect.js';
 
 const PG_OID_TYPE_MAP: Record<number, string> = {
   16: 'boolean',
@@ -219,6 +219,29 @@ function groupByTable<T extends { table_name: string }>(rows: T[]): Map<string, 
   return grouped;
 }
 
+/** @internal */
+export function preparePostgresReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: unknown[] } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  const paramNames = Object.keys(params);
+  const values: unknown[] = new Array(paramNames.length);
+  const paramIndexMap = new Map<string, number>();
+  paramNames.forEach((name, index) => {
+    paramIndexMap.set(name, index + 1);
+    values[index] = params[name];
+  });
+  const sortedKeys = [...paramNames].sort((a, b) => b.length - a.length);
+  let parameterizedQuery = sql;
+  for (const name of sortedKeys) {
+    parameterizedQuery = parameterizedQuery.replace(new RegExp(`:${name}\\b`, 'g'), `$${paramIndexMap.get(name)}`);
+  }
+  return { sql: parameterizedQuery, params: values };
+}
+
 function primaryKeyMap(rows: PostgresPrimaryKeyRow[]): Map<string, Set<string>> {
   const grouped = new Map<string, Set<string>>();
   for (const row of rows) {
@@ -400,7 +423,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
   private readonly poolFactory: KtxPostgresPoolFactory;
   private readonly endpointResolver?: KtxPostgresEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxPostgresDialect();
+  private readonly dialect = getDialectForDriver('postgres');
   private pool: KtxPostgresPool | null = null;
   private lastIdlePoolError: Error | null = null;
   private resolvedEndpoint: KtxPostgresResolvedEndpoint | null = null;
@@ -489,7 +512,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
     const prepared = Array.isArray(input.params)
       ? { sql: limitedSql, params: input.params }
-      : this.dialect.prepareQuery(limitedSql, input.params);
+      : preparePostgresReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }
@@ -584,6 +607,7 @@ export class KtxPostgresScanConnector implements KtxScanConnector {
       [filterSchemas],
     );
     return rows.map((row) => ({
+      catalog: null,
       schema: row.schema_name,
       name: row.table_name,
       kind: row.table_kind === 'v' ? ('view' as const) : ('table' as const),

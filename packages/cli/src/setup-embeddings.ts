@@ -6,12 +6,13 @@ import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/proj
 import type { KtxEmbeddingConfig } from './llm/types.js';
 import { type KtxEmbeddingHealthCheckResult, runKtxEmbeddingHealthCheck } from './llm/embedding-health.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
+import { createStaticCliSpinner, errorMessage, writePrefixedLines, type KtxCliSpinner } from './clack.js';
 import {
   ensureManagedLocalEmbeddingsDaemon,
   managedLocalEmbeddingHealthConfig,
   type ManagedLocalEmbeddingsDaemon,
 } from './managed-local-embeddings.js';
+import { ManagedPythonDaemonStartError } from './managed-python-daemon.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { withTextInputNavigation } from './prompt-navigation.js';
 import { envCredentialReference, writeProjectLocalSecretReference } from './setup-secrets.js';
@@ -419,7 +420,13 @@ export async function runKtxSetupEmbeddingsStep(
           io,
         });
       } catch (error) {
-        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        const write = (chunk: string) => io.stderr.write(chunk);
+        if (error instanceof ManagedPythonDaemonStartError) {
+          const tail = await readLocalEmbeddingDaemonStderrTail(error.stderrLog);
+          writePrefixedLines(write, localEmbeddingSetupMessage(error.detail, tail));
+        } else {
+          writePrefixedLines(write, errorMessage(error));
+        }
         return { status: 'failed', projectDir: args.projectDir };
       }
     }

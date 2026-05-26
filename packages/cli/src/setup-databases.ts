@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { getDriverRegistration } from './context/connections/drivers.js';
 import { queryHistoryDialectForConnection } from './context/ingest/adapters/historic-sql/connection-dialect.js';
 import type { HistoricSqlDialect } from './context/ingest/adapters/historic-sql/types.js';
 import {
@@ -15,6 +16,11 @@ import { loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete, setKtxSetupDatabaseConnectionIds } from './context/project/setup-config.js';
 import type { KtxTableListEntry } from './context/scan/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import {
+  errorMessage,
+  flushPrefixedBufferedCommandOutput,
+  writePrefixedLines,
+} from './clack.js';
 import { runKtxConnection } from './connection.js';
 import {
   pickDatabaseScope as defaultPickDatabaseScope,
@@ -112,13 +118,13 @@ export interface KtxSetupDatabasesDeps {
 }
 
 const DRIVER_OPTIONS: Array<{ value: KtxSetupDatabaseDriver; label: string }> = [
-  { value: 'sqlite', label: 'SQLite' },
   { value: 'postgres', label: 'PostgreSQL' },
+  { value: 'bigquery', label: 'BigQuery' },
+  { value: 'snowflake', label: 'Snowflake' },
   { value: 'mysql', label: 'MySQL' },
   { value: 'clickhouse', label: 'ClickHouse' },
   { value: 'sqlserver', label: 'SQL Server' },
-  { value: 'bigquery', label: 'BigQuery' },
-  { value: 'snowflake', label: 'Snowflake' },
+  { value: 'sqlite', label: 'SQLite' },
 ];
 
 const DRIVER_LABELS = Object.fromEntries(DRIVER_OPTIONS.map((option) => [option.value, option.label])) as Record<
@@ -220,7 +226,7 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
 };
 
 type UrlDriverType = Extract<KtxSetupDatabaseDriver, 'postgres' | 'mysql' | 'clickhouse' | 'sqlserver'>;
-type ConnectionSetupStatus = 'ready' | 'back' | 'failed';
+type ConnectionSetupStatus = 'ready' | 'back' | 'failed' | 'failed-query-history-unavailable';
 
 const DRIVER_CONNECTION_DEFAULTS: Record<UrlDriverType, { port: string }> = {
   postgres: { port: '5432' },
@@ -361,74 +367,18 @@ async function defaultListSchemas(projectDir: string, connectionId: string): Pro
   const project = await loadKtxProject({ projectDir });
   const connection = project.config.connections[connectionId];
   const driver = normalizeDriver(connection?.driver);
+  const registration = driver ? getDriverRegistration(driver) : undefined;
+  if (!registration) return [];
 
-  if (driver === 'postgres') {
-    const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('./connectors/postgres/connector.js');;
-    if (!isKtxPostgresConnectionConfig(connection)) return [];
-    const connector = new KtxPostgresScanConnector({ connectionId, connection });
-    try {
-      return await connector.listSchemas();
-    } finally {
-      await connector.cleanup();
-    }
+  const connectorModule = await registration.load();
+  if (!connectorModule.isConnectionConfig(connection)) return [];
+
+  const connector = connectorModule.createScanConnector({ connectionId, connection, projectDir });
+  try {
+    return await connector.listSchemas();
+  } finally {
+    await connector.cleanup?.();
   }
-
-  if (driver === 'sqlserver') {
-    const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('./connectors/sqlserver/connector.js');;
-    if (!isKtxSqlServerConnectionConfig(connection)) return [];
-    const connector = new KtxSqlServerScanConnector({ connectionId, connection });
-    try {
-      return await connector.listSchemas();
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'mysql') {
-    const { KtxMysqlScanConnector, isKtxMysqlConnectionConfig } = await import('./connectors/mysql/connector.js');;
-    if (!isKtxMysqlConnectionConfig(connection)) return [];
-    const connector = new KtxMysqlScanConnector({ connectionId, connection });
-    try {
-      return await connector.listSchemas();
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'clickhouse') {
-    const { KtxClickHouseScanConnector, isKtxClickHouseConnectionConfig } = await import('./connectors/clickhouse/connector.js');;
-    if (!isKtxClickHouseConnectionConfig(connection)) return [];
-    const connector = new KtxClickHouseScanConnector({ connectionId, connection });
-    try {
-      return await connector.listSchemas();
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'bigquery') {
-    const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('./connectors/bigquery/connector.js');;
-    if (!isKtxBigQueryConnectionConfig(connection)) return [];
-    const connector = new KtxBigQueryScanConnector({ connectionId, connection });
-    try {
-      return await connector.listDatasets();
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'snowflake') {
-    const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('./connectors/snowflake/connector.js');;
-    if (!isKtxSnowflakeConnectionConfig(connection)) return [];
-    const connector = new KtxSnowflakeScanConnector({ connectionId, connection, projectDir });
-    try {
-      return await connector.listSchemas();
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  return [];
 }
 
 function configuredSchemas(connection: KtxProjectConnectionConfig | undefined, driver: KtxSetupDatabaseDriver): string[] | undefined {
@@ -448,74 +398,18 @@ async function defaultListTables(
   const connection = project.config.connections[connectionId];
   const driver = normalizeDriver(connection?.driver);
   const schemas = schemasOverride ?? (driver ? configuredSchemas(connection, driver) : undefined);
+  const registration = driver ? getDriverRegistration(driver) : undefined;
+  if (!registration) return [];
 
-  if (driver === 'postgres') {
-    const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('./connectors/postgres/connector.js');;
-    if (!isKtxPostgresConnectionConfig(connection)) return [];
-    const connector = new KtxPostgresScanConnector({ connectionId, connection });
-    try {
-      return await connector.listTables(schemas);
-    } finally {
-      await connector.cleanup();
-    }
+  const connectorModule = await registration.load();
+  if (!connectorModule.isConnectionConfig(connection)) return [];
+
+  const connector = connectorModule.createScanConnector({ connectionId, connection, projectDir });
+  try {
+    return await connector.listTables(schemas);
+  } finally {
+    await connector.cleanup?.();
   }
-
-  if (driver === 'mysql') {
-    const { KtxMysqlScanConnector, isKtxMysqlConnectionConfig } = await import('./connectors/mysql/connector.js');;
-    if (!isKtxMysqlConnectionConfig(connection)) return [];
-    const connector = new KtxMysqlScanConnector({ connectionId, connection });
-    try {
-      return await connector.listTables(schemas);
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'sqlserver') {
-    const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('./connectors/sqlserver/connector.js');;
-    if (!isKtxSqlServerConnectionConfig(connection)) return [];
-    const connector = new KtxSqlServerScanConnector({ connectionId, connection });
-    try {
-      return await connector.listTables(schemas);
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'bigquery') {
-    const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('./connectors/bigquery/connector.js');;
-    if (!isKtxBigQueryConnectionConfig(connection)) return [];
-    const connector = new KtxBigQueryScanConnector({ connectionId, connection });
-    try {
-      return await connector.listTables(schemas);
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'snowflake') {
-    const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('./connectors/snowflake/connector.js');;
-    if (!isKtxSnowflakeConnectionConfig(connection)) return [];
-    const connector = new KtxSnowflakeScanConnector({ connectionId, connection, projectDir });
-    try {
-      return await connector.listTables(schemas);
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  if (driver === 'clickhouse') {
-    const { KtxClickHouseScanConnector, isKtxClickHouseConnectionConfig } = await import('./connectors/clickhouse/connector.js');;
-    if (!isKtxClickHouseConnectionConfig(connection)) return [];
-    const connector = new KtxClickHouseScanConnector({ connectionId, connection });
-    try {
-      return await connector.listTables(schemas);
-    } finally {
-      await connector.cleanup();
-    }
-  }
-
-  return [];
 }
 
 function existingConnectionIdsByDriver(
@@ -638,9 +532,9 @@ function scriptedScopeConfigForDriver(
   databaseSchemas: string[],
 ): Record<string, unknown> {
   if (databaseSchemas.length === 0) return {};
-  if (driver === 'bigquery') return { dataset_ids: databaseSchemas };
-  if (driver === 'clickhouse') return { databases: databaseSchemas };
-  return { schemas: databaseSchemas };
+  const registration = getDriverRegistration(driver);
+  if (!registration?.scopeConfigKey) return {};
+  return { [registration.scopeConfigKey]: databaseSchemas };
 }
 
 function databaseNameFromLiteralUrl(url: string): string | undefined {
@@ -1128,25 +1022,6 @@ function createBufferedCommandIo(): BufferedCommandIo {
   };
 }
 
-function flushBufferedCommandOutput(io: KtxCliIo, bufferedIo: BufferedCommandIo): void {
-  const stdout = bufferedIo.stdoutText();
-  const stderr = bufferedIo.stderrText();
-  if (stdout.length > 0) {
-    io.stdout.write(stdout);
-  }
-  if (stderr.length > 0) {
-    io.stderr.write(stderr);
-  }
-}
-
-function writePrefixedLines(write: (chunk: string) => void, output: string): void {
-  for (const line of output.split(/\r?\n/)) {
-    if (line.length > 0) {
-      write(`│  ${line}\n`);
-    }
-  }
-}
-
 function envWithCurrentNodeFirst(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return {
     ...env,
@@ -1220,11 +1095,6 @@ async function defaultRebuildNativeSqlite(io: KtxCliIo): Promise<number> {
     writePrefixedLines((chunk) => io.stderr.write(chunk), commandFailureOutput(error));
     return typeof (error as { code?: unknown })?.code === 'number' ? (error as { code: number }).code : 1;
   }
-}
-
-function flushPrefixedBufferedCommandOutput(io: KtxCliIo, bufferedIo: BufferedCommandIo): void {
-  writePrefixedLines((chunk) => io.stdout.write(chunk), bufferedIo.stdoutText());
-  writePrefixedLines((chunk) => io.stderr.write(chunk), bufferedIo.stderrText());
 }
 
 function nativeSqliteAbiMismatchDetail(output: string): string | null {
@@ -1316,6 +1186,20 @@ async function writeConnectionConfig(input: {
   if (queryHistory?.enabled === true) {
     await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
+}
+
+async function disableConnectionQueryHistory(projectDir: string, connectionId: string): Promise<void> {
+  const project = await loadKtxProject({ projectDir });
+  const connection = project.config.connections[connectionId];
+  if (!connection) {
+    return;
+  }
+  const existing = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection) ?? {};
+  await writeConnectionConfig({
+    projectDir,
+    connectionId,
+    connection: withQueryHistoryConfig(connection, { ...existing, enabled: false }),
+  });
 }
 
 async function createConnectionConfigRollback(projectDir: string, connectionId: string): Promise<() => Promise<void>> {
@@ -1519,9 +1403,9 @@ async function maybeConfigureDatabaseScope(input: {
         input.connectionId,
       );
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      input.io.stderr.write(
-        `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${detail}\n`,
+      writePrefixedLines(
+        (chunk) => input.io.stderr.write(chunk),
+        `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${errorMessage(error)}`,
       );
       const typed = await promptCommaSeparatedScope({
         prompts: input.prompts,
@@ -1573,11 +1457,12 @@ async function maybeConfigureDatabaseScope(input: {
       input.io,
     );
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    input.io.stderr.write(
+    const detail = errorMessage(error);
+    writePrefixedLines(
+      (chunk) => input.io.stderr.write(chunk),
       input.forcePrompt === true
-        ? `Could not discover tables for ${input.connectionId}; edit was not saved. ${detail}\n`
-        : `Could not discover tables for ${input.connectionId}; continuing without table filter. ${detail}\n`,
+        ? `Could not discover tables for ${input.connectionId}; edit was not saved. ${detail}`
+        : `Could not discover tables for ${input.connectionId}; continuing without table filter. ${detail}`,
     );
     return input.forcePrompt === true ? 'failed' : 'ready';
   }
@@ -1665,19 +1550,19 @@ async function maybeRunHistoricSqlSetupProbe(input: {
   connectionId: string;
   io: KtxCliIo;
   deps: KtxSetupDatabasesDeps;
-}): Promise<void> {
+}): Promise<boolean> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   const queryHistory = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection);
   if (queryHistory?.enabled !== true) {
-    return;
+    return true;
   }
   if (!connection) {
-    return;
+    return true;
   }
   const dialect = queryHistoryDialectForConnection(connection);
   if (!dialect) {
-    return;
+    return true;
   }
 
   input.io.stdout.write('│  Query history probe...\n');
@@ -1696,6 +1581,7 @@ async function maybeRunHistoricSqlSetupProbe(input: {
   if (!result.ok) {
     input.io.stdout.write('│  Setup written; query history will be skipped until fixed.\n');
   }
+  return result.ok;
 }
 
 async function applyHistoricSqlConfigToExistingConnection(input: {
@@ -1785,8 +1671,11 @@ async function validateAndScanConnection(input: {
   const testIo = createBufferedCommandIo();
   const testCode = await testConnection(input.projectDir, input.connectionId, testIo);
   if (testCode !== 0) {
-    flushBufferedCommandOutput(input.io, testIo);
-    input.io.stderr.write(`Connection test failed for ${input.connectionId}.\n`);
+    flushPrefixedBufferedCommandOutput(input.io, testIo);
+    writePrefixedLines(
+      (chunk) => input.io.stderr.write(chunk),
+      `Connection test failed for ${input.connectionId}.`,
+    );
     return 'failed';
   }
   const testOutput = testIo.stdoutText();
@@ -1800,7 +1689,7 @@ async function validateAndScanConnection(input: {
     return scopeStatus;
   }
 
-  await maybeRunHistoricSqlSetupProbe({
+  const queryHistoryAvailable = await maybeRunHistoricSqlSetupProbe({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
     io: input.io,
@@ -1857,7 +1746,7 @@ async function validateAndScanConnection(input: {
       );
     }
     if (scanCode !== 0) {
-      return 'failed';
+      return queryHistoryAvailable ? 'failed' : 'failed-query-history-unavailable';
     }
   }
   const scanOutput = scanIo.stdoutText();
@@ -1999,7 +1888,10 @@ async function runPrimarySourceFullEdit(input: {
   const existing = project.config.connections[input.connectionId];
   const driver = normalizeDriver(existing?.driver);
   if (!existing || !driver) {
-    input.io.stderr.write(`Connection "${input.connectionId}" is not a configured database.\n`);
+    writePrefixedLines(
+      (chunk) => input.io.stderr.write(chunk),
+      `Connection "${input.connectionId}" is not a configured database.`,
+    );
     return 'failed';
   }
 
@@ -2053,7 +1945,7 @@ async function runPrimarySourceFullEdit(input: {
   });
   if (validated !== 'ready') {
     await rollback();
-    return validated;
+    return validated === 'failed-query-history-unavailable' ? 'failed' : validated;
   }
   return 'ready';
 }
@@ -2188,7 +2080,7 @@ export async function runKtxSetupDatabasesStep(
           prompts,
         });
       } catch (error) {
-        io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
         return { status: 'failed', projectDir: args.projectDir };
       }
       if (connectionChoice === 'back') {
@@ -2332,14 +2224,18 @@ export async function runKtxSetupDatabasesStep(
           break;
         }
         if (args.inputMode === 'disabled') return { status: 'failed', projectDir: args.projectDir };
+        const failureOptions = [
+          { value: 'retry', label: 'Retry connection test' },
+          { value: 're-enter', label: 'Re-enter connection details' },
+          ...(setupStatus === 'failed-query-history-unavailable'
+            ? [{ value: 'disable-query-history', label: 'Disable query history and retry' }]
+            : []),
+          { value: 'skip', label: 'Skip this database' },
+          { value: 'back', label: 'Back' },
+        ];
         const action = await prompts.select({
           message: `Database setup failed for ${connectionChoice.connectionId}`,
-          options: [
-            { value: 'retry', label: 'Retry connection test' },
-            { value: 're-enter', label: 'Re-enter connection details' },
-            { value: 'skip', label: 'Skip this database' },
-            { value: 'back', label: 'Back' },
-          ],
+          options: failureOptions,
         });
         if (action === 'back') {
           if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
@@ -2351,6 +2247,16 @@ export async function runKtxSetupDatabasesStep(
           break;
         }
         if (action === 'retry') {
+          setupStatus = await validateAndScanConnection({
+            projectDir: args.projectDir,
+            connectionId: connectionChoice.connectionId,
+            io,
+            deps,
+            args,
+            prompts,
+          });
+        } else if (action === 'disable-query-history') {
+          await disableConnectionQueryHistory(args.projectDir, connectionChoice.connectionId);
           setupStatus = await validateAndScanConnection({
             projectDir: args.projectDir,
             connectionId: connectionChoice.connectionId,

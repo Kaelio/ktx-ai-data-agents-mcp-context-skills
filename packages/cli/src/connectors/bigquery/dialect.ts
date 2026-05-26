@@ -1,9 +1,18 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  limitOffsetClause,
+  parseDialectDisplayRef,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type BigQueryTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxBigQueryDialect {
-  readonly type = 'bigquery';
+/** @internal */
+export class KtxBigQueryDialect implements KtxDialect {
+  readonly type = 'bigquery' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     TIMESTAMP: 'time',
@@ -27,13 +36,19 @@ export class KtxBigQueryDialect {
   }
 
   formatTableName(table: BigQueryTableNameRef): string {
-    if (table.catalog && table.db) {
-      return `${this.quoteIdentifier(table.catalog)}.${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`;
-    }
-    if (table.db) {
-      return `${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`;
-    }
-    return this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'three-part');
+  }
+
+  formatDisplayRef(table: BigQueryTableNameRef): string {
+    return formatDialectDisplayRef(table, 'three-part');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'three-part');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('three-part');
   }
 
   mapDataType(nativeType: string): string {
@@ -93,19 +108,6 @@ export class KtxBigQueryDialect {
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND TRIM(CAST(${quotedColumn} AS STRING)) != '' ORDER BY RAND() LIMIT ${limit}`;
   }
 
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: Record<string, unknown> } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-    let processedSql = sql;
-    const processedParams: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(params)) {
-      processedSql = processedSql.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
-      processedParams[key] = value;
-    }
-    return { sql: processedSql, params: Object.keys(processedParams).length > 0 ? processedParams : undefined };
-  }
-
   getRandomSampleFilter(samplePct: number): string {
     if (samplePct <= 0 || samplePct >= 1) {
       return '';
@@ -121,7 +123,11 @@ export class KtxBigQueryDialect {
   }
 
   getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+    return limitOffsetClause(limit, offset);
+  }
+
+  getTopClause(_limit: number): string {
+    return '';
   }
 
   getNullCountExpression(column: string): string {
@@ -130,6 +136,18 @@ export class KtxBigQueryDialect {
 
   getDistinctCountExpression(column: string): string {
     return `APPROX_COUNT_DISTINCT(${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `LENGTH(CAST(${columnSql} AS STRING))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `CAST(${columnSql} AS STRING)`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT STRING_AGG(CAST(value AS STRING), '\\u001F') FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -171,37 +189,5 @@ export class KtxBigQueryDialect {
       SELECT APPROX_COUNT_DISTINCT(val) AS cardinality
       FROM sampled
     `;
-  }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    timezone?: string,
-  ): string {
-    const bigQueryGranularity = granularity.toUpperCase();
-    if (timezone) {
-      return `DATE_TRUNC(DATETIME(${column}, '${timezone}'), ${bigQueryGranularity})`;
-    }
-    return `DATE_TRUNC(${column}, ${bigQueryGranularity})`;
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, timezone?: string): string {
-    const col = timezone ? `DATETIME(${column}, '${timezone}')` : column;
-    const [rawAmount, rawUnit] = interval.split(' ');
-    let diffUnit = rawUnit!.toUpperCase();
-    let amount = Number(rawAmount);
-    let addUnit = diffUnit;
-    if (diffUnit === 'WEEK') {
-      diffUnit = 'DAY';
-      amount = amount * 7;
-      addUnit = 'DAY';
-    }
-    const originExpr = origin ? `TIMESTAMP '${origin}'` : `TIMESTAMP '1970-01-01'`;
-    return `TIMESTAMP_ADD(${originExpr}, INTERVAL CAST(FLOOR(TIMESTAMP_DIFF(${col}, ${originExpr}, ${diffUnit}) / ${amount}) * ${amount} AS INT64) ${addUnit})`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    const [amount, unit] = interval.split(' ');
-    return `INTERVAL ${amount} ${unit!.toUpperCase()}`;
   }
 }

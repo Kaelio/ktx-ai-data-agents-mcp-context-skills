@@ -19,7 +19,7 @@ const RELATIONSHIP_RUNTIME_SOURCES = Object.freeze([
 ]);
 
 async function checkedInFixtureIds() {
-  const fixtureRoot = new URL('packages/cli/src/test/fixtures/relationship-benchmarks/', KTX_ROOT);
+  const fixtureRoot = new URL('packages/cli/test/fixtures/relationship-benchmarks/', KTX_ROOT);
   const entries = await readdir(fixtureRoot, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory())

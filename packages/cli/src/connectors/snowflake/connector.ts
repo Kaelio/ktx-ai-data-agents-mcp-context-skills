@@ -2,6 +2,7 @@ import { createPrivateKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -27,7 +28,6 @@ import {
 } from '../../context/scan/types.js';
 import snowflake from 'snowflake-sdk';
 import type { Bind, Binds, Connection, ConnectionOptions } from 'snowflake-sdk';
-import { KtxSnowflakeDialect } from './dialect.js';
 import { assertSafeSnowflakeIdentifier, quoteSnowflakeIdentifier } from './identifiers.js';
 import { configureSnowflakeSdkLogger } from './sdk-logger.js';
 
@@ -227,6 +227,14 @@ function toSnowflakeBind(value: unknown): Bind {
 
 function toSnowflakeBinds(params: unknown[] | undefined): Binds | undefined {
   return params?.map((value) => toSnowflakeBind(value));
+}
+
+/** @internal */
+export function prepareSnowflakeReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: unknown[] } {
+  return { sql, params: params ? Object.values(params) : undefined };
 }
 
 export function isKtxSnowflakeConnectionConfig(
@@ -430,6 +438,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
       [this.resolved.database, ...(schemas ?? [])],
     );
     return result.rows.map((row) => ({
+      catalog: this.resolved.database,
       schema: String(row[0]),
       name: String(row[1]),
       kind: String(row[2]) === 'VIEW' ? ('view' as const) : ('table' as const),
@@ -550,7 +559,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
 
   private readonly resolved: KtxSnowflakeResolvedConnectionConfig;
   private readonly driverFactory: KtxSnowflakeDriverFactory;
-  private readonly dialect = new KtxSnowflakeDialect();
+  private readonly dialect = getDialectForDriver('snowflake');
   private readonly now: () => Date;
   private driverInstance: KtxSnowflakeDriver | null = null;
 
@@ -635,7 +644,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxSnowflakeReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareSnowflakeReadOnlyQuery(limitedSql, input.params);
     return this.getDriver().query(prepared.sql, prepared.params);
   }
 
@@ -696,6 +705,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
       [this.resolved.database, ...(schemas ?? [])],
     );
     return result.rows.map((row) => ({
+      catalog: this.resolved.database,
       schema: String(row[0]),
       name: String(row[1]),
       kind: String(row[2]) === 'VIEW' ? ('view' as const) : ('table' as const),

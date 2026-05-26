@@ -1,5 +1,6 @@
 import { BigQuery, type TableField } from '@google-cloud/bigquery';
 import { normalizeBigQueryProjectId, normalizeBigQueryRegion } from '../../context/connections/bigquery-identifiers.js';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -26,7 +27,6 @@ import {
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { KtxBigQueryDialect } from './dialect.js';
 
 export interface KtxBigQueryConnectionConfig {
   driver?: string;
@@ -235,6 +235,23 @@ function normalizeValue(value: unknown): unknown {
   return value;
 }
 
+/** @internal */
+export function prepareBigQueryReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: Record<string, unknown> } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+  let processedSql = sql;
+  const processedParams: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    processedSql = processedSql.replace(new RegExp(`:${key}\\b`, 'g'), `@${key}`);
+    processedParams[key] = value;
+  }
+  return { sql: processedSql, params: Object.keys(processedParams).length > 0 ? processedParams : undefined };
+}
+
 export function isKtxBigQueryConnectionConfig(
   connection: KtxBigQueryConnectionConfig | undefined,
 ): connection is KtxBigQueryConnectionConfig {
@@ -286,7 +303,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   private readonly now: () => Date;
   private readonly maxBytesBilled?: number | string;
   private readonly queryTimeoutMs?: number;
-  private readonly dialect = new KtxBigQueryDialect();
+  private readonly dialect = getDialectForDriver('bigquery');
   private client: KtxBigQueryClient | null = null;
 
   constructor(options: KtxBigQueryScanConnectorOptions) {
@@ -364,7 +381,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxBigQueryReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareBigQueryReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }
@@ -411,7 +428,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     return this.dialect.quoteIdentifier(identifier);
   }
 
-  async listDatasets(): Promise<string[]> {
+  async listSchemas(): Promise<string[]> {
     const [datasets] = await this.getClient().getDatasets();
     return datasets.map((dataset) => dataset.id).filter((id): id is string => Boolean(id));
   }
@@ -437,6 +454,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
       params,
     );
     return rows.map((row) => ({
+      catalog: this.resolved.projectId,
       schema: row.table_schema,
       name: row.table_name,
       kind:

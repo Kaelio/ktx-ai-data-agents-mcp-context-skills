@@ -1,3 +1,4 @@
+import { parseDottedTableEntry } from './context/scan/enabled-tables.js';
 import type { KtxTableListEntry } from './context/scan/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
@@ -73,7 +74,9 @@ export interface PickDatabaseScopeArgs {
 }
 
 function qualifiedTableId(entry: KtxTableListEntry): string {
-  return `${entry.schema}.${entry.name}`;
+  return entry.catalog !== null
+    ? `${entry.catalog}.${entry.schema}.${entry.name}`
+    : `${entry.schema}.${entry.name}`;
 }
 
 function tableTitle(entry: KtxTableListEntry): string {
@@ -177,7 +180,8 @@ function schemasFromEnabledTables(enabledTables: readonly string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const qualified of enabledTables) {
-    const schema = qualified.split('.')[0] ?? '';
+    const ref = parseDottedTableEntry(qualified);
+    const schema = ref?.db ?? '';
     if (schema.length === 0 || seen.has(schema)) continue;
     seen.add(schema);
     result.push(schema);
@@ -228,11 +232,14 @@ async function runStageTwoTreePicker(input: {
       ? initialSelectionForExisting(args.existing.enabledTables, byId)
       : initialSelectionFromDefaults(selectedSchemas, schemaIds);
 
-  const initialState = buildInitialState({
-    tree,
-    existingSelectedIds: initialSelection,
-    skipEmptyAction: 'save-empty',
-  });
+  const initialState = {
+    ...buildInitialState({
+      tree,
+      existingSelectedIds: initialSelection,
+      skipEmptyAction: 'save-empty',
+    }),
+    expanded: new Set(schemaIds),
+  };
 
   const schemaWordPlural = schemaCount === 1 ? args.schemaNoun : args.schemaNounPlural;
   const subtitleLines = [

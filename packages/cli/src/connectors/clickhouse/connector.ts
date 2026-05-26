@@ -1,4 +1,5 @@
 import { createClient } from '@clickhouse/client';
+import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
 import { createKtxConnectorCapabilities, type KtxColumnSampleInput, type KtxColumnSampleResult, type KtxColumnStatsInput, type KtxColumnStatsResult, type KtxQueryResult, type KtxReadOnlyQueryInput, type KtxScanConnector, type KtxScanContext, type KtxScanInput, type KtxSchemaColumn, type KtxSchemaSnapshot, type KtxSchemaTable, type KtxTableRef, type KtxTableSampleInput, type KtxTableListEntry, type KtxTableSampleResult } from '../../context/scan/types.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -6,7 +7,6 @@ import { readFileSync } from 'node:fs';
 import { Agent as HttpsAgent } from 'node:https';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { KtxClickHouseDialect } from './dialect.js';
 
 export interface KtxClickHouseConnectionConfig {
   driver?: string;
@@ -198,6 +198,49 @@ function clickHouseTableKey(database: string, table: string): string {
   return `${database}.${table}`;
 }
 
+function inferClickHouseQueryParamType(value: unknown): string {
+  if (value === null || value === undefined) {
+    return 'String';
+  }
+  if (typeof value === 'boolean') {
+    return 'Bool';
+  }
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? 'Int64' : 'Float64';
+  }
+  if (value instanceof Date) {
+    return 'DateTime';
+  }
+  return 'String';
+}
+
+/** @internal */
+export function prepareClickHouseReadOnlyQuery(
+  sql: string,
+  params?: Record<string, unknown>,
+): { sql: string; params?: Record<string, unknown> } {
+  if (!params) {
+    return { sql, params: undefined };
+  }
+
+  let parameterizedQuery = sql;
+  const queryParams: Record<string, unknown> = {};
+  const sortedKeys = Object.keys(params).sort((a, b) => b.length - a.length);
+
+  for (const key of sortedKeys) {
+    const placeholder = `:${key}`;
+    if (parameterizedQuery.includes(placeholder)) {
+      parameterizedQuery = parameterizedQuery.replace(
+        new RegExp(`:${key}\\b`, 'g'),
+        `{${key}:${inferClickHouseQueryParamType(params[key])}}`,
+      );
+      queryParams[key] = params[key];
+    }
+  }
+
+  return { sql: parameterizedQuery, params: Object.keys(queryParams).length > 0 ? queryParams : undefined };
+}
+
 export function isKtxClickHouseConnectionConfig(
   connection: KtxClickHouseConnectionConfig | undefined,
 ): connection is KtxClickHouseConnectionConfig {
@@ -256,7 +299,7 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
   private readonly clientFactory: KtxClickHouseClientFactory;
   private readonly endpointResolver?: KtxClickHouseEndpointResolver;
   private readonly now: () => Date;
-  private readonly dialect = new KtxClickHouseDialect();
+  private readonly dialect = getDialectForDriver('clickhouse');
   private client: KtxClickHouseClient | null = null;
   private resolvedEndpoint: KtxClickHouseResolvedEndpoint | null = null;
 
@@ -408,7 +451,7 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
   async executeReadOnly(input: KtxClickHouseReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
     const limitedSql = limitSqlForExecution(assertReadOnlySql(input.sql), input.maxRows);
-    const prepared = this.dialect.prepareQuery(limitedSql, input.params);
+    const prepared = prepareClickHouseReadOnlyQuery(limitedSql, input.params);
     const result = await this.query(prepared.sql, prepared.params);
     return { ...result, rowCount: result.rows.length };
   }
@@ -488,6 +531,7 @@ export class KtxClickHouseScanConnector implements KtxScanConnector {
       { schemas: filterSchemas },
     );
     return rows.map((row) => ({
+      catalog: null,
       schema: row.database,
       name: row.name,
       kind: row.engine === 'View' || row.engine === 'MaterializedView' ? ('view' as const) : ('table' as const),

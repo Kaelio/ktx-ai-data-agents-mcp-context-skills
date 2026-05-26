@@ -1,9 +1,18 @@
+import type { KtxDialect } from '../../context/connections/dialects.js';
+import {
+  columnDisplayPartCount,
+  formatDialectDisplayRef,
+  formatDialectTableName,
+  limitOffsetClause,
+  parseDialectDisplayRef,
+} from '../../context/connections/dialect-helpers.js';
 import type { KtxSchemaDimensionType, KtxTableRef } from '../../context/scan/types.js';
 
 type MysqlTableNameRef = Pick<KtxTableRef, 'name'> & Partial<Pick<KtxTableRef, 'catalog' | 'db'>>;
 
-export class KtxMysqlDialect {
-  readonly type = 'mysql';
+/** @internal */
+export class KtxMysqlDialect implements KtxDialect {
+  readonly type = 'mysql' as const;
 
   private readonly typeMappings: Record<string, KtxSchemaDimensionType> = {
     datetime: 'time',
@@ -41,9 +50,19 @@ export class KtxMysqlDialect {
   }
 
   formatTableName(table: MysqlTableNameRef): string {
-    return table.db
-      ? `${this.quoteIdentifier(table.db)}.${this.quoteIdentifier(table.name)}`
-      : this.quoteIdentifier(table.name);
+    return formatDialectTableName(table, this.quoteIdentifier.bind(this), 'ansi');
+  }
+
+  formatDisplayRef(table: MysqlTableNameRef): string {
+    return formatDialectDisplayRef(table, 'ansi');
+  }
+
+  parseDisplayRef(display: string): KtxTableRef | null {
+    return parseDialectDisplayRef(display, 'ansi');
+  }
+
+  columnDisplayTablePartCount(): 1 | 2 | 3 {
+    return columnDisplayPartCount('ansi');
   }
 
   mapDataType(nativeType: string): string {
@@ -91,21 +110,6 @@ export class KtxMysqlDialect {
     return `SELECT ${quotedColumn} FROM ${tableName} WHERE ${quotedColumn} IS NOT NULL AND TRIM(CAST(${quotedColumn} AS CHAR)) != '' LIMIT ${limit}`;
   }
 
-  prepareQuery(sql: string, params?: Record<string, unknown>): { sql: string; params?: unknown[] } {
-    if (!params) {
-      return { sql, params: undefined };
-    }
-    const values: unknown[] = [];
-    const parameterizedQuery = sql.replace(/:([A-Za-z_][A-Za-z0-9_]*)\b/g, (placeholder, key: string) => {
-      if (!(key in params)) {
-        return placeholder;
-      }
-      values.push(params[key]);
-      return '?';
-    });
-    return { sql: parameterizedQuery, params: values };
-  }
-
   getRandomSampleFilter(samplePct: number): string {
     if (samplePct <= 0 || samplePct >= 1) {
       return '';
@@ -118,7 +122,11 @@ export class KtxMysqlDialect {
   }
 
   getLimitOffsetClause(limit: number, offset?: number): string {
-    return offset !== undefined && offset > 0 ? `LIMIT ${limit} OFFSET ${offset}` : `LIMIT ${limit}`;
+    return limitOffsetClause(limit, offset);
+  }
+
+  getTopClause(_limit: number): string {
+    return '';
   }
 
   getNullCountExpression(column: string): string {
@@ -127,6 +135,18 @@ export class KtxMysqlDialect {
 
   getDistinctCountExpression(column: string): string {
     return `COUNT(DISTINCT ${column})`;
+  }
+
+  textLengthExpression(columnSql: string): string {
+    return `CHAR_LENGTH(CAST(${columnSql} AS CHAR))`;
+  }
+
+  castToText(columnSql: string): string {
+    return `CAST(${columnSql} AS CHAR)`;
+  }
+
+  getSampleValueAggregation(innerSql: string): string {
+    return `(SELECT GROUP_CONCAT(CAST(value AS CHAR) SEPARATOR CHAR(31)) FROM (${innerSql}) AS relationship_profile_values)`;
   }
 
   generateCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {
@@ -166,37 +186,5 @@ export class KtxMysqlDialect {
         LIMIT ${sampleSize}
       ) AS sampled
     `;
-  }
-
-  getTimeTruncExpression(
-    column: string,
-    granularity: 'day' | 'week' | 'month' | 'quarter' | 'year',
-    timezone?: string,
-  ): string {
-    const col = timezone ? `CONVERT_TZ(${column}, '+00:00', '${timezone}')` : column;
-    switch (granularity) {
-      case 'day':
-        return `DATE(${col})`;
-      case 'week':
-        return `DATE(${col} - INTERVAL WEEKDAY(${col}) DAY)`;
-      case 'month':
-        return `DATE_FORMAT(${col}, '%Y-%m-01')`;
-      case 'quarter':
-        return `MAKEDATE(YEAR(${col}), 1) + INTERVAL (QUARTER(${col}) - 1) QUARTER`;
-      case 'year':
-        return `DATE_FORMAT(${col}, '%Y-01-01')`;
-    }
-  }
-
-  getCustomTimeTruncExpression(column: string, interval: string, origin?: string, timezone?: string): string {
-    const col = timezone ? `CONVERT_TZ(${column}, '+00:00', '${timezone}')` : column;
-    const [amount, unit] = interval.split(' ');
-    const originExpr = origin ? `'${origin}'` : `'1970-01-01'`;
-    return `DATE_ADD(${originExpr}, INTERVAL FLOOR(TIMESTAMPDIFF(${unit!.toUpperCase()}, ${originExpr}, ${col}) / ${amount}) * ${amount} ${unit!.toUpperCase()})`;
-  }
-
-  parseIntervalToSql(interval: string): string {
-    const [amount, unit] = interval.split(' ');
-    return `INTERVAL ${amount} ${unit!.toUpperCase()}`;
   }
 }

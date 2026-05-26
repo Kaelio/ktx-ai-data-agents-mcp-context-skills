@@ -68,8 +68,8 @@ describe('scanFileContent', () => {
   it('allows product identifiers in test fixtures', () => {
     const name = lowerProductName();
 
-    assert.equal(scanFileContent('packages/cli/src/setup.test.ts', `project: ${name}-dev`).length, 0);
-    assert.equal(scanFileContent('packages/cli/src/context/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
+    assert.equal(scanFileContent('packages/cli/test/setup.test.ts', `project: ${name}-dev`).length, 0);
+    assert.equal(scanFileContent('packages/cli/test/context/ingest/importer.test.ts', `email: system@${name}.dev`).length, 0);
     assert.equal(scanFileContent('python/ktx-daemon/tests/test_package.py', `${name}-ktx`).length, 0);
   });
 
@@ -112,6 +112,43 @@ describe('scanFileContent', () => {
     );
   });
 
+  it('rejects concrete connector dialect imports from scan workflow and connector classes', () => {
+    const violations = [
+      ...scanFileContent(
+        'packages/cli/src/context/scan/relationship-profiling.ts',
+        "import { KtxPostgresDialect } from '../../connectors/postgres/dialect.js';",
+      ),
+      ...scanFileContent(
+        'packages/cli/src/connectors/postgres/connector.ts',
+        "import { KtxPostgresDialect } from './dialect.js';",
+      ),
+    ];
+
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      ['dialect-boundary', 'dialect-boundary'],
+    );
+    assert.equal(
+      violations[0]?.message,
+      'Forbidden concrete connector dialect import; use getDialectForDriver() from context/connections/dialects.ts',
+    );
+
+    assert.deepEqual(
+      scanFileContent(
+        'packages/cli/src/context/connections/dialects.ts',
+        "import { KtxPostgresDialect } from '../../connectors/postgres/dialect.js';",
+      ),
+      [],
+    );
+    assert.deepEqual(
+      scanFileContent(
+        'packages/cli/test/connectors/postgres/dialect.test.ts',
+        "import { KtxPostgresDialect } from './dialect.js';",
+      ),
+      [],
+    );
+  });
+
   it('rejects old KTX LLM port declarations in context', () => {
     const violations = [
       ...scanFileContent('packages/cli/src/context/agent/agent-runner.service.ts', 'export interface LlmProviderPort {}'),
@@ -150,7 +187,7 @@ describe('scanFileContent', () => {
 
     assert.deepEqual(
       scanFileContent(
-        'packages/cli/src/context/ingest/page-triage/page-triage.service.test.ts',
+        'packages/cli/test/context/ingest/page-triage/page-triage.service.test.ts',
         "const model = this.deps.llmProvider.getModelByName('test-model');",
       ),
       [],

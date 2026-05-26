@@ -5,6 +5,7 @@ import { type KtxLocalProject, loadKtxProject } from './context/project/project.
 import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/project/setup-config.js';
 import { serializeKtxProjectConfig } from './context/project/config.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { errorMessage, writePrefixedLines } from './clack.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
 import {
   type KtxDatabaseContextDepth,
@@ -745,7 +746,7 @@ export async function runKtxSetupContextStep(
 
     return await runBuild(args, io, deps, project, targets);
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
     return { status: 'failed', projectDir: args.projectDir };
   }
 }

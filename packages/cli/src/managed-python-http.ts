@@ -7,6 +7,7 @@ import type { LookerTableIdentifierParser } from './context/ingest/adapters/look
 import { createHttpSqlAnalysisPort, type KtxSqlAnalysisHttpJsonRunner } from './context/sql-analysis/http-sql-analysis-port.js';
 import type { SqlAnalysisPort } from './context/sql-analysis/ports.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { writePrefixedLines } from './clack.js';
 import {
   ensureManagedPythonCommandRuntime,
   type KtxManagedPythonInstallPolicy,
@@ -137,7 +138,7 @@ export function createManagedPythonDaemonBaseUrlResolver(
       force: false,
     });
     const verb = daemon.status === 'started' ? 'Started' : 'Using existing';
-    options.io.stderr.write(`${verb} KTX daemon: ${daemon.baseUrl}\n`);
+    writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} KTX daemon: ${daemon.baseUrl}`);
     cachedBaseUrl = daemon.baseUrl;
     return cachedBaseUrl;
   };

@@ -1,7 +1,11 @@
+import {
+  getDriverRegistration,
+  listSupportedDrivers,
+} from './context/connections/drivers.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import type { KtxScanConnector } from './context/scan/types.js';
 
-const SUPPORTED_DRIVERS = 'sqlite, postgres, mysql, clickhouse, sqlserver, bigquery, snowflake';
+const SUPPORTED_DRIVERS = listSupportedDrivers().join(', ');
 
 export async function createKtxCliScanConnector(
   project: KtxLocalProject,
@@ -17,58 +21,23 @@ export async function createKtxCliScanConnector(
       `Connection "${connectionId}" has no \`driver\` field in ktx.yaml. Supported drivers: ${SUPPORTED_DRIVERS}.`,
     );
   }
-  if (driver === 'sqlite') {
-    const { KtxSqliteScanConnector, isKtxSqliteConnectionConfig } = await import('./connectors/sqlite/connector.js');;
-    if (!isKtxSqliteConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxSqliteScanConnector({ connectionId, connection, projectDir: project.projectDir });
+
+  const registration = getDriverRegistration(driver);
+  if (!registration) {
+    throw new Error(
+      `Connection "${connectionId}" uses driver "${driver}", which has no native standalone KTX scan connector. Supported drivers: ${SUPPORTED_DRIVERS}.`,
+    );
   }
-  if (driver === 'postgres') {
-    const { KtxPostgresScanConnector, isKtxPostgresConnectionConfig } = await import('./connectors/postgres/connector.js');;
-    if (!isKtxPostgresConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxPostgresScanConnector({ connectionId, connection });
+
+  const connectorModule = await registration.load();
+  if (!connectorModule.isConnectionConfig(connection)) {
+    throw invalidConnectionConfigError(connectionId, driver);
   }
-  if (driver === 'mysql') {
-    const { KtxMysqlScanConnector, isKtxMysqlConnectionConfig } = await import('./connectors/mysql/connector.js');;
-    if (!isKtxMysqlConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxMysqlScanConnector({ connectionId, connection });
-  }
-  if (driver === 'clickhouse') {
-    const { KtxClickHouseScanConnector, isKtxClickHouseConnectionConfig } = await import('./connectors/clickhouse/connector.js');;
-    if (!isKtxClickHouseConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxClickHouseScanConnector({ connectionId, connection });
-  }
-  if (driver === 'sqlserver') {
-    const { KtxSqlServerScanConnector, isKtxSqlServerConnectionConfig } = await import('./connectors/sqlserver/connector.js');;
-    if (!isKtxSqlServerConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxSqlServerScanConnector({ connectionId, connection });
-  }
-  if (driver === 'bigquery') {
-    const { KtxBigQueryScanConnector, isKtxBigQueryConnectionConfig } = await import('./connectors/bigquery/connector.js');;
-    if (!isKtxBigQueryConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxBigQueryScanConnector({ connectionId, connection });
-  }
-  if (driver === 'snowflake') {
-    const { KtxSnowflakeScanConnector, isKtxSnowflakeConnectionConfig } = await import('./connectors/snowflake/connector.js');;
-    if (!isKtxSnowflakeConnectionConfig(connection)) {
-      throw invalidConnectionConfigError(connectionId, driver);
-    }
-    return new KtxSnowflakeScanConnector({ connectionId, connection, projectDir: project.projectDir });
-  }
-  throw new Error(
-    `Connection "${connectionId}" uses driver "${driver}", which has no native standalone KTX scan connector. Supported drivers: ${SUPPORTED_DRIVERS}.`,
-  );
+  return connectorModule.createScanConnector({
+    connectionId,
+    connection,
+    projectDir: project.projectDir,
+  });
 }
 
 function invalidConnectionConfigError(connectionId: string, driver: string): Error {

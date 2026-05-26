@@ -25,6 +25,7 @@ import { type KtxProjectConfig, type KtxProjectConnectionConfig, serializeKtxPro
 import { loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { errorMessage, writePrefixedLines } from './clack.js';
 import { pickNotionRootPages } from './notion-page-picker.js';
 import { runKtxSourceMapping } from './source-mapping.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
@@ -2074,7 +2075,7 @@ export async function runKtxSetupSourcesStep(
       return { status: 'ready', projectDir: args.projectDir, connectionIds: readyConnectionIds };
     }
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
     return { status: 'failed', projectDir: args.projectDir };
   }
 }
