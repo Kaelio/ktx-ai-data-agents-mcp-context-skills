@@ -11,15 +11,14 @@ describe('emit_historic_sql_evidence tool', () => {
     });
   });
 
-  it('writes table usage evidence to the ignored run evidence directory', async () => {
-    const writeFile = vi.fn(async () => ({ success: true, commitHash: null }));
+  it('writes table usage evidence using the work unit allowed raw paths', async () => {
+    const writeFile = vi.fn(async (_path: string, _body: string) => ({ success: true, commitHash: null }));
     const tool = createEmitHistoricSqlEvidenceTool();
 
     const result = await tool.execute!(
       {
         kind: 'table_usage',
         table: 'public.orders',
-        rawPath: 'tables/public.orders.json',
         usage: {
           narrative: 'Orders are repeatedly queried by paid status.',
           frequencyTier: 'high',
@@ -36,6 +35,7 @@ describe('emit_historic_sql_evidence tool', () => {
           connectionId: 'warehouse',
           session: {
             ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'historic-sql' },
+            allowedRawPaths: new Set(['tables/public.orders.json']),
             configService: { writeFile },
           },
         },
@@ -45,12 +45,53 @@ describe('emit_historic_sql_evidence tool', () => {
     expect(result).toBe('Recorded historic-SQL table_usage evidence for public.orders.');
     expect(writeFile).toHaveBeenCalledWith(
       '.ktx/ingest-evidence/historic-sql/run-1/historic-sql-table-public-orders.json',
-      expect.stringContaining('"kind": "table_usage"'),
+      expect.stringContaining('"rawPaths"'),
       'System User',
       'system@example.com',
       'Record historic-SQL evidence: historic-sql-table-public-orders',
       { skipLock: true },
     );
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('tables/public.orders.json'),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(Object),
+    );
+  });
+
+  it('rejects calls without a WorkUnit raw file context', async () => {
+    const tool = createEmitHistoricSqlEvidenceTool();
+
+    await expect(
+      tool.execute!(
+        {
+          kind: 'pattern',
+          pattern: {
+            slug: 'orders',
+            title: 'Orders',
+            narrative: 'Orders pattern.',
+            definitionSql: 'select * from public.orders',
+            tablesInvolved: ['public.orders'],
+            slRefs: ['orders'],
+            constituentTemplateIds: ['pg:1'],
+          },
+        },
+        {
+          toolCallId: 'call-1',
+          messages: [],
+          abortSignal: new AbortController().signal,
+          experimental_context: {
+            connectionId: 'warehouse',
+            session: {
+              ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'historic-sql' },
+              configService: { writeFile: vi.fn() },
+            },
+          },
+        } as never,
+      ),
+    ).resolves.toContain('emit_historic_sql_evidence requires a WorkUnit context');
   });
 
   it('rejects non-historic ingest sessions', async () => {
@@ -60,7 +101,6 @@ describe('emit_historic_sql_evidence tool', () => {
       tool.execute!(
         {
           kind: 'pattern',
-          rawPath: 'patterns-input.json',
           pattern: {
             slug: 'orders',
             title: 'Orders',
@@ -79,6 +119,7 @@ describe('emit_historic_sql_evidence tool', () => {
             connectionId: 'warehouse',
             session: {
               ingest: { runId: 'run-1', jobId: 'job-1', syncId: 'sync-1', sourceKey: 'notion' },
+              allowedRawPaths: new Set(['patterns-input/part-0001.json']),
               configService: { writeFile: vi.fn() },
             },
           },

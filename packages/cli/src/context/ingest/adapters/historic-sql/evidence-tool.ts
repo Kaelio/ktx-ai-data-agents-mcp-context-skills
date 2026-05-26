@@ -10,7 +10,6 @@ const emitHistoricSqlEvidenceInputSchema = z
   .object({
     kind: z.enum(['table_usage', 'pattern']),
     table: z.string().min(1).optional(),
-    rawPath: z.string().min(1),
     usage: tableUsageOutputSchema.optional(),
     pattern: patternOutputSchema.optional(),
   })
@@ -46,6 +45,7 @@ interface EmitHistoricSqlEvidenceToolContext {
   connectionId?: string | null;
   session?: {
     ingest?: { runId: string; sourceKey: string };
+    allowedRawPaths?: ReadonlySet<string>;
     configService?: {
       writeFile(
         path: string,
@@ -66,7 +66,7 @@ function unitKeyForEvidence(input: EmitHistoricSqlEvidenceInput): string {
   return `historic-sql-pattern-${String(input.pattern?.slug).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
 }
 
-function evidenceEnvelope(input: EmitHistoricSqlEvidenceInput, connectionId: string) {
+function evidenceEnvelope(input: EmitHistoricSqlEvidenceInput, connectionId: string, rawPaths: string[]) {
   if (input.kind === 'table_usage') {
     if (!input.table || !input.usage) {
       throw new Error('Invalid historic-SQL table usage evidence input.');
@@ -75,7 +75,7 @@ function evidenceEnvelope(input: EmitHistoricSqlEvidenceInput, connectionId: str
       kind: 'table_usage' as const,
       connectionId,
       table: input.table,
-      rawPath: input.rawPath,
+      rawPaths,
       usage: input.usage,
     };
   }
@@ -85,7 +85,7 @@ function evidenceEnvelope(input: EmitHistoricSqlEvidenceInput, connectionId: str
   return {
     kind: 'pattern' as const,
     connectionId,
-    rawPath: input.rawPath,
+    rawPaths,
     pattern: input.pattern,
   };
 }
@@ -102,9 +102,13 @@ export function createEmitHistoricSqlEvidenceTool(defaultContext?: EmitHistoricS
       if (!ingest || ingest.sourceKey !== 'historic-sql' || !configService || !context?.connectionId) {
         return 'Error: emit_historic_sql_evidence is only available during historic-sql ingest.';
       }
+      const rawPaths = context.session?.allowedRawPaths ? [...context.session.allowedRawPaths].sort() : [];
+      if (rawPaths.length === 0) {
+        return 'Error: emit_historic_sql_evidence requires a WorkUnit context with at least one raw file.';
+      }
 
       const unitKey = unitKeyForEvidence(input);
-      const evidence = evidenceEnvelope(input, context.connectionId);
+      const evidence = evidenceEnvelope(input, context.connectionId, rawPaths);
       const content = serializeHistoricSqlEvidence(evidence);
       await configService.writeFile(
         historicSqlEvidencePath(ingest.runId, unitKey),

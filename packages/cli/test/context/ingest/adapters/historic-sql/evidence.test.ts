@@ -12,7 +12,7 @@ describe('historic-sql evidence contracts', () => {
       kind: 'table_usage',
       connectionId: 'warehouse',
       table: 'public.orders',
-      rawPath: 'tables/public.orders.json',
+      rawPaths: ['tables/public.orders.json'],
       usage: {
         narrative: 'Orders are repeatedly queried for paid/refunded lifecycle analysis.',
         frequencyTier: 'high',
@@ -32,7 +32,7 @@ describe('historic-sql evidence contracts', () => {
       historicSqlEvidenceEnvelopeSchema.parse({
         kind: 'pattern',
         connectionId: 'warehouse',
-        rawPath: 'patterns-input.json',
+        rawPaths: ['patterns-input/part-0001.json'],
         pattern: {
           slug: 'order-lifecycle-analysis',
           title: 'Order Lifecycle Analysis',

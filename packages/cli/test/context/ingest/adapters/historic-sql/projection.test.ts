@@ -60,7 +60,7 @@ describe('projectHistoricSqlEvidence', () => {
       kind: 'table_usage',
       connectionId: 'warehouse',
       table: 'public.orders',
-      rawPath: 'tables/public.orders.json',
+      rawPaths: ['tables/public.orders.json'],
       usage: {
         narrative: 'Orders are repeatedly queried for lifecycle analysis.',
         frequencyTier: 'high',
@@ -158,7 +158,7 @@ describe('projectHistoricSqlEvidence', () => {
     await writeJson(workdir, '.ktx/ingest-evidence/historic-sql/run-1/pattern.json', {
       kind: 'pattern',
       connectionId: 'warehouse',
-      rawPath: 'patterns-input.json',
+      rawPaths: ['patterns-input/part-0001.json'],
       pattern: {
         slug: 'order-lifecycle-analysis',
         title: 'Order Lifecycle Analysis',
@@ -179,7 +179,7 @@ describe('projectHistoricSqlEvidence', () => {
         expect.objectContaining({
           target: 'wiki',
           key: 'historic-sql-old-order-lifecycle',
-          rawPaths: ['patterns-input.json'],
+          rawPaths: ['patterns-input/part-0001.json'],
         }),
       ]),
     );
@@ -234,7 +234,7 @@ describe('projectHistoricSqlEvidence', () => {
     await writeJson(workdir, '.ktx/ingest-evidence/historic-sql/run-1/pattern.json', {
       kind: 'pattern',
       connectionId: 'warehouse',
-      rawPath: 'patterns-input.json',
+      rawPaths: ['patterns-input/part-0001.json'],
       pattern: {
         slug: 'order-lifecycle-analysis',
         title: 'Order Lifecycle Analysis',
@@ -343,7 +343,7 @@ describe('projectHistoricSqlEvidence', () => {
       kind: 'table_usage',
       connectionId: 'warehouse',
       table: 'public.customers',
-      rawPath: 'tables/public.customers.json',
+      rawPaths: ['tables/public.customers.json'],
       usage: {
         narrative: 'Customers were queried.',
         frequencyTier: 'low',
@@ -380,7 +380,7 @@ describe('projectHistoricSqlEvidence', () => {
     expect(result.touchedSources).toEqual([{ connectionId: 'warehouse', sourceName: 'orders' }]);
     const staleAction = result.actions.find((action) => action.target === 'sl' && action.key === 'orders');
     expect(staleAction).toEqual(expect.objectContaining({ target: 'sl', key: 'orders' }));
-    expect(staleAction?.rawPaths).toBeUndefined();
+    expect(staleAction?.rawPaths).toEqual(['manifest.json']);
     const shard = YAML.parse(await readFile(join(workdir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8'));
     expect(shard.tables.orders.usage).toEqual({
       ownerNote: 'keep analyst annotation',

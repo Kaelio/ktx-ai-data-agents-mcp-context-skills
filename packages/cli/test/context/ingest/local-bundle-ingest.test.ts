@@ -139,7 +139,6 @@ class HistoricSqlEvidenceAgentRunner implements AgentRunnerPort {
       const result = await emitEvidence.execute({
         kind: 'table_usage',
         table: 'public.orders',
-        rawPath: 'tables/public.orders.json',
         usage: {
           narrative: 'Orders are repeatedly queried by lifecycle status.',
           frequencyTier: 'high',
