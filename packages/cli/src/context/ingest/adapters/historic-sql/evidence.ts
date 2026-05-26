@@ -14,7 +14,7 @@ export const historicSqlTableUsageEvidenceSchema = z.object({
   kind: z.literal('table_usage'),
   connectionId: z.string().min(1),
   table: z.string().min(1),
-  rawPath: z.string().min(1),
+  rawPaths: z.array(z.string().min(1)).min(1),
   usage: tableUsageOutputSchema,
 });
 
@@ -22,7 +22,7 @@ export const historicSqlTableUsageEvidenceSchema = z.object({
 export const historicSqlPatternEvidenceSchema = z.object({
   kind: z.literal('pattern'),
   connectionId: z.string().min(1),
-  rawPath: z.string().min(1),
+  rawPaths: z.array(z.string().min(1)).min(1),
   pattern: patternOutputSchema,
 });
 

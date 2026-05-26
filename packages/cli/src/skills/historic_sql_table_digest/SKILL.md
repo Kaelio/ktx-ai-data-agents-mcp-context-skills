@@ -53,7 +53,6 @@ Call `emit_historic_sql_evidence` with this shape:
 {
   "kind": "table_usage",
   "table": "public.orders",
-  "rawPath": "tables/public.orders.json",
   "usage": {
     "narrative": "Orders are repeatedly queried for paid/refunded lifecycle analysis and customer-level rollups.",
     "frequencyTier": "high",

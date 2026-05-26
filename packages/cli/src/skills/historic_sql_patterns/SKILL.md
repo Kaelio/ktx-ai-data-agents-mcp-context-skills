@@ -15,8 +15,7 @@ Use this skill when the WorkUnit raw file is a `patterns-input/part-0001.json` s
 3. Call `read_raw_file` for that exact raw file path.
 4. Identify recurring analytical intents that span at least two tables and have repeated usage signal.
 5. Emit one `pattern` evidence object per durable cross-table intent by calling `emit_historic_sql_evidence`.
-6. Set each evidence object's `rawPath` to the exact raw file path read in step 3.
-7. Stop after all pattern evidence has been emitted.
+6. Stop after all pattern evidence has been emitted.
 
 Every join column mentioned in pattern descriptions must be verified via
 entity_details for both sides of the join.
@@ -56,7 +55,6 @@ Each call to `emit_historic_sql_evidence` must use this shape:
 ```json
 {
   "kind": "pattern",
-  "rawPath": "patterns-input/part-0001.json",
   "pattern": {
     "slug": "order-lifecycle-analysis",
     "title": "Order Lifecycle Analysis",
