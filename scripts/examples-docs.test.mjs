@@ -255,7 +255,8 @@ describe('standalone example docs', () => {
     assert.match(reviewingContext, /ktx ingest --all --no-input/);
     assert.match(quickstart, /schema context/);
     assert.match(primarySources, /context:\n      queryHistory:/);
-    assert.match(rootReadme, /`ktx ingest <id>` \| Build context for one connection/);
+    assert.match(rootReadme, /`ktx ingest` \| Build context for every configured connection/);
+    assert.doesNotMatch(rootReadme, /`ktx ingest <id>`/);
     assert.match(quickstart, /Databases:\n  warehouse: deep context complete/);
     assert.match(quickstart, /Databases configured: yes \(warehouse\)/);
     assert.match(setupReference, /Databases configured: yes \(postgres-warehouse\)/);

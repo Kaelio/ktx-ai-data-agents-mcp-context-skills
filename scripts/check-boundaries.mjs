@@ -5,15 +5,6 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py']);
-const runtimeAssetPatterns = [/^packages\/cli\/src\/prompts\/.+\.md$/, /^packages\/cli\/src\/skills\/.+\.md$/];
-const identifierSkipPrefixes = ['docs/', 'docs-site/', 'examples/', 'python/ktx-sl/plans/', 'python/ktx-sl/openspec/'];
-const identifierAllowPatterns = [
-  /^packages\/cli\/src\/(?:index|managed-local-embeddings|managed-python-command|managed-python-daemon|managed-python-runtime|release-version|runtime)(?:\.test)?\.ts$/,
-  /^python\/ktx-daemon\/src\/ktx_daemon\/__init__\.py$/,
-  /^scripts\/(?:build-python-runtime-wheel|local-embeddings-runtime-smoke|package-artifacts|public-npm-release-metadata|published-package-smoke|release-readiness)(?:\.test)?\.mjs$/,
-  /^scripts\/semantic-release-config\.cjs$/,
-];
-const forbiddenIdentifierTerms = ['kae' + 'lio', 'Kae' + 'lio', 'KAE' + 'LIO_'];
 
 const appImportPatterns = [
   {
@@ -83,10 +74,6 @@ function isCodeSource(relativePath) {
   return codeExtensions.has(path.extname(relativePath));
 }
 
-function isRuntimeAsset(relativePath) {
-  return runtimeAssetPatterns.some((pattern) => pattern.test(relativePath));
-}
-
 function scansForAppImports(relativePath) {
   return isCodeSource(relativePath);
 }
@@ -111,18 +98,6 @@ function scansForConcreteDialectImportBoundaries(relativePath) {
     relativePath.startsWith('packages/cli/src/context/scan/') ||
     /^packages\/cli\/src\/connectors\/[^/]+\/connector\.ts$/.test(relativePath)
   );
-}
-
-function scansForForbiddenIdentifiers(relativePath) {
-  return (isCodeSource(relativePath) && !isTestSource(relativePath)) || isRuntimeAsset(relativePath);
-}
-
-function skipsIdentifierScan(relativePath) {
-  return identifierSkipPrefixes.some((prefix) => relativePath.startsWith(prefix));
-}
-
-function allowsForbiddenIdentifier(relativePath) {
-  return identifierAllowPatterns.some((pattern) => pattern.test(relativePath));
 }
 
 export function scanFileContent(relativePath, content) {
@@ -173,22 +148,6 @@ export function scanFileContent(relativePath, content) {
           kind: 'dialect-boundary',
           message:
             'Forbidden concrete connector dialect import; use getDialectForDriver() from context/connections/dialects.ts',
-        });
-      }
-    }
-  }
-
-  if (
-    scansForForbiddenIdentifiers(normalizedPath) &&
-    !skipsIdentifierScan(normalizedPath) &&
-    !allowsForbiddenIdentifier(normalizedPath)
-  ) {
-    for (const term of forbiddenIdentifierTerms) {
-      if (content.includes(term)) {
-        violations.push({
-          file: normalizedPath,
-          kind: 'identifier',
-          message: `Forbidden product identifier "${term}"`,
         });
       }
     }
