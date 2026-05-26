@@ -35,6 +35,7 @@ import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitTelemetryEvent } from './telemetry/index.js';
 import {
   createKtxSetupPromptAdapter,
+  createKtxSetupUiAdapter,
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 
@@ -1780,6 +1781,11 @@ async function chooseDrivers(
     return 'missing-input';
   }
   const initialValues = unique(options?.initialDrivers ?? []);
+  createKtxSetupUiAdapter().note(
+    'Get demo credentials at https://kaelio.com/start',
+    '🎁 Need a warehouse to play with?',
+    io,
+  );
   const choices = await prompts.multiselect({
     message: withMultiselectNavigation('Which databases should KTX connect to?'),
     options: [...DRIVER_OPTIONS],
