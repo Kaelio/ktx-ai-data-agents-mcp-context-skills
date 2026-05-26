@@ -589,6 +589,7 @@ export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSet
 async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
   const setupUi = deps.setupUi ?? createKtxSetupUiAdapter();
   setupUi.intro('KTX setup', io);
+  setupUi.note('https://docs.kaelio.com/ktx', '📚 Docs', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
   let agentNextActions: string | undefined;
