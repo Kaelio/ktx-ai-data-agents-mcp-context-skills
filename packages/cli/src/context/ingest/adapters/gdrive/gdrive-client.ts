@@ -95,6 +95,7 @@ export function createGoogleDocsClients(rawKey: unknown): {
     docs: {
       async getDocument(documentId: string) {
         const params = new URLSearchParams({
+          includeTabsContent: 'true',
           suggestionsViewMode: 'PREVIEW_WITHOUT_SUGGESTIONS',
         });
         const response = await authorizedFetch(client, `${GOOGLE_DOCS_BASE_URL}/documents/${documentId}?${params.toString()}`);

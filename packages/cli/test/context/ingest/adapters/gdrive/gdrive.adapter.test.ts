@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { GdriveSourceAdapter } from './gdrive.adapter.js';
+import { GdriveSourceAdapter } from '../../../../../src/context/ingest/adapters/gdrive/gdrive.adapter.js';
 
 describe('GdriveSourceAdapter', () => {
   let stagedDir: string;

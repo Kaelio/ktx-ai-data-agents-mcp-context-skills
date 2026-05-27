@@ -57,12 +57,72 @@ export interface GoogleDocsDocument {
   body?: {
     content?: GoogleDocsStructuralElement[];
   };
+  documentStyle?: GoogleDocsDocumentStyle;
+  lists?: Record<string, GoogleDocsList>;
+  headers?: Record<string, GoogleDocsHeaderFooter>;
+  footers?: Record<string, GoogleDocsHeaderFooter>;
+  tabs?: GoogleDocsTab[];
+}
+
+export interface GoogleDocsList {
+  listProperties?: {
+    nestingLevels?: GoogleDocsListNestingLevel[];
+  };
+}
+
+export interface GoogleDocsListNestingLevel {
+  glyphType?: string;
+  glyphSymbol?: string;
+}
+
+export interface GoogleDocsTab {
+  tabProperties?: {
+    tabId?: string;
+    title?: string;
+  };
+  childTabs?: GoogleDocsTab[];
+  documentTab?: {
+    body?: {
+      content?: GoogleDocsStructuralElement[];
+    };
+    documentStyle?: GoogleDocsDocumentStyle;
+    lists?: Record<string, GoogleDocsList>;
+    headers?: Record<string, GoogleDocsHeaderFooter>;
+    footers?: Record<string, GoogleDocsHeaderFooter>;
+  };
+}
+
+export interface GoogleDocsDocumentStyle {
+  defaultHeaderId?: string;
+  defaultFooterId?: string;
+  firstPageHeaderId?: string;
+  firstPageFooterId?: string;
+  evenPageHeaderId?: string;
+  evenPageFooterId?: string;
+}
+
+export interface GoogleDocsHeaderFooter {
+  headerId?: string;
+  footerId?: string;
+  content?: GoogleDocsStructuralElement[];
 }
 
 export interface GoogleDocsStructuralElement {
   paragraph?: GoogleDocsParagraph;
-  table?: unknown;
+  table?: GoogleDocsTable;
   sectionBreak?: unknown;
+}
+
+export interface GoogleDocsTable {
+  tableRows?: GoogleDocsTableRow[];
+}
+
+export interface GoogleDocsTableRow {
+  tableCells?: GoogleDocsTableCell[];
+}
+
+export interface GoogleDocsTableCell {
+  content?: GoogleDocsStructuralElement[];
 }
 
 export interface GoogleDocsParagraph {
@@ -73,7 +133,13 @@ export interface GoogleDocsParagraph {
   };
   paragraphStyle?: {
     namedStyleType?: string;
+    headingId?: string;
   };
+}
+
+export interface GoogleDocsLinkTarget {
+  id?: string;
+  tabId?: string;
 }
 
 export interface GoogleDocsParagraphElement {
@@ -84,7 +150,14 @@ export interface GoogleDocsParagraphElement {
       italic?: boolean;
       underline?: boolean;
       strikethrough?: boolean;
-      link?: { url?: string };
+      link?: {
+        url?: string;
+        tabId?: string;
+        headingId?: string;
+        bookmarkId?: string;
+        heading?: GoogleDocsLinkTarget;
+        bookmark?: GoogleDocsLinkTarget;
+      };
       weightedFontFamily?: { fontFamily?: string };
       baselineOffset?: 'SUPERSCRIPT' | 'SUBSCRIPT' | string;
     };

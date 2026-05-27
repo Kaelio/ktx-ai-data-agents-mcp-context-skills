@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchGdriveSnapshot } from './fetch.js';
+import { fetchGdriveSnapshot } from '../../../../../src/context/ingest/adapters/gdrive/fetch.js';
 
 const getDocument = vi.fn(async () => ({
   title: 'Herness and Enterprise Agent Operating Framework for Connected Systems',
@@ -22,14 +22,14 @@ const listFiles = vi.fn(async () => ({
   nextPageToken: null,
 }));
 
-vi.mock('./gdrive-client.js', () => ({
+vi.mock('../../../../../src/context/ingest/adapters/gdrive/gdrive-client.js', () => ({
   createGoogleDocsClients: vi.fn(() => ({
     drive: { listFiles },
     docs: { getDocument },
   })),
 }));
 
-vi.mock('./normalize.js', () => ({
+vi.mock('../../../../../src/context/ingest/adapters/gdrive/normalize.js', () => ({
   normalizeGoogleDocToMarkdown: vi.fn(() => 'Durable operating rules.'),
 }));
 

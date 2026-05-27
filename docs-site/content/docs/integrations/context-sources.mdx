@@ -384,7 +384,7 @@ Ingests Google Docs from a shared Google Drive folder as wiki-ready knowledge co
 
 - Wiki pages synthesized from Google Docs content
 - Folder-scoped knowledge ingestion from a specific Drive folder
-- Markdown normalization for headings, lists, paragraphs, links, and common inline formatting
+- Markdown normalization for headings, lists, paragraphs, links, common inline formatting, and Google Docs tables
 
 ### Connection config
 
@@ -435,7 +435,8 @@ connections:
 ### Notes
 
 - `gdrive` is knowledge-only in v1; it does not produce semantic layer sources
-- Setup wizard support and `ktx connection test` support are deferred to follow-up work
+- `ktx setup` supports Google Drive configuration, including the service-account key ref, folder id, and recursive crawl flag
+- `ktx connection test <connectionId>` supports `gdrive` and reports the number of Google Docs visible in the configured folder
 - The service account must be granted access to the target folder explicitly
 
 ## Common errors
