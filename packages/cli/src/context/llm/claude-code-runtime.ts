@@ -58,6 +58,22 @@ function isResult(message: SDKMessage): message is SDKResultMessage {
   return message.type === 'result';
 }
 
+// Skip emissions the SDK does not count toward `num_turns`: `pause_turn` continuations and
+// errored partials (e.g. `max_output_tokens`) it retries internally. Without this, the
+// runtime's step counter outruns `maxTurns` and the HUD renders e.g. `step 69/40`.
+function countsAsAssistantTurn(message: SDKMessage): boolean {
+  if (message.type !== 'assistant' || message.parent_tool_use_id !== null) {
+    return false;
+  }
+  if (message.error !== undefined) {
+    return false;
+  }
+  if (message.message.stop_reason === 'pause_turn') {
+    return false;
+  }
+  return true;
+}
+
 function resultError(result: SDKResultMessage): Error | undefined {
   if (result.subtype === 'success') {
     return undefined;
@@ -190,7 +206,7 @@ async function collectResult(params: {
   let result: SDKResultMessage | undefined;
   for await (const message of params.query({ prompt: params.prompt, options: params.options })) {
     assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
-    if (message.type === 'assistant' && message.parent_tool_use_id === null) {
+    if (countsAsAssistantTurn(message)) {
       await params.onAssistantTurn?.();
     }
     if (isResult(message)) {

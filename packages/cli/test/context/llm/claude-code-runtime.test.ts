@@ -415,6 +415,64 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     );
   });
 
+  it('counts only assistant turns the SDK counts toward num_turns', async () => {
+    const assistantMessage = (
+      overrides: Partial<Extract<SDKMessage, { type: 'assistant' }>> & { uuid: string },
+    ): SDKMessage =>
+      ({
+        type: 'assistant',
+        message: { role: 'assistant', content: [], stop_reason: 'end_turn' },
+        parent_tool_use_id: null,
+        session_id: 'session-id',
+        ...overrides,
+      }) as unknown as SDKMessage;
+
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage(),
+        assistantMessage({
+          uuid: '00000000-0000-4000-8000-0000000000a1',
+          error: 'max_output_tokens',
+        }),
+        assistantMessage({
+          uuid: '00000000-0000-4000-8000-0000000000a2',
+          message: { role: 'assistant', content: [], stop_reason: 'pause_turn' } as never,
+        }),
+        assistantMessage({ uuid: '00000000-0000-4000-8000-0000000000a3' }),
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [], stop_reason: 'end_turn' },
+          parent_tool_use_id: 'tool-use-1',
+          uuid: '00000000-0000-4000-8000-0000000000a4',
+          session_id: 'session-id',
+        } as unknown as SDKMessage,
+        resultMessage({ subtype: 'success', terminal_reason: 'completed' }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+    });
+    const onStepFinish = vi.fn();
+
+    await expect(
+      runtime.runAgentLoop({
+        modelRole: 'default',
+        systemPrompt: 'system',
+        userPrompt: 'user',
+        toolSet: {},
+        stepBudget: 40,
+        telemetryTags: { operationName: 'test' },
+        onStepFinish,
+      }),
+    ).resolves.toEqual({ stopReason: 'natural' });
+
+    expect(onStepFinish).toHaveBeenCalledTimes(1);
+    expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 40 });
+  });
+
   it('logs and ignores onStepFinish callback errors', async () => {
     const query = vi.fn((_input: any) =>
       stream([
