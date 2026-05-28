@@ -1,0 +1,7 @@
+interface:
+  display_name: "ktx"
+  short_description: "Install and configure ktx for data agents"
+  default_prompt: "Use $ktx to install and configure ktx in this project."
+
+policy:
+  allow_implicit_invocation: true

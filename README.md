@@ -119,9 +119,8 @@ Agent integration ready: yes (codex:project)
 > your project directory:
 >
 > ```text
-> Follow instructions from
-> https://docs.kaelio.com/ktx/docs/agents-setup.md
-> to install and configure ktx
+> Run npx skills add Kaelio/ktx --skill ktx and use the ktx skill to install
+> and configure ktx in this project.
 > ```
 
 > [!IMPORTANT]
