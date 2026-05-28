@@ -6,9 +6,9 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
 dependencies = [
-    "sqlglot>=26",
-    "pydantic>=2",
-    "pyyaml>=6",
+  "sqlglot>=30",
+  "pydantic>=2",
+  "pyyaml>=6",
 ]
 
 [project.urls]
@@ -18,13 +18,13 @@ Issues = "https://github.com/kaelio/ktx/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8",
-    "pytest-cov",
-    "ruff",
-    "pre-commit",
+  "pytest>=8",
+  "pytest-cov",
+  "ruff",
+  "pre-commit",
 ]
 tpch = [
-    "duckdb>=1.0",
+  "duckdb>=1.0",
 ]
 
 [tool.pytest.ini_options]
@@ -40,9 +40,9 @@ branch = true
 show_missing = true
 skip_empty = true
 exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.",
-    "if TYPE_CHECKING:",
+  "pragma: no cover",
+  "if __name__ == .__main__.",
+  "if TYPE_CHECKING:",
 ]
 
 [build-system]
@@ -54,6 +54,6 @@ packages = ["semantic_layer"]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
-    "pytest-cov>=7.1.0",
+  "pytest>=9.0.2",
+  "pytest-cov>=7.1.0",
 ]

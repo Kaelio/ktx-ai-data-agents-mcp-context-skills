@@ -6,18 +6,18 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
 dependencies = [
-    "fastapi>=0.115.0",
-    "ktx-sl",
-    "lkml>=1.3.7",
-    "numpy>=2.2.6",
-    "orjson>=3.11.4",
-    "pandas>=2.2.3",
-    "posthog>=7.0.0",
-    "psycopg[binary]>=3.2.0",
-    "pydantic>=2.9.0",
-    "requests>=2.32.0",
-    "sqlglot>=26",
-    "uvicorn[standard]>=0.32.0",
+  "fastapi>=0.136.3",
+  "ktx-sl",
+  "lkml>=1.3.7",
+  "numpy>=2.4.6",
+  "orjson>=3.11.9",
+  "pandas>=3.0.3",
+  "posthog>=7.16.1",
+  "psycopg[binary]>=3.3.4",
+  "pydantic>=2.13.4",
+  "requests>=2.34.2",
+  "sqlglot>=30",
+  "uvicorn[standard]>=0.48.0",
 ]
 
 [project.scripts]
@@ -25,8 +25,8 @@ ktx-daemon = "ktx_daemon.__main__:main"
 
 [project.optional-dependencies]
 local-embeddings = [
-    "sentence-transformers>=5.1.1",
-    "torch>=2.2.0",
+  "sentence-transformers>=5.1.1",
+  "torch>=2.2.0",
 ]
 
 [project.urls]
@@ -43,8 +43,8 @@ packages = ["src/ktx_daemon"]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
-    "pytest>=9.0.2",
+  "httpx>=0.28.1",
+  "pytest>=9.0.2",
 ]
 
 [tool.uv.sources]

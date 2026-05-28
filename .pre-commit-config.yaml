@@ -14,6 +14,12 @@ repos:
       - id: check-case-conflict
       - id: mixed-line-ending
 
+  - repo: https://github.com/tombi-toml/tombi-pre-commit
+    rev: v1.1.0
+    hooks:
+      - id: tombi-format
+        args: ["--offline"]
+
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.21.2
     hooks:

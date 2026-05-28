@@ -13,10 +13,10 @@ Issues = "https://github.com/kaelio/ktx/issues"
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4.6.0",
-    "pytest>=9.0.2",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.8.4",
+  "pre-commit>=4.6.0",
+  "pytest>=9.0.2",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.8.4",
 ]
 
 [tool.uv]
@@ -32,14 +32,14 @@ torch = { index = "pytorch-cpu" }
 
 [tool.uv.workspace]
 members = [
-    "python/ktx-sl",
-    "python/ktx-daemon",
+  "python/ktx-sl",
+  "python/ktx-daemon",
 ]
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
 pythonpath = ["python/ktx-sl/tests"]
 testpaths = [
-    "python/ktx-sl/tests",
-    "python/ktx-daemon/tests",
+  "python/ktx-sl/tests",
+  "python/ktx-daemon/tests",
 ]

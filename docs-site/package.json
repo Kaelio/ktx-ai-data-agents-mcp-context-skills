@@ -11,16 +11,16 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",
-    "fumadocs-core": "16.8.10",
-    "fumadocs-mdx": "15.0.4",
-    "fumadocs-ui": "16.8.10",
+    "fumadocs-core": "17.0.0",
+    "fumadocs-mdx": "15.0.7",
+    "fumadocs-ui": "17.0.0",
     "next": "^16",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
