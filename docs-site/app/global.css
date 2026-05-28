@@ -166,12 +166,16 @@ pre {
 }
 
 /* Disable monospace ligatures so `--flag` keeps a visible space and double
-   dashes don't fuse into an em-dash glyph. */
+   dashes don't fuse into an em-dash glyph. Covers every monospace surface:
+   raw <code>/<pre>, the ktx-code wrapper, Tailwind's `font-mono` utility,
+   and anything that opts in via the `var(--font-mono)` family directly. */
 code,
 pre,
 pre code,
 .ktx-code,
-.ktx-code code {
+.ktx-code code,
+.font-mono,
+[style*="--font-mono"] {
   font-variant-ligatures: none !important;
   font-feature-settings: "liga" 0, "calt" 0 !important;
 }

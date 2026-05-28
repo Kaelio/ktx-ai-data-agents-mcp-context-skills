@@ -375,6 +375,22 @@ that do not change user-facing behavior. When you do update docs, follow the
 warrants docs but you are out of scope, call it out in your final summary
 rather than silently skipping it.
 
+#### Monospace ligatures in `docs-site/`
+
+- **MUST**: Disable monospace ligatures on every surface that uses the
+  `var(--font-mono)` family (Geist Mono). Geist Mono fuses `--` into an
+  em-dash glyph that visually eats the adjacent space, so prompts like
+  `npx skills add Kaelio/ktx --skill ktx` render as `Kaelio/ktx--skill ktx`.
+- **MUST**: When adding a new container that renders user-visible monospace
+  text outside `<code>` / `<pre>` (e.g. a styled `<div className="font-mono">`
+  for a copyable prompt), verify the global ligature-off rule in
+  `docs-site/app/global.css` covers its selector. Either use Tailwind's
+  `font-mono` utility (already covered) or extend the rule to match the new
+  class — do not silently rely on Geist Mono's defaults.
+- **SHOULD**: Prefer `<code>` / `<pre>` (or a `font-mono` wrapper) for any
+  string that contains CLI flags, paths, or other tokens with `--`, `->`,
+  `>=`, `!=`, `==`, `//` so ligatures never alter intent.
+
 ## LLM and Prompt Development
 
 When creating or modifying agent prompts, system prompts, tool descriptions, or
