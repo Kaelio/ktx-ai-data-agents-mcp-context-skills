@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -602,7 +602,7 @@ describe('setup status', () => {
     expect(testIo.stderr()).toBe('');
   });
 
-  it('removes a newly created missing project directory when a later runtime step fails', async () => {
+  it('preserves a newly created missing project directory when a later setup step fails', async () => {
     const projectDir = join(tempDir, 'missing-project');
     const testIo = makeIo();
 
@@ -634,10 +634,12 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(1);
 
-    await expect(stat(projectDir)).rejects.toThrow();
+    await expect(stat(projectDir)).resolves.toBeDefined();
+    await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
+    await expect(stat(join(projectDir, '.ktx'))).resolves.toBeDefined();
   });
 
-  it('removes KTX scaffold files from an initially empty project directory when runtime setup fails', async () => {
+  it('preserves KTX scaffold files in an initially empty project directory when setup fails', async () => {
     const testIo = makeIo();
 
     await expect(
@@ -668,8 +670,59 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(1);
 
-    await expect(stat(tempDir)).resolves.toBeDefined();
-    expect(await readdir(tempDir)).toEqual([]);
+    await expect(stat(join(tempDir, 'ktx.yaml'))).resolves.toBeDefined();
+    await expect(stat(join(tempDir, '.ktx'))).resolves.toBeDefined();
+  });
+
+  it('preserves partial context-build artifacts and resume state when the context step fails', async () => {
+    const projectDir = join(tempDir, 'partial-context');
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir }),
+          databases: async () => ({ status: 'skipped', projectDir }),
+          sources: async () => ({ status: 'skipped', projectDir }),
+          runtime: async () => runtimeReady(projectDir),
+          context: async () => {
+            await mkdir(join(projectDir, '.ktx', 'setup'), { recursive: true });
+            await writeFile(
+              join(projectDir, '.ktx', 'setup', 'state.json'),
+              JSON.stringify({ status: 'failed', retryableFailedTargets: [{ source: 'metabase' }] }),
+              'utf-8',
+            );
+            await mkdir(join(projectDir, 'wiki'), { recursive: true });
+            await writeFile(join(projectDir, 'wiki', 'postgres-warehouse.md'), '# warehouse\n', 'utf-8');
+            await mkdir(join(projectDir, 'semantic-layer'), { recursive: true });
+            await writeFile(join(projectDir, 'semantic-layer', 'orders.yaml'), 'name: orders\n', 'utf-8');
+            return { status: 'failed', projectDir };
+          },
+        },
+      ),
+    ).resolves.toBe(1);
+
+    await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
+    await expect(readFile(join(projectDir, '.ktx', 'setup', 'state.json'), 'utf-8')).resolves.toContain('"status":"failed"');
+    await expect(readFile(join(projectDir, 'wiki', 'postgres-warehouse.md'), 'utf-8')).resolves.toContain('warehouse');
+    await expect(readFile(join(projectDir, 'semantic-layer', 'orders.yaml'), 'utf-8')).resolves.toContain('orders');
   });
 
   it('preserves a pre-existing non-empty project directory when runtime setup fails', async () => {
