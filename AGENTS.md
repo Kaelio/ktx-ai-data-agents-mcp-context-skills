@@ -323,6 +323,26 @@ use `PascalCase` without the suffix.
   source-code identifier, package/API name, or other literal value that must
   match the implementation.
 
+### Product Category Naming
+
+- **MUST**: Use **context layer** as the primary public category for **ktx**.
+  Preferred phrase: `context layer for data agents`.
+- **MUST**: Use **context engine** only as the secondary mechanism term for the
+  active system that builds, reconciles, validates, searches, and serves the
+  context layer.
+- **MUST**: Keep **semantic layer** as the narrower term for executable metric
+  definitions, semantic sources, joins, measures, and SQL compilation.
+- **MUST NOT**: Replace every `semantic layer` occurrence with `context layer`;
+  the semantic layer is one pillar inside the broader context layer.
+
+Preferred pattern:
+
+```md
+**ktx** is an open-source context layer for data agents. Its context engine
+ingests warehouse metadata, BI definitions, query history, docs, and approved
+metrics, then turns them into reviewable files agents can search and execute.
+```
+
 ### Terminology
 
 For canonical vocabulary used across docs, code, comments, CLI strings, and
