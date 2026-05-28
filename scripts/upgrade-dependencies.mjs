@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFileCallback);
+const npmCheckUpdatesRejectArgs = ['--reject', 'fumadocs-core,fumadocs-ui'];
 
 function ktxRootDir() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,8 +62,15 @@ export async function runDependencyUpgrade(options = {}) {
     {
       name: 'TypeScript dependency constraints',
       command: 'pnpm',
-      args: ['dlx', 'npm-check-updates', '-u', '--deep', ...npmCheckUpdatesCooldownArgs],
-      retry: commandText('pnpm', ['dlx', 'npm-check-updates', '-u', '--deep', ...npmCheckUpdatesCooldownArgs]),
+      args: ['dlx', 'npm-check-updates', '-u', '--deep', ...npmCheckUpdatesRejectArgs, ...npmCheckUpdatesCooldownArgs],
+      retry: commandText('pnpm', [
+        'dlx',
+        'npm-check-updates',
+        '-u',
+        '--deep',
+        ...npmCheckUpdatesRejectArgs,
+        ...npmCheckUpdatesCooldownArgs,
+      ]),
     },
     ...pythonDependencyUpdatePhases(),
     {

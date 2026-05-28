@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",
-    "fumadocs-core": "17.0.0",
+    "fumadocs-core": "16.8.10",
     "fumadocs-mdx": "15.0.7",
-    "fumadocs-ui": "17.0.0",
+    "fumadocs-ui": "16.8.10",
     "next": "^16",
     "react": "19.2.6",
     "react-dom": "19.2.6"

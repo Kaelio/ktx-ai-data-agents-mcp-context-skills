@@ -24,7 +24,19 @@ test('runDependencyUpgrade updates TypeScript and Python manifests before regene
   assert.deepEqual(
     calls.map((call) => [call.command, call.args]),
     [
-      ['pnpm', ['dlx', 'npm-check-updates', '-u', '--deep', '--cooldown', '10080m']],
+      [
+        'pnpm',
+        [
+          'dlx',
+          'npm-check-updates',
+          '-u',
+          '--deep',
+          '--reject',
+          'fumadocs-core,fumadocs-ui',
+          '--cooldown',
+          '10080m',
+        ],
+      ],
       ['uvx', ['dependency-check-updates', '--manifest', 'pyproject.toml', '-u']],
       ['uvx', ['dependency-check-updates', '--manifest', 'python/ktx-sl/pyproject.toml', '-u']],
       ['uvx', ['dependency-check-updates', '--manifest', 'python/ktx-daemon/pyproject.toml', '-u']],
@@ -62,7 +74,7 @@ test('runDependencyUpgrade stops at the failed phase and prints a retry command'
   assert.deepEqual(
     calls.map((call) => [call.command, call.args]),
     [
-      ['pnpm', ['dlx', 'npm-check-updates', '-u', '--deep']],
+      ['pnpm', ['dlx', 'npm-check-updates', '-u', '--deep', '--reject', 'fumadocs-core,fumadocs-ui']],
       ['uvx', ['dependency-check-updates', '--manifest', 'pyproject.toml', '-u']],
       ['uvx', ['dependency-check-updates', '--manifest', 'python/ktx-sl/pyproject.toml', '-u']],
     ],
@@ -94,7 +106,7 @@ test('runDependencyUpgrade ignores missing pnpm minimum release age config', asy
   assert.equal(result.ok, true);
   assert.deepEqual(calls[0], {
     command: 'pnpm',
-    args: ['dlx', 'npm-check-updates', '-u', '--deep'],
+    args: ['dlx', 'npm-check-updates', '-u', '--deep', '--reject', 'fumadocs-core,fumadocs-ui'],
   });
   assert.equal(
     calls
