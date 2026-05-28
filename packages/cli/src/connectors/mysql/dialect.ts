@@ -171,8 +171,17 @@ export class KtxMysqlDialect implements KtxDialect {
     `;
   }
 
-  generateColumnStatisticsQuery(_schemaName: string, _tableName: string): string | null {
-    return null;
+  generateColumnStatisticsQuery(schemaName: string, tableName: string): string | null {
+    return `
+      SELECT
+        COLUMN_NAME AS column_name,
+        MAX(CARDINALITY) AS estimated_cardinality
+      FROM INFORMATION_SCHEMA.STATISTICS
+      WHERE TABLE_SCHEMA = '${schemaName.replace(/'/g, "''")}'
+        AND TABLE_NAME = '${tableName.replace(/'/g, "''")}'
+        AND CARDINALITY IS NOT NULL
+      GROUP BY COLUMN_NAME
+    `;
   }
 
   generateRandomizedCardinalitySampleQuery(tableName: string, columnName: string, sampleSize: number): string {

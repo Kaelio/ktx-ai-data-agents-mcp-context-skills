@@ -159,6 +159,15 @@ interface MysqlDistinctValueRow extends RowDataPacket {
   val: unknown;
 }
 
+interface MysqlStatsRow extends RowDataPacket {
+  column_name: string;
+  estimated_cardinality: number | null;
+}
+
+export interface KtxMysqlColumnStatisticsResult {
+  cardinalityByColumn: Map<string, number>;
+}
+
 class DefaultMysqlPoolFactory implements KtxMysqlPoolFactory {
   createPool(config: KtxMysqlPoolConfig): KtxMysqlPool {
     return mysql.createPool(config) as Pool;
@@ -384,7 +393,7 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
   readonly capabilities = createKtxConnectorCapabilities({
     tableSampling: true,
     columnSampling: true,
-    columnStats: false,
+    columnStats: true,
     readOnlySql: true,
     nestedAnalysis: true,
     formalForeignKeys: true,
@@ -562,8 +571,29 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     return { values, nullCount: null, distinctCount: null };
   }
 
-  async columnStats(_input: KtxColumnStatsInput, _ctx: KtxScanContext): Promise<KtxColumnStatsResult | null> {
-    return null;
+  async columnStats(input: KtxColumnStatsInput, _ctx: KtxScanContext): Promise<KtxColumnStatsResult | null> {
+    const stats = await this.getColumnStatistics(input.table);
+    const value = stats?.cardinalityByColumn.get(input.column);
+    return value === undefined
+      ? null
+      : { min: null, max: null, average: null, nullCount: null, distinctCount: value };
+  }
+
+  async getColumnStatistics(table: KtxTableRef): Promise<KtxMysqlColumnStatisticsResult | null> {
+    const schema = table.db ?? this.poolConfig.database;
+    const sql = this.dialect.generateColumnStatisticsQuery(schema, table.name);
+    if (!sql) {
+      return null;
+    }
+    const rows = await this.queryRaw<MysqlStatsRow>(sql);
+    const cardinalityByColumn = new Map<string, number>();
+    for (const row of rows) {
+      const cardinality = Number(row.estimated_cardinality);
+      if (Number.isFinite(cardinality) && cardinality >= 0) {
+        cardinalityByColumn.set(row.column_name, cardinality);
+      }
+    }
+    return cardinalityByColumn.size > 0 ? { cardinalityByColumn } : null;
   }
 
   async executeReadOnly(input: KtxMysqlReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {

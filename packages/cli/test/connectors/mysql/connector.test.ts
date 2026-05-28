@@ -74,6 +74,15 @@ function fakePoolFactory(): KtxMysqlPoolFactory {
     if (sql.trim() === 'SELECT 1') {
       return mysqlResult([{ '1': 1 }], [{ name: '1', type: 8 }]);
     }
+    if (sql.includes('INFORMATION_SCHEMA.STATISTICS')) {
+      return mysqlResult(
+        [
+          { column_name: 'id', estimated_cardinality: 2 },
+          { column_name: 'customer_id', estimated_cardinality: 2 },
+        ],
+        [{ name: 'column_name' }, { name: 'estimated_cardinality' }],
+      );
+    }
     throw new Error(`Unexpected SQL: ${sql} params=${JSON.stringify(params)}`);
   });
   const release = vi.fn();
@@ -515,10 +524,25 @@ describe('KtxMysqlScanConnector', () => {
       { catalog: null, schema: 'analytics', name: 'orders', kind: 'table' },
       { catalog: null, schema: 'analytics', name: 'order_summary', kind: 'view' },
     ]);
-    await expect(connector.columnStats(
-      { connectionId: 'warehouse', table: { catalog: null, db: 'analytics', name: 'orders' }, column: 'status' },
-      { runId: 'scan-run-1' },
-    )).resolves.toBeNull();
+    await expect(
+      connector.columnStats(
+        { connectionId: 'warehouse', table: { catalog: null, db: 'analytics', name: 'orders' }, column: 'id' },
+        { runId: 'scan-run-1' },
+      ),
+    ).resolves.toEqual({ min: null, max: null, average: null, nullCount: null, distinctCount: 2 });
+
+    await expect(
+      connector.columnStats(
+        { connectionId: 'warehouse', table: { catalog: null, db: 'analytics', name: 'orders' }, column: 'status' },
+        { runId: 'scan-run-1' },
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      connector.getColumnStatistics({ catalog: null, db: 'analytics', name: 'orders' }),
+    ).resolves.toMatchObject({
+      cardinalityByColumn: new Map([['id', 2], ['customer_id', 2]]),
+    });
 
     await connector.cleanup();
   });

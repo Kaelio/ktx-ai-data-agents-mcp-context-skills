@@ -89,7 +89,7 @@ const fixtures: DialectFixture[] = [
     cardinalityContains: 'SELECT COUNT(DISTINCT val) AS cardinality',
     randomizedCardinalityContains: 'ORDER BY RAND()',
     distinctValuesContains: 'SELECT DISTINCT CAST(`status` AS CHAR) AS val',
-    statisticsContains: null,
+    statisticsContains: 'INFORMATION_SCHEMA.STATISTICS',
     dimensionInput: 'tinyint(1)',
     dimensionType: 'boolean',
     nativeTypeInput: 'varchar(255)',
