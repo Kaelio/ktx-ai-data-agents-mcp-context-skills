@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "ktx",
+      "description": "Skills for installing, configuring, and operating ktx.",
+      "skills": ["ktx"]
+    }
+  ]
+}

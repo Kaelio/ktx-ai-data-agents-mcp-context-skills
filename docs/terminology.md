@@ -21,6 +21,41 @@ in prose when ambiguity is possible. Always qualify:
 Bare `source` is allowed only inside a section that has already established its
 referent (e.g., body of a `Semantic sources` page, or `sourceName` as a CLI arg).
 
+## Context Layer and Context Engine
+
+Use **context layer** as the primary category term for what **ktx** provides to
+data agents.
+
+Use **context engine** as the secondary mechanism term for how **ktx** builds,
+maintains, validates, and serves that layer.
+
+| Concept | Use | Do not use |
+|---|---|---|
+| The whole **ktx** product category | **context layer** / **context layer for data agents** | knowledge layer, agent memory |
+| The active system that builds and maintains context | **context engine** | context layer when describing ingest/reconciliation internals |
+| The durable reviewed surface agents use | **context layer** | context engine |
+| The compiler pillar for executable metrics and joins | **semantic layer** | context layer when specifically discussing SQL compilation |
+| Prose/business knowledge files | **wiki** / **wiki pages** | wiki context |
+
+### Usage rules
+
+- Use **context layer** in taglines, page titles, meta descriptions, docs
+  introductions, comparison pages, and first-paragraph definitions.
+- Use **context engine** when describing active behavior: ingesting evidence,
+  reconciling changes, validating references, maintaining files, search, CLI,
+  and MCP serving.
+- Keep **semantic layer** for the narrower YAML/compiler surface: semantic
+  sources, measures, joins, dimensions, filters, SQL compilation, and semantic
+  queries.
+- Do not use **context engine** as the primary replacement for the whole
+  product. It sounds like runtime infrastructure; **context layer** better
+  describes the durable YAML and Markdown surface users review in git.
+- Do not use **context layer** when the sentence is specifically about the
+  compiler. Example: write "the semantic layer compiles semantic queries to
+  SQL," not "the context layer compiles semantic queries to SQL."
+- Default lowercase in prose: `context layer`, `context engine`, `semantic
+  layer`. Title case only in page titles, headings, nav labels, and UI labels.
+
 ## Canonical vocabulary
 
 | Concept | Use | Do not use |
@@ -31,7 +66,8 @@ referent (e.g., body of a `Semantic sources` page, or `sourceName` as a CLI arg)
 | The connected database | **primary source** / **database connection** | data source |
 | Analytics-tooling integration | **context source** / **context-source connection** | BI source, BI model, metadata source, source tool |
 | YAML file describing a table | **semantic source** | semantic-layer source, model file, bare "source file" |
-| The whole **ktx** surface | **context layer** (lowercase in prose) | "Context Layer" in prose |
+| The whole **ktx** surface | **context layer** / **context layer for data agents** (lowercase in prose) | "Context Layer" in prose, knowledge layer, agent memory |
+| The active system that builds and maintains context | **context engine** (lowercase in prose) | context layer when describing ingest/reconciliation internals |
 | The compiler pillar | **semantic layer** (lowercase in prose) | "Semantic Layer" in prose |
 | The query payload | **semantic query** (lowercase in prose) | "Semantic Query" |
 | The MCP layer | **MCP server** (the server), **MCP tools** (the functions) | "ktx MCP" as a standalone noun |

@@ -6,12 +6,28 @@ const withMDX = createMDX();
 const config = {
   basePath: "/ktx",
   async rewrites() {
-    return [
-      {
-        source: "/docs/:path*.md",
-        destination: "/llms.mdx/docs/:path*",
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: "/stars",
+          has: [{ type: "host", value: "ktx.sh" }],
+          destination: "https://ktx-stars.vercel.app/stars",
+          basePath: false,
+        },
+        {
+          source: "/stars/:path*",
+          has: [{ type: "host", value: "ktx.sh" }],
+          destination: "https://ktx-stars.vercel.app/stars/:path*",
+          basePath: false,
+        },
+      ],
+      afterFiles: [
+        {
+          source: "/docs/:path*.md",
+          destination: "/llms.mdx/docs/:path*",
+        },
+      ],
+    };
   },
   async redirects() {
     return [
@@ -43,9 +59,9 @@ const config = {
         basePath: false,
       },
       {
-        source: "/:path*",
+        source: "/:path((?!stars(?:/|$)).*)",
         has: [{ type: "host", value: "ktx.sh" }],
-        destination: "https://docs.kaelio.com/ktx/:path*",
+        destination: "https://docs.kaelio.com/ktx/:path",
         permanent: true,
         basePath: false,
       },
