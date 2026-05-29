@@ -19,6 +19,12 @@ repos:
     hooks:
       - id: tombi-format
         args: ["--offline"]
+        # uv.lock is generated and owned by uv, which writes its own canonical
+        # TOML layout. tombi reformats that layout differently, so once uv
+        # regenerates the lock (e.g. after a dependency or version change)
+        # tombi rewrites it and the hook fails on the modified file. Keep uv
+        # authoritative for its lockfile; tombi still formats hand-edited TOML.
+        exclude: ^uv\.lock$
 
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.21.2
