@@ -12,9 +12,13 @@ describe('renderKtxCommandTree', () => {
       .filter((line) => /^ {2}[├└]── \S/.test(line))
       .map((line) => line.replace(/^ {2}[├└]── /, '').trim().split(' ')[0]);
 
-    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'mcp', 'admin']) {
+    for (const expected of ['setup', 'connection', 'ingest', 'sl', 'mcp', 'admin', 'completion']) {
       expect(topLevel).toContain(expected);
     }
+
+    // The internal completion helper is hidden and must not appear in the tree.
+    expect(topLevel).not.toContain('__complete');
+    expect(output).not.toContain('__complete');
 
     expect(output).toContain('│   └── test [connectionId]');
     expect(output).toContain('│   ├── status                          Show KTX MCP daemon status');
@@ -27,7 +31,8 @@ describe('renderKtxCommandTree', () => {
     expect(output).not.toContain('scan <connectionId>');
     expect(output).not.toContain('│   ├── replay');
     expect(output).not.toContain('│   └── replay');
-    expect(output).not.toContain('│   ├── run');
+    // Match `run` as a whole command name, not the `run` prefix of `runtime`.
+    expect(output).not.toMatch(/[├└]── run(\s|$)/m);
     expect(output).not.toContain('│   ├── watch');
     expect(output).not.toContain('│   └── watch');
     expect(output).not.toContain('│   ├── read');

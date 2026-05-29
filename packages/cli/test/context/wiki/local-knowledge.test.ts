@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initKtxProject, type KtxLocalProject } from '../../../src/context/project/project.js';
 import {
+  listLocalKnowledgePageKeys,
   listLocalKnowledgePages,
   readLocalKnowledgePage,
   searchLocalKnowledgePages,
@@ -100,6 +101,35 @@ describe('local knowledge helpers', () => {
     ]);
     expect(search[0]?.score).toBeGreaterThan(0);
     await expect(access(join(project.projectDir, '.ktx', 'db.sqlite'))).resolves.toBeUndefined();
+  });
+
+  it('lists page keys across scopes, deduped and sorted, for completion', async () => {
+    await writeLocalKnowledgePage(project, {
+      key: 'metrics-revenue',
+      scope: 'GLOBAL',
+      summary: 'Revenue metric definition',
+      content: 'Revenue is recognized when an order is paid.',
+    });
+    await writeLocalKnowledgePage(project, {
+      key: 'metrics-churn',
+      scope: 'USER',
+      userId: 'local',
+      summary: 'Churn metric definition',
+      content: 'Churn is measured monthly.',
+    });
+    // Same key in both scopes must collapse to a single completion candidate.
+    await writeLocalKnowledgePage(project, {
+      key: 'metrics-revenue',
+      scope: 'USER',
+      userId: 'local',
+      summary: 'User override of revenue',
+      content: 'Local revenue note.',
+    });
+
+    await expect(listLocalKnowledgePageKeys(project, { userId: 'local' })).resolves.toEqual([
+      'metrics-churn',
+      'metrics-revenue',
+    ]);
   });
 
   it('adds the token lane alongside lexical wiki matches', async () => {

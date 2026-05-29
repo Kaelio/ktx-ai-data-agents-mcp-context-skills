@@ -201,6 +201,32 @@ export async function listLocalKnowledgePages(
   return pages.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+/**
+ * List wiki page keys without reading or parsing file contents.
+ *
+ * Keys are derived purely from file paths, so this stays cheap enough for
+ * shell tab-completion (unlike `listLocalKnowledgePages`, which reads every
+ * page to populate summaries).
+ */
+export async function listLocalKnowledgePageKeys(
+  project: KtxLocalProject,
+  input: { userId?: string } = {},
+): Promise<string[]> {
+  const userId = input.userId ?? 'local';
+  const keys = new Set<string>();
+  for (const scope of ['GLOBAL', 'USER'] as const) {
+    const root = scope === 'GLOBAL' ? 'wiki/global' : `wiki/user/${assertSafePathToken('user id', userId)}`;
+    const listed = await project.fileStore.listFiles(root);
+    for (const path of listed.files.filter((file) => file.endsWith('.md'))) {
+      const key = keyFromKnowledgePath(path, scope, userId);
+      if (key) {
+        keys.add(key);
+      }
+    }
+  }
+  return [...keys].sort();
+}
+
 function scorePage(page: LocalKnowledgePage, terms: string[]): number {
   const haystack = buildKnowledgeSearchText(page.key, page.summary, page.content, page.tags).toLowerCase();
   return terms.some((term) => haystack.includes(term)) ? 3 : 0;

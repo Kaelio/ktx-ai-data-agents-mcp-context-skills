@@ -16,7 +16,11 @@ export function walkCommandTree(command: CommandUnknownOpts): CommandTreeNode {
     description: command.description(),
     aliases: command.aliases(),
     arguments: command.registeredArguments.map(formatArgumentDeclaration),
-    children: command.commands.map((child) => walkCommandTree(child)),
+    // Internal commands (e.g. the shell-completion helper `__complete`) use a
+    // `__` prefix and are omitted from the human-facing command tree.
+    children: command.commands
+      .filter((child) => !child.name().startsWith('__'))
+      .map((child) => walkCommandTree(child)),
   };
 }
 

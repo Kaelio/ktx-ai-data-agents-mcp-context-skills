@@ -1,0 +1,81 @@
+---
+title: "ktx completion"
+description: "Print a shell completion script for tab completion."
+---
+
+Print a shell completion script for **ktx**. Once installed, pressing <kbd>Tab</kbd>
+completes commands, subcommands, and flags, and — inside a **ktx** project — the
+names of things that already exist: semantic-layer source names for `ktx sl` and
+`ktx sl validate`, wiki page keys for `ktx wiki`, and configured connection ids
+for `ktx connection test`, `ktx ingest`, and `ktx sql`. This saves you from
+remembering exact source, page, or connection names.
+
+## Command signature
+
+```bash
+ktx completion <shell>
+```
+
+`<shell>` must be `zsh` or `bash`. The command writes the script to stdout; it
+does not modify any files. Enable completion by evaluating the script in your
+shell startup file.
+
+## Installation
+
+Add the matching line to your shell startup file, then restart your shell (or
+`source` the file). `ktx` must be on your `PATH`.
+
+```bash
+# zsh — add to ~/.zshrc
+eval "$(ktx completion zsh)"
+```
+
+```bash
+# bash — add to ~/.bashrc
+eval "$(ktx completion bash)"
+```
+
+To try it for the current session only, run the same `eval` line directly in
+your terminal.
+
+## What gets completed
+
+| Position | Completions |
+|----------|-------------|
+| `ktx <Tab>` | Top-level commands (`setup`, `sl`, `wiki`, `ingest`, …) |
+| `ktx sl <Tab>` | The `validate` / `query` subcommands and existing source names |
+| `ktx sl validate <Tab>` | Existing semantic-layer source names |
+| `ktx wiki <Tab>` | Existing wiki page keys |
+| `ktx connection test <Tab>` | Configured connection ids |
+| `ktx ingest <Tab>` | Configured connection ids |
+| `ktx sql --connection <Tab>` | Configured connection ids |
+| `ktx completion <Tab>` | `zsh` or `bash` |
+| `ktx <command> --<Tab>` | The command's flags and inherited global flags |
+| `ktx sl --output <Tab>` | An option's allowed values (here `pretty`, `plain`, `json`) |
+| `ktx sl --connection-id <Tab>` | Configured connection ids |
+
+Source names, wiki page keys, and connection ids are read from the **ktx**
+project resolved from your current directory (or `--project-dir` /
+`KTX_PROJECT_DIR`). Outside a **ktx** project, completion still suggests
+commands and flags but no project entities.
+
+## Examples
+
+```bash
+# Print the zsh completion script
+ktx completion zsh
+
+# Print the bash completion script
+ktx completion bash
+
+# Install for zsh
+echo 'eval "$(ktx completion zsh)"' >> ~/.zshrc
+```
+
+## Common errors
+
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| `error: command-argument value '<name>' is invalid for argument 'shell'. Allowed choices are zsh, bash.` | A shell other than `zsh` or `bash` was requested | Re-run with `ktx completion zsh` or `ktx completion bash` |
+| Tab completion does nothing | The script was not evaluated, or `ktx` is not on `PATH` | Confirm the `eval` line is in your startup file, restart the shell, and verify `ktx --version` runs |
+| Source, page, or connection names are missing | The current directory is not inside a **ktx** project | Run from the project directory, or pass `--project-dir`, or set `KTX_PROJECT_DIR` |

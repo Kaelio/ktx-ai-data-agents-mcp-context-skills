@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Command, type CommandUnknownOpts, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
+import { registerCompletionCommands } from './commands/completion-commands.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
 import { registerWikiCommands } from './commands/knowledge-commands.js';
@@ -431,6 +432,11 @@ export function collectCommandFlagsPresent(command: CommandUnknownOpts): Record<
 export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   const program = createBaseProgram(options.packageInfo, options.io);
   program.hook('preAction', async (_thisCommand, actionCommand) => {
+    // The hidden completion command must stay silent and side-effect free: skip
+    // the telemetry notice, command span, and project checks entirely.
+    if (commandPath(actionCommand as CommandPathNode).includes('__complete')) {
+      return;
+    }
     const telemetry = await import('./telemetry/index.js');
     options.setTelemetryModule?.(telemetry);
     await telemetry.showTelemetryNoticeIfNeeded(options.io, options.packageInfo);
@@ -476,6 +482,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   registerStatusCommands(program, context);
   registerMcpCommands(program, context);
   registerAdminCommands(program, context);
+  registerCompletionCommands(program, context);
 
   return program;
 }

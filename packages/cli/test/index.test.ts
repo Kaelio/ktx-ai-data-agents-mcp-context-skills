@@ -132,9 +132,12 @@ describe('runKtxCli', () => {
     }
     expect(testIo.stdout()).not.toMatch(/^  dev\s/m);
     expect(testIo.stdout()).not.toMatch(/^  scan\s/m);
-    for (const removed of ['demo', 'init', 'connect', 'ask', 'knowledge', 'agent', 'completion', 'serve']) {
+    for (const removed of ['demo', 'init', 'connect', 'ask', 'knowledge', 'agent', 'serve']) {
       expect(testIo.stdout()).not.toMatch(new RegExp(`^\\s+${removed}(?:\\s|\\[|$)`, 'm'));
     }
+    // `completion` is a public command; the internal `__complete` helper is hidden.
+    expect(testIo.stdout()).toMatch(/^\s+completion <shell>/m);
+    expect(testIo.stdout()).not.toContain('__complete');
     expect(testIo.stdout()).toContain('--project-dir <path>');
     expect(testIo.stdout()).toContain('KTX_PROJECT_DIR');
     expect(testIo.stdout()).toContain('--debug');

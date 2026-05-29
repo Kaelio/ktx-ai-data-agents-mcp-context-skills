@@ -11,6 +11,7 @@
     "ktx-wiki",
     "ktx-status",
     "ktx-mcp",
-    "ktx-admin"
+    "ktx-admin",
+    "ktx-completion"
   ]
 }
