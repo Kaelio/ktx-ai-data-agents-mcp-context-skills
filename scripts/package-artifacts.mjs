@@ -512,15 +512,6 @@ function requireSuccess(label, result) {
   assert.equal(result.stderr, '', label + ' wrote unexpected stderr');
 }
 
-function requireSuccessWithProjectStderr(label, result, projectDir) {
-  assert.equal(
-    result.code,
-    0,
-    label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
-  );
-  assert.equal(result.stderr, 'Project: ' + projectDir + '\\n', label + ' wrote unexpected stderr');
-}
-
 function requireExitCodeWithProjectStderr(label, result, projectDir, expectedCode) {
   assert.equal(
     result.code,
@@ -860,27 +851,15 @@ try {
   requireOutput('ktx admin runtime stop', runtimeStop, /Stopped KTX daemon/);
   process.stdout.write('ktx admin runtime daemon lifecycle verified\\n');
 
-  const structuralScan = await run(
+  const databaseIngest = await run(
     ...Object.values(
-      pnpmCommand(['exec', 'ktx', 'ingest', 'warehouse', '--project-dir', projectDir, '--fast', '--no-input']),
+      pnpmCommand(['exec', 'ktx', 'ingest', 'warehouse', '--project-dir', projectDir, '--no-input']),
     ),
   );
-  requireSuccessWithProjectStderr('ktx ingest fast', structuralScan, projectDir);
-  requireOutput('ktx ingest fast', structuralScan, /Ingest finished/);
-  requireOutput('ktx ingest fast', structuralScan, /Database schema/);
-  requireOutput('ktx ingest fast', structuralScan, /warehouse\\s+done/);
-  await access(join(projectDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'));
-  process.stdout.write('ktx ingest fast verified\\n');
-
-  const enrichedScan = await run(
-    ...Object.values(
-      pnpmCommand(['exec', 'ktx', 'ingest', 'warehouse', '--project-dir', projectDir, '--deep', '--no-input']),
-    ),
-  );
-  requireExitCodeWithProjectStderr('ktx ingest deep readiness guard', enrichedScan, projectDir, 1);
-  requireOutput('ktx ingest deep readiness guard', enrichedScan, /Ingest finished with partial failures/);
-  requireOutput('ktx ingest deep readiness guard', enrichedScan, /requires deep ingest readiness/);
-  process.stdout.write('ktx ingest deep readiness guard verified\\n');
+  requireExitCodeWithProjectStderr('ktx ingest enrichment guard', databaseIngest, projectDir, 1);
+  requireOutput('ktx ingest enrichment guard', databaseIngest, /Ingest finished with partial failures/);
+  requireOutput('ktx ingest enrichment guard', databaseIngest, /enrichment is not configured/);
+  process.stdout.write('ktx ingest enrichment guard verified\\n');
 
   await access(join(projectDir, '.ktx', 'db.sqlite'));
   process.stdout.write('ktx ingest state verified\\n');

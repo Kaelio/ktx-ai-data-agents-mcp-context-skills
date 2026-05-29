@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDefaultKtxProjectConfig, parseKtxProjectConfig, serializeKtxProjectConfig, type KtxProjectConfig } from '../src/context/project/config.js';
+import { buildDefaultKtxProjectConfig, serializeKtxProjectConfig, type KtxProjectConfig } from '../src/context/project/config.js';
 import { readKtxSetupState, writeKtxSetupState } from '../src/context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,7 +49,7 @@ async function writeReadyProject(projectDir: string, overrides: ReadyProjectOver
     ...defaults,
     setup: { database_connection_ids: ['warehouse'] },
     connections: {
-      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
       docs: { driver: 'notion', auth_token_ref: 'env:NOTION_TOKEN', crawl_mode: 'all_accessible' },
     },
     llm: {
@@ -407,130 +407,10 @@ describe('setup context build state', () => {
     expect(io.stdout()).not.toContain('Existing context artifacts were found from setup ingest.');
   });
 
-  it('treats fast database context as ready from schema manifest shards without AI artifacts', async () => {
+  it('requires completed relationships for database context when relationship discovery is enabled', async () => {
     await writeReadyProject(tempDir, {
       connections: {
-        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'fast' } },
-      },
-      llm: { provider: { backend: 'none' }, models: {} },
-      scan: { enrichment: { mode: 'none' } },
-    });
-    await mkdir(join(tempDir, 'semantic-layer', 'warehouse', '_schema'), { recursive: true });
-    await writeFile(join(tempDir, 'semantic-layer', 'warehouse', '_schema', 'public.yaml'), 'tables: {}\n');
-    await writeScanReport(tempDir, '2026-05-09T10:00:00.000Z', {
-      mode: 'structural',
-      tableDescriptions: 'skipped',
-      columnDescriptions: 'skipped',
-      embeddings: 'skipped',
-      manifestShards: ['semantic-layer/warehouse/_schema/public.yaml'],
-    });
-    const io = makeIo();
-    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
-      exitCode: 0,
-    }));
-
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'disabled' },
-        io.io,
-        {
-          runContextBuild: runContextBuildMock,
-        },
-      ),
-    ).resolves.toMatchObject({ status: 'ready' });
-
-    expect(runContextBuildMock).not.toHaveBeenCalled();
-    expect(io.stdout()).toContain('Existing context artifacts were found from setup ingest.');
-  });
-
-  it('stores fast context depth non-interactively when deep readiness is missing', async () => {
-    await writeReadyProject(tempDir, {
-      connections: { warehouse: { driver: 'postgres', readonly: true } },
-      llm: { provider: { backend: 'none' }, models: {} },
-      scan: { enrichment: { mode: 'none' } },
-    });
-    const io = makeIo();
-    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => ({
-      exitCode: 0,
-    }));
-    const verifyContextReady = vi.fn(async () => ({
-      ready: true,
-      agentContextReady: true,
-      semanticSearchReady: true,
-      details: ['ready'],
-    }));
-
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'disabled' },
-        io.io,
-        { runContextBuild: runContextBuildMock, verifyContextReady },
-      ),
-    ).resolves.toMatchObject({ status: 'ready' });
-
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.connections.warehouse.context).toMatchObject({ depth: 'fast' });
-    expect(runContextBuildMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ projectDir: tempDir, inputMode: 'disabled' }),
-      expect.anything(),
-      expect.anything(),
-    );
-    expect(runContextBuildMock.mock.calls[0]?.[1]).not.toMatchObject({
-      scanMode: 'enriched',
-      detectRelationships: true,
-    });
-  });
-
-  it('prompts for database context depth after final readiness is known', async () => {
-    await writeReadyProject(tempDir, {
-      connections: { warehouse: { driver: 'postgres', readonly: true } },
-      llm: {
-        provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret
-        models: { default: 'gpt-test' },
-      },
-      scan: {
-        enrichment: {
-          mode: 'llm',
-          embeddings: { backend: 'openai', model: 'text-embedding-3-small', dimensions: 1536 },
-        },
-      },
-    });
-    const io = makeIo();
-    const select = vi.fn(async () => 'deep');
-    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
-    const verifyContextReady = vi.fn(async () => ({
-      ready: true,
-      agentContextReady: true,
-      semanticSearchReady: true,
-      details: ['ready'],
-    }));
-
-    await expect(
-      runKtxSetupContextStep(
-        { projectDir: tempDir, inputMode: 'auto' },
-        io.io,
-        {
-          prompts: { select, cancel: vi.fn() },
-          runContextBuild: runContextBuildMock,
-          verifyContextReady,
-        },
-      ),
-    ).resolves.toMatchObject({ status: 'ready' });
-
-    expect(select).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('How much database context should KTX build?'),
-      }),
-    );
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.connections.warehouse.context).toMatchObject({ depth: 'deep' });
-  });
-
-  it('requires completed relationships for deep context when relationship discovery is enabled', async () => {
-    await writeReadyProject(tempDir, {
-      connections: {
-        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'deep' } },
+        warehouse: { driver: 'postgres', readonly: true },
       },
       scan: { relationships: { enabled: true } },
     });
@@ -560,10 +440,10 @@ describe('setup context build state', () => {
     expect(runContextBuildMock).toHaveBeenCalledOnce();
   });
 
-  it('does not require relationships for deep context when relationship discovery is disabled', async () => {
+  it('does not require relationships for database context when relationship discovery is disabled', async () => {
     await writeReadyProject(tempDir, {
       connections: {
-        warehouse: { driver: 'postgres', readonly: true, context: { depth: 'deep' } },
+        warehouse: { driver: 'postgres', readonly: true },
       },
       scan: { relationships: { enabled: false } },
     });
@@ -620,7 +500,7 @@ describe('setup context build state', () => {
 
   it('starts a fresh foreground build when stale state is found', async () => {
     await writeReadyProject(tempDir, {
-      connections: { warehouse: { driver: 'postgres', readonly: true, context: { depth: 'fast' } } },
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
     });
     await writeKtxSetupContextState(tempDir, {
       runId: 'setup-context-local-stale',

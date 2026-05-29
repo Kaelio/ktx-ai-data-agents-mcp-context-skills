@@ -5,9 +5,11 @@ description: "Build or refresh ktx context, or capture text into ktx memory."
 
 `ktx ingest` builds or refreshes **ktx** context from configured connections, and
 can also capture free-form text into **ktx** memory. Database connections build
-schema context. Context-source connections ingest metadata from tools such as
-dbt, Looker, Metabase, MetricFlow, LookML, and Notion. Pass `--text` or
-`--file` to capture inline text or text files into memory instead.
+enriched context — schema plus AI-generated descriptions, embeddings, and
+relationship evidence — and require a configured model and embeddings.
+Context-source connections ingest metadata from tools such as dbt, Looker,
+Metabase, MetricFlow, LookML, and Notion. Pass `--text` or `--file` to capture
+inline text or text files into memory instead.
 
 ## Command signature
 
@@ -29,8 +31,6 @@ connection is selected.
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--all` | Ingest all configured connections (same as bare invocation) | `false` |
-| `--fast` | Use deterministic fast database ingest | Stored connection default, or `fast` |
-| `--deep` | Use deep database ingest with AI-generated descriptions, embeddings, and relationship evidence | Stored connection default, or `fast` |
 | `--query-history` | Include database query-history usage patterns | Stored connection default |
 | `--no-query-history` | Skip database query-history usage patterns for this run | Stored connection default |
 | `--query-history-window-days <days>` | BigQuery/Snowflake query-history lookback window for this run | Stored connection default |
@@ -44,12 +44,12 @@ connection is selected.
 | `--yes` | Install required managed runtime features without prompting | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
-`--fast` and `--deep` are mutually exclusive. Depth flags apply only to
-database connections. Query-history flags apply only to database connections
+Database ingest always builds enriched context and requires a configured model
+and embeddings (run `ktx setup`); connections without that configuration fail
+before any work starts. Query-history flags apply only to database connections
 that support query history. The window flag applies to BigQuery and Snowflake;
 Postgres reads the current `pg_stat_statements` aggregate data instead of a
-time-windowed history table. Query-history ingest runs after fast ingest and
-requires deep ingest readiness.
+time-windowed history table. Query-history ingest runs after the schema scan.
 
 When more than one connection is selected, database ingest runs first, then
 context-source ingest and memory updates run for context-source connections.
@@ -72,14 +72,8 @@ ktx ingest
 # Build one database or context-source connection
 ktx ingest warehouse
 
-# Force deterministic fast database ingest
-ktx ingest warehouse --fast
-
-# Force deep database ingest with AI enrichment
-ktx ingest warehouse --deep
-
 # Include query-history usage patterns
-ktx ingest warehouse --deep --query-history
+ktx ingest warehouse --query-history
 # Set the lookback window for BigQuery or Snowflake query history
 ktx ingest warehouse --query-history-window-days 30
 
@@ -154,8 +148,8 @@ KTX_INGEST_TRACE_LEVEL=trace ktx ingest metabase
 | Error | Cause | Recovery |
 |-------|-------|----------|
 | Connection not configured | The connection id is not present in `ktx.yaml` | Add the connection with `ktx setup` or update `ktx.yaml` |
-| Deep readiness is missing | `--deep` or query history needs model, embedding, and scan-enrichment configuration | Run `ktx setup` or rerun with `--fast` |
-| Query history is unsupported | The selected database driver does not support query history | Run fast ingest without query-history flags |
+| Enrichment is not configured | Database ingest needs a model, embeddings, and scan-enrichment configuration | Run `ktx setup` to configure a model and embeddings |
+| Query history is unsupported | The selected database driver does not support query history | Run ingest without query-history flags |
 | Python runtime is missing | The selected ingest target needs runtime-backed SQL analysis or source parsing | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx admin runtime install` command |
-| Context-source options were ignored | Depth and query-history flags were supplied for a context-source connection | Omit database-only flags when ingesting context-source connections |
+| Context-source options were ignored | Query-history flags were supplied for a context-source connection | Omit database-only flags when ingesting context-source connections |
 | Text ingest stops early | `--fail-fast` was used and one item failed | Fix the failed item or rerun without `--fail-fast` to collect all failures |

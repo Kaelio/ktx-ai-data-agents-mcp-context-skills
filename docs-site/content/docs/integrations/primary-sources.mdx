@@ -517,5 +517,5 @@ No authentication required - SQLite is file-based. The file must be readable by 
 | Connection URL appears in git diff | A literal credential URL was written to `ktx.yaml` | Replace it with `env:NAME` or `file:/path/to/secret` and rotate exposed credentials |
 | Database ingest returns no tables | Schema, database, or project filter is wrong, or the user lacks metadata permissions | Verify the schema list and grant metadata read permissions |
 | Query history is empty | Query history extension or warehouse history view is unavailable | Enable the warehouse-specific history feature, then rerun `ktx ingest <connectionId> --query-history` or `ktx setup` |
-| Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on fast schema context |
+| Column statistics are missing | Connector cannot access stats tables or the warehouse does not expose them | Grant stats permissions where supported; otherwise rely on schema-level context without column statistics |
 | Semantic query execution fails | Connection is missing, unreachable, or query execution is disabled | Run `ktx connection test <id>` and check the `ktx sl query` flags |

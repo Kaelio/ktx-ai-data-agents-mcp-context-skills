@@ -29,8 +29,6 @@ export function registerIngestCommands(
     .usage('[options] [connectionId]')
     .argument('[connectionId]', 'Configured connection id to ingest (omit to ingest all)')
     .option('--all', 'Ingest all configured connections', false)
-    .addOption(new Option('--fast', 'Use deterministic database schema ingest').conflicts('deep'))
-    .addOption(new Option('--deep', 'Use AI-enriched database ingest').conflicts('fast'))
     .addOption(new Option('--query-history', 'Include database query-history usage patterns').conflicts('noQueryHistory'))
     .addOption(new Option('--no-query-history', 'Skip database query-history usage patterns'))
     .option('--query-history-window-days <days>', 'Query-history lookback window for this run', parsePositiveIntegerOption)
@@ -87,8 +85,6 @@ export function registerIngestCommands(
       all: selection.kind === 'all',
       json: options.json === true,
       inputMode: options.input === false ? 'disabled' : 'auto',
-      ...(options.fast === true ? { depth: 'fast' as const } : {}),
-      ...(options.deep === true ? { depth: 'deep' as const } : {}),
       queryHistory,
       ...(options.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: options.queryHistoryWindowDays } : {}),
       cliVersion: context.packageInfo.version,

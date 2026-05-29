@@ -38,7 +38,6 @@ const setupStepSchema = telemetryCommonEnvelopeSchema
       'embeddings',
       'secrets',
       'databases',
-      'database-context-depth',
       'sources',
       'context',
       'agents',

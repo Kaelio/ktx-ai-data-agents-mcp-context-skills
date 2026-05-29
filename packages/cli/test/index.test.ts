@@ -702,7 +702,7 @@ describe('runKtxCli', () => {
     const publicIngest = vi.fn().mockResolvedValue(0);
 
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'ingest', 'warehouse', '--fast', '--no-input'], testIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'ingest', 'warehouse', '--no-input'], testIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(0);
@@ -715,7 +715,6 @@ describe('runKtxCli', () => {
         all: false,
         json: false,
         inputMode: 'disabled',
-        depth: 'fast',
         queryHistory: 'default',
         cliVersion,
         runtimeInstallPolicy: 'never',
@@ -725,12 +724,12 @@ describe('runKtxCli', () => {
     expect(testIo.stderr()).toBe(`Project: ${tempDir}\n`);
   });
 
-  it('routes public ingest --all --deep with JSON output', async () => {
+  it('routes public ingest --all with JSON output', async () => {
     const testIo = makeIo();
     const publicIngest = vi.fn().mockResolvedValue(0);
 
     await expect(
-      runKtxCli(['--project-dir', tempDir, 'ingest', '--all', '--deep', '--json'], testIo.io, {
+      runKtxCli(['--project-dir', tempDir, 'ingest', '--all', '--json'], testIo.io, {
         publicIngest,
       }),
     ).resolves.toBe(0);
@@ -742,7 +741,6 @@ describe('runKtxCli', () => {
         all: true,
         json: true,
         inputMode: 'auto',
-        depth: 'deep',
         queryHistory: 'default',
         cliVersion,
         runtimeInstallPolicy: 'prompt',
@@ -784,20 +782,6 @@ describe('runKtxCli', () => {
 
     expect(publicIngest).not.toHaveBeenCalled();
     expect(testIo.stderr()).toContain('Choose only one runtime install mode: --yes or --no-input');
-  });
-
-  it('rejects mutually exclusive public ingest depth flags before dispatch', async () => {
-    const testIo = makeIo();
-    const publicIngest = vi.fn().mockResolvedValue(0);
-
-    await expect(
-      runKtxCli(['--project-dir', '/tmp/project', 'ingest', 'warehouse', '--fast', '--deep'], testIo.io, {
-        publicIngest,
-      }),
-    ).resolves.toBe(1);
-
-    expect(publicIngest).not.toHaveBeenCalled();
-    expect(testIo.stderr()).toMatch(/option '--(deep|fast)' cannot be used with option '--(fast|deep)'/);
   });
 
   it.each(['run', 'status', 'watch', 'replay'])(
@@ -890,8 +874,6 @@ describe('runKtxCli', () => {
     expect(testIo.stdout()).toContain('Usage: ktx ingest');
     expect(testIo.stdout()).toContain('Build or inspect KTX context');
     expect(testIo.stdout()).toContain('--all');
-    expect(testIo.stdout()).toContain('--fast');
-    expect(testIo.stdout()).toContain('--deep');
     expect(testIo.stdout()).toContain('--query-history');
     expect(testIo.stdout()).toContain('--no-query-history');
     expect(testIo.stdout()).toContain('--query-history-window-days <days>');

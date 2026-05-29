@@ -100,7 +100,6 @@ describe('installed live-database artifact smoke helpers', () => {
       'warehouse',
       '--project-dir',
       '/tmp/project',
-      '--fast',
       '--no-input',
     ]);
 

@@ -111,12 +111,13 @@ non-obvious terms.
 Agents can refresh context when the user asks them to:
 
 ```bash
-ktx ingest warehouse --fast
+ktx ingest warehouse
 ktx ingest
 ktx ingest --file docs/revenue-notes.md --connection-id warehouse
 ```
 
-Use `--deep` only when LLM and embedding setup is ready.
+Database ingest builds enriched context and requires a configured model and
+embeddings; run `ktx setup` first if they are not ready.
 
 ## Good agent behavior
 

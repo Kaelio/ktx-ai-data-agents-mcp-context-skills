@@ -257,7 +257,7 @@ describe('standalone example docs', () => {
     assert.match(primarySources, /context:\n      queryHistory:/);
     assert.match(rootReadme, /`ktx ingest` \| Build context for every configured connection/);
     assert.doesNotMatch(rootReadme, /`ktx ingest <id>`/);
-    assert.match(quickstart, /Databases:\n  warehouse: deep context complete/);
+    assert.match(quickstart, /Databases:\n  warehouse: database context complete/);
     assert.match(quickstart, /Databases configured: yes \(warehouse\)/);
     assert.match(setupReference, /Databases configured: yes \(postgres-warehouse\)/);
     assert.doesNotMatch(rootReadme, new RegExp(['Primary sources', 'configured'].join(' ')));

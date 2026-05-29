@@ -1,16 +1,10 @@
 import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
-import type { KtxProjectConnectionConfig } from './context/project/config.js';
+import type { KtxProjectConfig, KtxProjectConnectionConfig } from './context/project/config.js';
 import type { KtxProgressPort } from './context/scan/types.js';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
-import {
-  type KtxDatabaseContextDepth,
-  databaseContextDepth,
-  deepReadinessGaps,
-  isDatabaseDriver,
-  normalizeConnectionDriver,
-} from './ingest-depth.js';
+import { isDatabaseDriver, normalizeConnectionDriver } from './connection-drivers.js';
 import {
   ensureManagedPythonCommandRuntime,
   type KtxManagedPythonInstallPolicy,
@@ -29,7 +23,6 @@ profileMark('module:public-ingest');
 type KtxPublicIngestStepName = 'database-schema' | 'query-history' | 'source-ingest' | 'memory-update';
 type KtxPublicIngestStepStatus = 'done' | 'skipped' | 'failed' | 'not-run';
 type KtxPublicIngestInputMode = 'auto' | 'disabled';
-type KtxPublicIngestDepth = KtxDatabaseContextDepth;
 type KtxPublicIngestQueryHistoryFlag = 'default' | 'enabled' | 'disabled';
 type HistoricSqlDialect = 'postgres' | 'bigquery' | 'snowflake';
 
@@ -41,7 +34,6 @@ export type KtxPublicIngestArgs =
     all: boolean;
     json: boolean;
     inputMode: KtxPublicIngestInputMode;
-    depth?: KtxPublicIngestDepth;
     queryHistory?: KtxPublicIngestQueryHistoryFlag;
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
@@ -58,7 +50,6 @@ export interface KtxPublicIngestPlanTarget {
   sourceDir?: string;
   debugCommand: string;
   steps: KtxPublicIngestStepName[];
-  databaseDepth?: KtxPublicIngestDepth;
   detectRelationships?: boolean;
   preflightFailure?: string;
   queryHistory?: {
@@ -67,7 +58,6 @@ export interface KtxPublicIngestPlanTarget {
     windowDays?: number;
     pullConfig?: Record<string, unknown>;
     unsupported?: boolean;
-    skippedStoredByFast?: boolean;
   };
 }
 
@@ -121,7 +111,6 @@ interface KtxPublicContextBuildArgs {
   inputMode: 'auto' | 'disabled';
   targetConnectionId?: string;
   all?: boolean;
-  depth?: KtxPublicIngestDepth;
   queryHistory?: KtxPublicIngestQueryHistoryFlag;
   queryHistoryWindowDays?: number;
   scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
@@ -154,7 +143,6 @@ interface KtxUnsupportedQueryHistoryWarning {
 
 interface KtxPublicIngestWarningAccumulator {
   warnings: string[];
-  ignoredDepthForSources: string[];
   ignoredQueryHistoryForSources: string[];
   unsupportedQueryHistoryForDatabases: KtxUnsupportedQueryHistoryWarning[];
 }
@@ -162,7 +150,6 @@ interface KtxPublicIngestWarningAccumulator {
 function createWarningAccumulator(): KtxPublicIngestWarningAccumulator {
   return {
     warnings: [],
-    ignoredDepthForSources: [],
     ignoredQueryHistoryForSources: [],
     unsupportedQueryHistoryForDatabases: [],
   };
@@ -233,7 +220,6 @@ function finalizeWarnings(
   accumulator: KtxPublicIngestWarningAccumulator,
   args: {
     all: boolean;
-    depth?: KtxPublicIngestDepth;
     queryHistory?: KtxPublicIngestQueryHistoryFlag;
     queryHistoryWindowDays?: number;
   },
@@ -242,11 +228,6 @@ function finalizeWarnings(
     ...accumulator.warnings,
     ...unsupportedQueryHistoryWarnings(accumulator.unsupportedQueryHistoryForDatabases, args.all),
   ];
-  const depthOption = args.depth ? `--${args.depth}` : null;
-  if (depthOption) {
-    const warning = sourceIgnoredWarning(depthOption, accumulator.ignoredDepthForSources, args.all);
-    if (warning) warnings.push(warning);
-  }
   if (args.queryHistory === 'enabled' || args.queryHistoryWindowDays !== undefined) {
     const warning = sourceIgnoredWarning('--query-history', accumulator.ignoredQueryHistoryForSources, args.all);
     if (warning) warnings.push(warning);
@@ -317,13 +298,12 @@ function resolveDatabaseTargetOptions(input: {
   driver: string;
   connection: KtxProjectConnectionConfig;
   args: {
-    depth?: KtxPublicIngestDepth;
     queryHistory?: KtxPublicIngestQueryHistoryFlag;
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
   };
   warnings: KtxPublicIngestWarningAccumulator;
-}): Pick<KtxPublicIngestPlanTarget, 'databaseDepth' | 'queryHistory' | 'steps'> {
+}): Pick<KtxPublicIngestPlanTarget, 'queryHistory' | 'steps'> {
   const storedQh = storedQueryHistory(input.connection);
   const dialect = queryHistoryDialectByDriver.get(input.driver);
   const explicitQueryHistory = input.args.queryHistory ?? 'default';
@@ -332,7 +312,6 @@ function resolveDatabaseTargetOptions(input: {
   const requestedQh =
     explicitQueryHistory === 'enabled' ||
     (explicitQueryHistory !== 'disabled' && (windowOverrideRequested || storedEnabled));
-  let depth = input.args.depth ?? databaseContextDepth(input.connection) ?? 'fast';
   const queryHistory = {
     enabled: false,
     ...(input.args.queryHistoryWindowDays !== undefined
@@ -350,19 +329,13 @@ function resolveDatabaseTargetOptions(input: {
         explicitQueryHistory === 'enabled' || input.args.queryHistoryWindowDays !== undefined ? 'explicit' : 'stored',
     });
     return {
-      databaseDepth: depth,
       queryHistory: { ...queryHistory, unsupported: true },
       steps: ['database-schema'],
     };
   }
 
   if (requestedQh && dialect) {
-    if (depth === 'fast') {
-      input.warnings.warnings.push(`--query-history requires deep ingest; running ${input.connectionId} with --deep.`);
-    }
-    depth = 'deep';
     return {
-      databaseDepth: depth,
       queryHistory: {
         ...queryHistory,
         enabled: true,
@@ -378,22 +351,28 @@ function resolveDatabaseTargetOptions(input: {
     };
   }
 
-  if (input.args.depth === 'fast' && explicitQueryHistory !== 'enabled' && storedEnabled) {
-    input.warnings.warnings.push(
-      `${input.connectionId} has query history enabled in ktx.yaml, but --fast skips query-history processing.`,
-    );
-    return {
-      databaseDepth: 'fast',
-      queryHistory: { ...queryHistory, skippedStoredByFast: true },
-      steps: ['database-schema'],
-    };
-  }
-
   return {
-    databaseDepth: depth,
     queryHistory,
     steps: ['database-schema'],
   };
+}
+
+function enrichmentReadinessGaps(config: KtxProjectConfig): string[] {
+  const gaps: string[] = [];
+  if (config.llm.provider.backend === 'none' || !config.llm.models.default) {
+    gaps.push('model configuration');
+  }
+
+  if (config.scan.enrichment.mode !== 'llm') {
+    gaps.push('scan enrichment mode');
+  }
+
+  const embeddings = config.scan.enrichment.embeddings;
+  if (!embeddings || embeddings.backend === 'none' || !embeddings.model || embeddings.dimensions <= 0) {
+    gaps.push('scan embeddings');
+  }
+
+  return gaps;
 }
 
 function targetForConnection(
@@ -401,7 +380,6 @@ function targetForConnection(
   connection: KtxProjectConnectionConfig,
   projectConfig: KtxPublicIngestProject['config'],
   args: {
-    depth?: KtxPublicIngestDepth;
     queryHistory?: KtxPublicIngestQueryHistoryFlag;
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
@@ -412,9 +390,6 @@ function targetForConnection(
   const adapter = sourceAdapterByDriver.get(driver);
   const sourceDir = sourceDirForConnection(connection);
   if (adapter) {
-    if (args.depth) {
-      warnings.ignoredDepthForSources.push(connectionId);
-    }
     if (args.queryHistory === 'enabled' || args.queryHistoryWindowDays !== undefined) {
       warnings.ignoredQueryHistoryForSources.push(connectionId);
     }
@@ -431,18 +406,18 @@ function targetForConnection(
 
   if (isDatabaseDriver(driver)) {
     const options = resolveDatabaseTargetOptions({ connectionId, driver, connection, args, warnings });
-    const gaps = options.databaseDepth === 'deep' ? deepReadinessGaps(projectConfig) : [];
+    const gaps = enrichmentReadinessGaps(projectConfig);
     return {
       connectionId,
       driver,
       operation: 'database-ingest',
       debugCommand: `ktx ingest ${connectionId} --debug`,
-      detectRelationships: options.databaseDepth === 'deep' && projectConfig.scan.relationships.enabled,
+      detectRelationships: projectConfig.scan.relationships.enabled,
       ...(gaps.length > 0
         ? {
-            preflightFailure: `${connectionId} requires deep ingest readiness: ${gaps.join(
+            preflightFailure: `${connectionId} cannot be ingested: enrichment is not configured (${gaps.join(
               ', ',
-            )}. Run ktx setup or rerun with --fast.`,
+            )}). Run ktx setup to configure a model and embeddings.`,
           }
         : {}),
       ...options,
@@ -458,7 +433,6 @@ export function buildPublicIngestPlan(
     projectDir: string;
     targetConnectionId?: string;
     all: boolean;
-    depth?: KtxPublicIngestDepth;
     queryHistory?: KtxPublicIngestQueryHistoryFlag;
     queryHistoryWindowDays?: number;
     scanMode?: Extract<KtxScanArgs, { command: 'run' }>['mode'];
@@ -522,13 +496,12 @@ function retryCommandForTarget(
   args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
 ): string {
   const projectPart = ` --project-dir ${args.projectDir}`;
-  const depthPart = target.databaseDepth ? ` --${target.databaseDepth}` : '';
   const queryHistoryPart = target.queryHistory?.enabled === true ? ' --query-history' : '';
   const windowPart =
     target.queryHistory?.enabled === true && target.queryHistory.windowDays !== undefined
       ? ` --query-history-window-days ${target.queryHistory.windowDays}`
       : '';
-  return `ktx ingest ${target.connectionId}${projectPart}${depthPart}${queryHistoryPart}${windowPart}`;
+  return `ktx ingest ${target.connectionId}${projectPart}${queryHistoryPart}${windowPart}`;
 }
 
 function trimTrailingPeriod(value: string): string {
@@ -830,7 +803,7 @@ export async function executePublicIngestTarget(
       command: 'run',
       projectDir: args.projectDir,
       connectionId: target.connectionId,
-      mode: target.databaseDepth === 'deep' ? 'enriched' : 'structural',
+      mode: 'enriched',
       detectRelationships: target.detectRelationships === true,
       dryRun: false,
       ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
@@ -979,7 +952,6 @@ export async function runKtxPublicIngest(
         all: args.all,
         entrypoint: 'ingest',
         inputMode: args.inputMode,
-        ...(args.depth ? { depth: args.depth } : {}),
         ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
         ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
         ...(args.scanMode ? { scanMode: args.scanMode } : {}),
