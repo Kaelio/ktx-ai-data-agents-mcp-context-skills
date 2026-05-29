@@ -260,7 +260,7 @@ describe('setup sources step', () => {
           inputMode: 'disabled',
           source: 'notion',
           sourceConnectionId: 'notion-main',
-          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
+          sourceAuthTokenRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
           notionCrawlMode: 'selected_roots',
           notionRootPageIds: ['page-1'],
           runInitialSourceIngest: false,
@@ -279,6 +279,81 @@ describe('setup sources step', () => {
       max_knowledge_updates_per_run: 20,
     });
     expect((await readConfig()).connections['notion-main']?.last_successful_cursor).toBeUndefined();
+  });
+
+  it('rejects --source-api-key-ref for Notion and points at --source-auth-token-ref', async () => {
+    await addPrimarySource();
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupSourcesStep(
+        {
+          projectDir,
+          inputMode: 'disabled',
+          source: 'notion',
+          sourceConnectionId: 'notion-main',
+          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
+          notionCrawlMode: 'selected_roots',
+          notionRootPageIds: ['page-1'],
+          runInitialSourceIngest: false,
+          skipSources: false,
+        },
+        io.io,
+        {},
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir });
+
+    expect(io.stderr()).toContain('--source-api-key-ref does not apply to --source notion; use --source-auth-token-ref.');
+    expect((await readConfig()).connections['notion-main']).toBeUndefined();
+  });
+
+  it('rejects --source-auth-token-ref for Metabase and points at --source-api-key-ref', async () => {
+    await addPrimarySource();
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupSourcesStep(
+        {
+          projectDir,
+          inputMode: 'disabled',
+          source: 'metabase',
+          sourceConnectionId: 'prod_metabase',
+          sourceUrl: 'https://metabase.example.com',
+          sourceAuthTokenRef: 'env:METABASE_API_KEY', // pragma: allowlist secret
+          sourceWarehouseConnectionId: 'warehouse',
+          metabaseDatabaseId: 1,
+          runInitialSourceIngest: false,
+          skipSources: false,
+        },
+        io.io,
+        {},
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir });
+
+    expect(io.stderr()).toContain('--source-auth-token-ref does not apply to --source metabase; use --source-api-key-ref.');
+  });
+
+  it('rejects --source-client-secret-ref for dbt and points at --source-auth-token-ref', async () => {
+    await addPrimarySource();
+    const io = makeIo();
+
+    await expect(
+      runKtxSetupSourcesStep(
+        {
+          projectDir,
+          inputMode: 'disabled',
+          source: 'dbt',
+          sourceConnectionId: 'dbt-main',
+          sourceClientSecretRef: 'env:DBT_SECRET', // pragma: allowlist secret
+          runInitialSourceIngest: false,
+          skipSources: false,
+        },
+        io.io,
+        {},
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir });
+
+    expect(io.stderr()).toContain('--source-client-secret-ref does not apply to --source dbt; use --source-auth-token-ref.');
   });
 
   it('accepts former ingest subcommand names as interactive source connection ids', async () => {
@@ -323,7 +398,7 @@ describe('setup sources step', () => {
           inputMode: 'disabled',
           source: 'notion',
           sourceConnectionId: 'notion-main',
-          sourceApiKeyRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
+          sourceAuthTokenRef: 'env:NOTION_TOKEN', // pragma: allowlist secret
           notionCrawlMode: 'all_accessible',
           notionRootPageIds: ['page-1'],
           runInitialSourceIngest: false,

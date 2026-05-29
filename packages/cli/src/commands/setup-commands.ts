@@ -308,9 +308,14 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .addOption(new Option('--source-git-url <url>', 'Git URL for dbt, MetricFlow, or LookML').hideHelp())
     .addOption(new Option('--source-branch <branch>', 'Git branch for source setup').hideHelp())
     .addOption(new Option('--source-subpath <path>', 'Repo subpath for source setup').hideHelp())
-    .addOption(new Option('--source-auth-token-ref <ref>', 'env: or file: credential ref for source repo auth').hideHelp())
+    .addOption(
+      new Option(
+        '--source-auth-token-ref <ref>',
+        'env: or file: credential ref for source repo auth or Notion integration token',
+      ).hideHelp(),
+    )
     .addOption(new Option('--source-url <url>', 'Source service URL for Metabase or Looker').hideHelp())
-    .addOption(new Option('--source-api-key-ref <ref>', 'env: or file: API key ref for Metabase or Notion').hideHelp())
+    .addOption(new Option('--source-api-key-ref <ref>', 'env: or file: API key ref for Metabase').hideHelp())
     .addOption(new Option('--source-client-id <id>', 'Looker client id').hideHelp())
     .addOption(new Option('--source-client-secret-ref <ref>', 'env: or file: Looker client secret ref').hideHelp())
     .addOption(new Option('--source-warehouse-connection-id <id>', 'Mapped warehouse connection id').hideHelp())
