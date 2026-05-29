@@ -402,12 +402,13 @@ export async function runLocalMetabaseIngest(
         error,
       });
     }
+    const childOutcome = ingestReportOutcome(child.report);
     options.progress?.onMetabaseChildCompleted?.({
       metabaseConnectionId,
       metabaseDatabaseId: childPlan.metabaseDatabaseId,
       targetConnectionId,
       jobId: child.report.jobId,
-      status: ingestReportOutcome(child.report) === 'error' ? 'failed' : ingestReportOutcome(child.report),
+      status: childOutcome === 'error' ? 'failed' : childOutcome,
     });
     children.push({
       jobId: child.report.jobId,

@@ -1,5 +1,6 @@
 import type { MemoryAction } from '../../../context/memory/types.js';
 import type { LocalIngestRunRecord } from '../local-stage-ingest.js';
+import { ingestReportOutcome } from '../reports.js';
 import type { IngestReportSnapshot } from '../reports.js';
 import type {
   MemoryFlowActionDetail,
@@ -72,7 +73,7 @@ function fullModeMetadata(input: {
 }
 
 function reportStatus(report: IngestReportSnapshot): MemoryFlowReplayInput['status'] {
-  return report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
+  return ingestReportOutcome(report) === 'error' ? 'error' : 'done';
 }
 
 function reportCreatedEvent(report: IngestReportSnapshot): MemoryFlowEvent {
