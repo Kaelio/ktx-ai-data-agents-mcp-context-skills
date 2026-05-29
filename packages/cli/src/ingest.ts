@@ -2,7 +2,7 @@ import { buildMemoryFlowViewModel } from './context/ingest/memory-flow/view-mode
 import { createMemoryFlowLiveBuffer, sanitizeMemoryFlowError } from './context/ingest/memory-flow/live-buffer.js';
 import { formatMemoryFlowFinalSummary } from './context/ingest/memory-flow/summary.js';
 import { getLatestLocalIngestStatus, getLocalIngestStatus, type LocalMetabaseFanoutResult, type LocalMetabaseFanoutProgress, type RunLocalIngestOptions, runLocalIngest, runLocalMetabaseIngest } from './context/ingest/local-ingest.js';
-import { type IngestReportSnapshot, savedMemoryCountsForReport } from './context/ingest/reports.js';
+import { type IngestReportSnapshot, ingestReportOutcome, savedMemoryCountsForReport } from './context/ingest/reports.js';
 import { ingestReportToMemoryFlowReplay } from './context/ingest/memory-flow/events.js';
 import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/memory-flow/types.js';
 import { renderMemoryFlowReplay } from './context/ingest/memory-flow/render.js';
@@ -91,10 +91,6 @@ export interface KtxIngestDeps {
   >;
   progress?: (update: KtxIngestProgressUpdate) => void;
   runtimeIo?: KtxIngestIo;
-}
-
-function reportStatus(report: IngestReportSnapshot): 'done' | 'error' {
-  return report.body.status === 'failed' || report.body.failedWorkUnits.length > 0 ? 'error' : 'done';
 }
 
 const REPORT_SOURCE_LABELS = new Map<string, string>([
@@ -193,7 +189,7 @@ function writeReportStatus(report: IngestReportSnapshot, io: KtxIngestIo): void 
   if (report.body.tracePath) {
     io.stdout.write(`Trace: ${report.body.tracePath}\n`);
   }
-  io.stdout.write(`Status: ${reportStatus(report)}\n`);
+  io.stdout.write(`Status: ${ingestReportOutcome(report)}\n`);
   io.stdout.write(`Source: ${reportSourceLabel(report.sourceKey)}\n`);
   io.stdout.write(`Connection: ${report.connectionId}\n`);
   io.stdout.write(`Sync: ${report.body.syncId}\n`);
@@ -231,7 +227,7 @@ function writeMetabaseFanoutStatus(result: LocalMetabaseFanoutResult, io: KtxIng
   }
   io.stdout.write(`Saved memory: ${counts.wikiCount} wiki, ${counts.slCount} SL\n`);
   for (const child of result.children) {
-    const status = reportStatus(child.report);
+    const status = ingestReportOutcome(child.report);
     io.stdout.write(
       `- target=${child.targetConnectionId} database=${child.metabaseDatabaseId} status=${status} job=${child.jobId} report=${child.report.id}\n`,
     );
@@ -595,7 +591,7 @@ function initialRunMemoryFlowInput(
 }
 
 function finalRunMemoryFlowInput(snapshot: MemoryFlowReplayInput, report: IngestReportSnapshot): MemoryFlowReplayInput {
-  const status = reportStatus(report);
+  const status = ingestReportOutcome(report) === 'error' ? 'error' : 'done';
   return {
     ...snapshot,
     runId: report.runId,
@@ -777,7 +773,7 @@ export async function runKtxIngest(
         } finally {
           plainProgress?.flush();
         }
-        return result.status === 'all_succeeded' ? 0 : 1;
+        return result.status === 'all_failed' ? 1 : 0;
       }
 
       const jobId = deps.jobIdFactory?.();
@@ -846,7 +842,7 @@ export async function runKtxIngest(
           liveTui?.close();
           liveTui = null;
           io.stdout.write(formatMemoryFlowFinalSummary(latestMemoryFlowSnapshot));
-          return reportStatus(result.report) === 'done' ? 0 : 1;
+          return ingestReportOutcome(result.report) === 'error' ? 1 : 0;
         }
         plainProgress?.flush();
         await writeReportRecord(result.report, runOutputMode, io, {
@@ -854,7 +850,7 @@ export async function runKtxIngest(
           renderStoredMemoryFlow: deps.renderStoredMemoryFlow,
           env,
         });
-        return reportStatus(result.report) === 'done' ? 0 : 1;
+        return ingestReportOutcome(result.report) === 'error' ? 1 : 0;
       } finally {
         plainProgress?.flush();
         liveTui?.close();
