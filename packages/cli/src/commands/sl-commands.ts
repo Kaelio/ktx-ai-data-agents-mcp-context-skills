@@ -94,6 +94,23 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
       },
     );
 
+  sl.command('read')
+    .description('Read a semantic-layer source YAML file (set --connection-id on `ktx sl`)')
+    .argument('<sourceName>', 'Semantic-layer source name')
+    .action(async (sourceName: string, _options, command) => {
+      const parentOpts = command.parent?.opts() as { connectionId?: string } | undefined;
+      const connectionId = parentOpts?.connectionId;
+      if (connectionId === undefined) {
+        command.error("error: required option '--connection-id <id>' not specified");
+      }
+      await runSlArgs(context, {
+        command: 'read',
+        projectDir: resolveCommandProjectDir(command),
+        connectionId: connectionId as string,
+        sourceName,
+      });
+    });
+
   sl.command('validate')
     .description('Validate a semantic-layer source (set --connection-id on `ktx sl`)')
     .argument('<sourceName>', 'Semantic-layer source name')

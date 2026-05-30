@@ -45,6 +45,7 @@ export type KtxSlArgs =
       json?: boolean;
       cliVersion: string;
     }
+  | { command: 'read'; projectDir: string; connectionId: string; sourceName: string }
   | { command: 'validate'; projectDir: string; connectionId: string; sourceName: string }
   | {
       command: 'query';
@@ -230,6 +231,17 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
         json: args.json,
         io,
       });
+      return 0;
+    }
+    if (args.command === 'read') {
+      const source = await readLocalSlSource(project, {
+        connectionId: args.connectionId,
+        sourceName: args.sourceName,
+      });
+      if (!source) {
+        throw new Error(`No semantic-layer source '${args.sourceName}' for connection '${args.connectionId}'`);
+      }
+      io.stdout.write(source.yaml);
       return 0;
     }
     if (args.command === 'validate') {
