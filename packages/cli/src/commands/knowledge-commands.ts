@@ -21,9 +21,9 @@ function isDebugEnabled(command: CommandWithGlobalOptions): boolean {
 }
 
 export function registerWikiCommands(program: Command, context: KtxCliCommandContext): void {
-  program
+  const wiki = program
     .command('wiki')
-    .description('List or search local wiki pages')
+    .description('List, search, or read local wiki pages')
     .usage('[options] [query...]')
     .argument('[query...]', 'Search query; omit to list all pages')
     .option('--user-id <id>', 'Local user id', 'local')
@@ -76,4 +76,18 @@ export function registerWikiCommands(program: Command, context: KtxCliCommandCon
         });
       },
     );
+
+  wiki
+    .command('read')
+    .description('Read a wiki page file by key')
+    .argument('<key>', 'Wiki page key')
+    .action(async (key: string, _options, command) => {
+      const parentOpts = command.parent?.opts() as { userId?: string } | undefined;
+      await runKnowledgeArgs(context, {
+        command: 'read',
+        projectDir: resolveCommandProjectDir(command),
+        key,
+        userId: parentOpts?.userId ?? 'local',
+      });
+    });
 }

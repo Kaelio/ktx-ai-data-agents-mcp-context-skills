@@ -1,7 +1,13 @@
 import { KtxIngestEmbeddingPortAdapter } from './context/llm/embedding-port.js';
 import type { KtxEmbeddingPort } from './context/core/embedding.js';
 import { loadKtxProject } from './context/project/project.js';
-import { type LocalKnowledgeSearchResult, type LocalKnowledgeSummary, listLocalKnowledgePages, searchLocalKnowledgePages as defaultSearchLocalKnowledgePages } from './context/wiki/local-knowledge.js';
+import {
+  type LocalKnowledgeSearchResult,
+  type LocalKnowledgeSummary,
+  listLocalKnowledgePages,
+  readLocalKnowledgePage,
+  searchLocalKnowledgePages as defaultSearchLocalKnowledgePages,
+} from './context/wiki/local-knowledge.js';
 import {
   resolveProjectEmbeddingProvider,
   type EmbeddingProviderResolution,
@@ -22,7 +28,8 @@ export type KtxKnowledgeArgs =
       limit?: number;
       debug?: boolean;
       cliVersion: string;
-    };
+    }
+  | { command: 'read'; projectDir: string; key: string; userId: string };
 
 type KtxKnowledgeIo = import('./cli-runtime.js').KtxCliIo;
 
@@ -126,6 +133,15 @@ export async function runKtxKnowledge(
         mode,
         io,
       });
+      return 0;
+    }
+    if (args.command === 'read') {
+      const page = await readLocalKnowledgePage(project, { key: args.key, userId: args.userId });
+      if (!page) {
+        throw new Error(`No wiki page found for key '${args.key}'`);
+      }
+      const raw = await project.fileStore.readFile(page.path);
+      io.stdout.write(raw.content);
       return 0;
     }
     if (args.command === 'search') {
