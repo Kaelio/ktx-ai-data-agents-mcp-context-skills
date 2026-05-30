@@ -1,21 +1,24 @@
 ---
 title: "ktx wiki"
-description: "List or search wiki pages."
+description: "List, search, or read wiki pages."
 ---
 
-List and search wiki pages in your **ktx** project. Wiki pages are Markdown
-documents that capture business definitions, rules, and gotchas. Agents search
-them for context when answering questions about your data.
+List, search, and read wiki pages in your **ktx** project. Wiki pages are
+Markdown documents that capture business definitions, rules, and gotchas.
+Agents search them for context when answering questions about your data.
 
 ## Command signature
 
 ```bash
-ktx wiki [options] [query...]
+ktx wiki [options] [query...]  # list (bare) or search (with query)
+ktx wiki read <key>
 ```
 
 - Bare `ktx wiki` lists local wiki pages.
-- `ktx wiki <query...>` searches local wiki pages (multi-word queries are
-  joined with a space).
+- `ktx wiki <query...>` searches local wiki pages. Multi-word queries are
+  joined with a space.
+- `ktx wiki read <key>` prints the whole Markdown file for one wiki page,
+  including YAML frontmatter.
 
 Edit the Markdown files under `wiki/` directly, or ingest source content with
 `ktx ingest`, when you need to add or update wiki knowledge.
@@ -50,6 +53,9 @@ ktx wiki "monthly recurring revenue"
 # Search wiki pages as JSON
 ktx wiki "monthly recurring revenue" --json --limit 10
 
+# Print the exact Markdown file for a known page key
+ktx wiki read revenue-definitions
+
 # Print search results as TSV
 ktx wiki "monthly recurring revenue" --output plain
 
@@ -62,8 +68,10 @@ ktx --debug wiki "monthly recurring revenue" --json
 Wiki commands print clack-style pretty output in a TTY and TSV-style plain
 output when requested. JSON output wraps the items with a command metadata
 envelope. Search results include `matchReasons` and `lanes` metadata so you can
-see whether lexical, token, or semantic search contributed to the ranking. Open
-the matching Markdown files directly when you need the full page contents.
+see whether lexical, token, or semantic search contributed to the ranking. Use
+`ktx wiki read <key>` when you need the full page contents. Read output is the
+exact Markdown file stored on disk, including YAML frontmatter, and is not
+wrapped in pretty, plain, or JSON formatting.
 Pretty search output shows `#1`, `#2`, and later rank badges for the displayed
 results. Plain and JSON output keep the raw `score` value, which is a ranking
 score rather than a percentage.
@@ -121,4 +129,4 @@ stays machine-readable:
 | Error | Cause | Recovery |
 |-------|-------|----------|
 | Search returns no results | The query terms do not match summaries, tags, or content, and the semantic lane is unavailable or has no positive matches | Run with `--debug`, check the semantic lane status, retry with business synonyms, then create a page if the knowledge is missing |
-| A page is missing | No Markdown file exists for that business context | Add a file under `wiki/` or run `ktx ingest <connectionId>` |
+| A page is missing | No Markdown file exists for that business context or `ktx wiki read <key>` used the wrong key | Run `ktx wiki <query>` to find the page key, then retry `ktx wiki read <key>` |

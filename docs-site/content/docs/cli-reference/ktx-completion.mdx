@@ -4,11 +4,12 @@ description: "Print a shell completion script for tab completion."
 ---
 
 Print a shell completion script for **ktx**. Once installed, pressing <kbd>Tab</kbd>
-completes commands, subcommands, and flags, and — inside a **ktx** project — the
-names of things that already exist: semantic-layer source names for `ktx sl` and
-`ktx sl validate`, wiki page keys for `ktx wiki`, and configured connection ids
-for `ktx connection test`, `ktx ingest`, and `ktx sql`. This saves you from
-remembering exact source, page, or connection names.
+completes commands, subcommands, and flags, and - inside a **ktx** project - the
+names of things that already exist: semantic-layer source names for
+`ktx sl read` and `ktx sl validate`, wiki page keys for `ktx wiki read`, and
+configured connection ids for `ktx connection test`, `ktx ingest`, and
+`ktx sql`. This saves you from remembering exact source, page, or connection
+names.
 
 ## Command signature
 
@@ -43,9 +44,11 @@ your terminal.
 | Position | Completions |
 |----------|-------------|
 | `ktx <Tab>` | Top-level commands (`setup`, `sl`, `wiki`, `ingest`, …) |
-| `ktx sl <Tab>` | The `validate` / `query` subcommands and existing source names |
+| `ktx sl <Tab>` | The `read` / `validate` / `query` subcommands |
+| `ktx sl read <Tab>` | Existing semantic-layer source names |
 | `ktx sl validate <Tab>` | Existing semantic-layer source names |
-| `ktx wiki <Tab>` | Existing wiki page keys |
+| `ktx wiki <Tab>` | The `read` subcommand |
+| `ktx wiki read <Tab>` | Existing wiki page keys |
 | `ktx connection test <Tab>` | Configured connection ids |
 | `ktx ingest <Tab>` | Configured connection ids |
 | `ktx sql --connection <Tab>` | Configured connection ids |
@@ -57,7 +60,9 @@ your terminal.
 Source names, wiki page keys, and connection ids are read from the **ktx**
 project resolved from your current directory (or `--project-dir` /
 `KTX_PROJECT_DIR`). Outside a **ktx** project, completion still suggests
-commands and flags but no project entities.
+commands and flags but no project entities. Bare `ktx sl <Tab>` and
+`ktx wiki <Tab>` complete subcommands instead of entity names because their
+positional arguments are free-text search queries.
 
 ## Examples
 

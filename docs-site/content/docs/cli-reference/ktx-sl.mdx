@@ -11,13 +11,16 @@ the vocabulary agents use to generate correct SQL.
 
 ```bash
 ktx sl [options] [query...]            # list (bare) or search (with query)
-ktx sl validate <sourceName> [options]
+ktx sl read <sourceName>
+ktx sl validate <sourceName>
 ktx sl query [options]
 ```
 
 - Bare `ktx sl` lists semantic sources.
-- `ktx sl <query...>` searches semantic sources (multi-word queries are
-  joined with a space).
+- `ktx sl <query...>` searches semantic sources. Multi-word queries are joined
+  with a space.
+- `ktx sl read <sourceName>` prints the YAML for one source. Set
+  `--connection-id` on `ktx sl`.
 - `ktx sl validate` and `ktx sl query` remain as explicit subcommands.
 
 ## Subcommands
@@ -26,6 +29,7 @@ ktx sl query [options]
 |-----------|-------------|
 | (none, no query) | List semantic sources |
 | (none, with query) | Search semantic sources |
+| `read <sourceName>` | Print the YAML for one semantic source |
 | `validate <sourceName>` | Validate a semantic source against the database schema |
 | `query` | Compile or execute a semantic query |
 
@@ -39,6 +43,12 @@ ktx sl query [options]
 | `--limit <number>` | Maximum search results (search mode only) | - |
 | `--output <mode>` | Output mode: `pretty` (default in TTY), `plain` (TSV), or `json` | `pretty` |
 | `--json` | Shortcut for `--output=json` (overrides `--output`) | `false` |
+
+### `sl read`
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection-id <id>` | **ktx** connection id (required) | - |
 
 ### `sl validate`
 
@@ -82,6 +92,9 @@ ktx sl --json
 
 # Search sources as JSON
 ktx sl "revenue" --json
+
+# Print the YAML for a known source
+ktx sl --connection-id my-warehouse read orders
 
 # Validate a source against the live schema
 ktx sl validate orders --connection-id my-warehouse
@@ -144,6 +157,10 @@ shows `#1`, `#2`, and later rank badges for the displayed results. Plain and
 JSON output keep the raw `score` value, which is a ranking score rather than a
 percentage.
 
+`ktx sl read <sourceName>` prints the source YAML directly to stdout. It does
+not wrap output in pretty, plain, or JSON formatting, so it can be piped to
+other tools.
+
 ```json
 {
   "sql": "SELECT orders.status, SUM(orders.total_amount) AS total_revenue FROM public.orders GROUP BY orders.status",
@@ -160,7 +177,7 @@ percentage.
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Source not found | Source name or connection id is wrong | Run `ktx sl --json` and retry with an exact source name and connection id |
+| Source not found | Source name or connection id is wrong | Run `ktx sl <query>` or `ktx sl --connection-id <id>` to find the exact source name, then retry `ktx sl --connection-id <id> read <sourceName>` |
 | Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
 | Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl <query>`, inspect the source YAML in your project files, then retry using declared fields |
 | Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |

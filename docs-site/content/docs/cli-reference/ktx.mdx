@@ -36,9 +36,11 @@ ktx
   wiki
     list
     search <query>
+    read <key>
   sl
     list
     search <query>
+    read <sourceName>
     validate <sourceName>
     query
   sql
@@ -97,6 +99,10 @@ ktx ingest
 # Search semantic sources and wiki pages
 ktx sl "revenue"
 ktx wiki "revenue recognition"
+
+# Print a known wiki page or semantic source
+ktx wiki read revenue-definitions
+ktx sl --connection-id warehouse read orders
 
 # Execute read-only SQL
 ktx sql --connection warehouse "select count(*) from public.orders"
