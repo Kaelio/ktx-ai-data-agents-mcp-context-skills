@@ -134,6 +134,105 @@ describe('runKtxSl', () => {
     expect(readIo.stderr()).toBe('');
   });
 
+  it('reads a unique semantic-layer source without a connection id', async () => {
+    const projectDir = join(tempDir, 'read-unique-project');
+    const project = await initKtxProject({ projectDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/analytics/tickets.yaml',
+      [
+        'name: tickets',
+        'table: public.tickets',
+        'grain:',
+        '  - ticket_id',
+        'columns:',
+        '  - name: ticket_id',
+        '    type: string',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+
+    const readIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'read',
+          projectDir,
+          sourceName: 'tickets',
+        },
+        readIo.io,
+      ),
+    ).resolves.toBe(0);
+
+    expect(readIo.stdout()).toContain('name: tickets');
+    expect(readIo.stderr()).toBe('');
+  });
+
+  it('reports ambiguous unscoped reads with sorted connection ids', async () => {
+    const projectDir = join(tempDir, 'read-ambiguous-project');
+    const project = await initKtxProject({ projectDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/analytics/orders.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+
+    const readIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'read',
+          projectDir,
+          sourceName: 'orders',
+        },
+        readIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(readIo.stdout()).toBe('');
+    expect(readIo.stderr()).toBe(
+      "Source 'orders' exists in multiple connections: analytics, warehouse. Re-run with --connection-id <id>.\n",
+    );
+  });
+
+  it('reports a clear error when an unscoped semantic-layer source is missing', async () => {
+    const projectDir = join(tempDir, 'missing-unscoped-read-project');
+    await seedSlSource({ projectDir });
+
+    const readIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'read',
+          projectDir,
+          sourceName: 'missing_orders',
+        },
+        readIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(readIo.stdout()).toBe('');
+    expect(readIo.stderr()).toBe("No semantic-layer source 'missing_orders'\n");
+  });
+
   it('reports a clear error when a semantic-layer source is missing', async () => {
     const projectDir = join(tempDir, 'missing-read-project');
     await seedSlSource({ projectDir });
@@ -153,6 +252,126 @@ describe('runKtxSl', () => {
 
     expect(readIo.stdout()).toBe('');
     expect(readIo.stderr()).toBe("No semantic-layer source 'missing_orders' for connection 'warehouse'\n");
+  });
+
+  it('validates a unique semantic-layer source without a connection id', async () => {
+    const projectDir = join(tempDir, 'validate-unique-project');
+    const project = await initKtxProject({ projectDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/analytics/tickets.yaml',
+      [
+        'name: tickets',
+        'table: public.tickets',
+        'grain:',
+        '  - ticket_id',
+        'columns:',
+        '  - name: ticket_id',
+        '    type: string',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+
+    const validateIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'validate',
+          projectDir,
+          sourceName: 'tickets',
+        },
+        validateIo.io,
+      ),
+    ).resolves.toBe(0);
+
+    expect(validateIo.stdout()).toBe('Valid semantic-layer source: analytics/tickets\n');
+    expect(validateIo.stderr()).toBe('');
+  });
+
+  it('reports ambiguous unscoped validation with sorted connection ids', async () => {
+    const projectDir = join(tempDir, 'validate-ambiguous-project');
+    const project = await initKtxProject({ projectDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/analytics/orders.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Add semantic-layer source',
+    );
+
+    const validateIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'validate',
+          projectDir,
+          sourceName: 'orders',
+        },
+        validateIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(validateIo.stdout()).toBe('');
+    expect(validateIo.stderr()).toBe(
+      "Source 'orders' exists in multiple connections: analytics, warehouse. Re-run with --connection-id <id>.\n",
+    );
+  });
+
+  it('reports a clear error when an unscoped semantic-layer source validation target is missing', async () => {
+    const projectDir = join(tempDir, 'missing-unscoped-validate-project');
+    await seedSlSource({ projectDir });
+
+    const validateIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'validate',
+          projectDir,
+          sourceName: 'missing_orders',
+        },
+        validateIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(validateIo.stdout()).toBe('');
+    expect(validateIo.stderr()).toBe('Semantic-layer source "missing_orders" was not found\n');
+  });
+
+  it('keeps scoped validation not-found wording', async () => {
+    const projectDir = join(tempDir, 'missing-scoped-validate-project');
+    await seedSlSource({ projectDir });
+
+    const validateIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'validate',
+          projectDir,
+          connectionId: 'warehouse',
+          sourceName: 'missing_orders',
+        },
+        validateIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(validateIo.stdout()).toBe('');
+    expect(validateIo.stderr()).toBe('Semantic-layer source "warehouse/missing_orders" was not found\n');
   });
 
   it('prints semantic-layer search rank badges in pretty output', async () => {

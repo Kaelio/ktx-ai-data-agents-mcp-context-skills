@@ -50,6 +50,7 @@ export interface LocalSlSearchInput {
   pglite?: PgliteSlSearchPrototypeOwnerOptions;
 }
 
+/** @internal */
 export interface LocalSlSource extends LocalSlSourceSummary {
   yaml: string;
 }
@@ -62,6 +63,11 @@ export interface LocalSlValidationResult {
   valid: boolean;
   errors: string[];
 }
+
+export type ResolvedSlSource =
+  | { kind: 'found'; source: LocalSlSource }
+  | { kind: 'not-found' }
+  | { kind: 'ambiguous'; connectionIds: string[] };
 
 const LOCAL_AUTHOR = 'ktx';
 const LOCAL_AUTHOR_EMAIL = 'ktx@example.com';
@@ -311,6 +317,7 @@ export async function writeLocalSlSource(
   );
 }
 
+/** @internal */
 export async function readLocalSlSource(
   project: KtxLocalProject,
   input: { connectionId: string; sourceName: string },
@@ -329,6 +336,41 @@ export async function readLocalSlSource(
     const record = records.find((source) => source.name === input.sourceName);
     return record ? { ...record } : null;
   }
+}
+
+export async function resolveLocalSlSource(
+  project: KtxLocalProject,
+  input: { sourceName: string; connectionId?: string },
+): Promise<ResolvedSlSource> {
+  if (input.connectionId !== undefined) {
+    const source = await readLocalSlSource(project, {
+      connectionId: input.connectionId,
+      sourceName: input.sourceName,
+    });
+    return source ? { kind: 'found', source } : { kind: 'not-found' };
+  }
+
+  const summaries = await listLocalSlSources(project, {});
+  const matches = summaries.filter((summary) => summary.name === input.sourceName);
+  if (matches.length === 0) {
+    return { kind: 'not-found' };
+  }
+  if (matches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      connectionIds: [...new Set(matches.map((match) => match.connectionId))].sort(),
+    };
+  }
+
+  const match = matches[0];
+  if (match === undefined) {
+    return { kind: 'not-found' };
+  }
+  const source = await readLocalSlSource(project, {
+    connectionId: match.connectionId,
+    sourceName: input.sourceName,
+  });
+  return source ? { kind: 'found', source } : { kind: 'not-found' };
 }
 
 export async function listLocalSlSources(

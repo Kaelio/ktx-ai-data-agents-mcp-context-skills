@@ -6,6 +6,7 @@ import { initKtxProject, type KtxLocalProject } from '../../../src/context/proje
 import {
   listLocalSlSources,
   readLocalSlSource,
+  resolveLocalSlSource,
   searchLocalSlSources,
   validateLocalSlSource,
   writeLocalSlSource,
@@ -88,6 +89,101 @@ describe('local semantic-layer helpers', () => {
     ]);
 
     await expect(validateLocalSlSource(ORDERS_YAML)).resolves.toEqual({ valid: true, errors: [] });
+  });
+
+  it('resolves a scoped source by connection id', async () => {
+    await writeLocalSlSource(project, {
+      connectionId: 'warehouse',
+      sourceName: 'orders',
+      yaml: ORDERS_YAML,
+    });
+
+    await expect(
+      resolveLocalSlSource(project, {
+        connectionId: 'warehouse',
+        sourceName: 'orders',
+      }),
+    ).resolves.toEqual({
+      kind: 'found',
+      source: expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'orders',
+        path: 'semantic-layer/warehouse/orders.yaml',
+        yaml: ORDERS_YAML,
+      }),
+    });
+  });
+
+  it('returns not-found for a missing scoped source', async () => {
+    await writeLocalSlSource(project, {
+      connectionId: 'warehouse',
+      sourceName: 'orders',
+      yaml: ORDERS_YAML,
+    });
+
+    await expect(
+      resolveLocalSlSource(project, {
+        connectionId: 'warehouse',
+        sourceName: 'missing_orders',
+      }),
+    ).resolves.toEqual({ kind: 'not-found' });
+  });
+
+  it('resolves a unique source name across all connections', async () => {
+    await writeLocalSlSource(project, {
+      connectionId: 'warehouse',
+      sourceName: 'orders',
+      yaml: ORDERS_YAML,
+    });
+    await writeLocalSlSource(project, {
+      connectionId: 'analytics',
+      sourceName: 'tickets',
+      yaml: SUPPORT_YAML,
+    });
+
+    await expect(
+      resolveLocalSlSource(project, {
+        sourceName: 'tickets',
+      }),
+    ).resolves.toEqual({
+      kind: 'found',
+      source: expect.objectContaining({
+        connectionId: 'analytics',
+        name: 'tickets',
+        path: 'semantic-layer/analytics/tickets.yaml',
+        yaml: SUPPORT_YAML,
+      }),
+    });
+  });
+
+  it('returns not-found for a missing unscoped source', async () => {
+    await writeLocalSlSource(project, {
+      connectionId: 'warehouse',
+      sourceName: 'orders',
+      yaml: ORDERS_YAML,
+    });
+
+    await expect(resolveLocalSlSource(project, { sourceName: 'missing_orders' })).resolves.toEqual({
+      kind: 'not-found',
+    });
+  });
+
+  it('reports sorted ambiguous connection ids for duplicate source names', async () => {
+    await writeLocalSlSource(project, {
+      connectionId: 'warehouse',
+      sourceName: 'orders',
+      yaml: ORDERS_YAML,
+    });
+    await writeLocalSlSource(project, {
+      connectionId: 'analytics',
+      sourceName: 'orders',
+      yaml: ORDERS_YAML,
+    });
+
+    await expect(resolveLocalSlSource(project, { sourceName: 'orders' })).resolves.toEqual({
+      kind: 'ambiguous',
+      connectionIds: ['analytics', 'warehouse'],
+    });
   });
 
   it('validates table-backed sources against matching physical manifests when project context is provided', async () => {

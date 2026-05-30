@@ -7,7 +7,14 @@ import type { KtxEmbeddingPort } from './context/core/embedding.js';
 import type { KtxSemanticLayerComputePort } from './context/daemon/semantic-layer-compute.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { compileLocalSlQuery } from './context/sl/local-query.js';
-import { listLocalSlSources, readLocalSlSource, searchLocalSlSources as defaultSearchLocalSlSources, validateLocalSlSource, type LocalSlSourceSearchResult, type LocalSlSourceSummary } from './context/sl/local-sl.js';
+import {
+  listLocalSlSources,
+  resolveLocalSlSource,
+  searchLocalSlSources as defaultSearchLocalSlSources,
+  validateLocalSlSource,
+  type LocalSlSourceSearchResult,
+  type LocalSlSourceSummary,
+} from './context/sl/local-sl.js';
 import type { SemanticLayerQueryInput } from './context/sl/types.js';
 import {
   resolveProjectEmbeddingProvider,
@@ -45,8 +52,8 @@ export type KtxSlArgs =
       json?: boolean;
       cliVersion: string;
     }
-  | { command: 'read'; projectDir: string; connectionId: string; sourceName: string }
-  | { command: 'validate'; projectDir: string; connectionId: string; sourceName: string }
+  | { command: 'read'; projectDir: string; connectionId?: string; sourceName: string }
+  | { command: 'validate'; projectDir: string; connectionId?: string; sourceName: string }
   | {
       command: 'query';
       projectDir: string;
@@ -186,6 +193,12 @@ async function readSlQueryFile(path: string): Promise<SemanticLayerQueryInput> {
   return parsed as SemanticLayerQueryInput;
 }
 
+function ambiguousSourceMessage(sourceName: string, connectionIds: readonly string[]): string {
+  return `Source '${sourceName}' exists in multiple connections: ${connectionIds.join(
+    ', ',
+  )}. Re-run with --connection-id <id>.`;
+}
+
 export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: KtxSlDeps = {}): Promise<number> {
   const startedAt = performance.now();
   let queryForTelemetry: SemanticLayerQueryInput | undefined;
@@ -234,27 +247,41 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
       return 0;
     }
     if (args.command === 'read') {
-      const source = await readLocalSlSource(project, {
+      const resolved = await resolveLocalSlSource(project, {
         connectionId: args.connectionId,
         sourceName: args.sourceName,
       });
-      if (!source) {
-        throw new Error(`No semantic-layer source '${args.sourceName}' for connection '${args.connectionId}'`);
+      if (resolved.kind === 'not-found') {
+        throw new Error(
+          args.connectionId !== undefined
+            ? `No semantic-layer source '${args.sourceName}' for connection '${args.connectionId}'`
+            : `No semantic-layer source '${args.sourceName}'`,
+        );
       }
-      io.stdout.write(source.yaml);
+      if (resolved.kind === 'ambiguous') {
+        throw new Error(ambiguousSourceMessage(args.sourceName, resolved.connectionIds));
+      }
+      io.stdout.write(resolved.source.yaml);
       return 0;
     }
     if (args.command === 'validate') {
-      const source = await readLocalSlSource(project, {
+      const resolved = await resolveLocalSlSource(project, {
         connectionId: args.connectionId,
         sourceName: args.sourceName,
       });
-      if (!source) {
-        throw new Error(`Semantic-layer source "${args.connectionId}/${args.sourceName}" was not found`);
+      if (resolved.kind === 'not-found') {
+        throw new Error(
+          args.connectionId !== undefined
+            ? `Semantic-layer source "${args.connectionId}/${args.sourceName}" was not found`
+            : `Semantic-layer source "${args.sourceName}" was not found`,
+        );
       }
-      const result = await validateLocalSlSource(source.yaml, {
+      if (resolved.kind === 'ambiguous') {
+        throw new Error(ambiguousSourceMessage(args.sourceName, resolved.connectionIds));
+      }
+      const result = await validateLocalSlSource(resolved.source.yaml, {
         project,
-        connectionId: args.connectionId,
+        connectionId: resolved.source.connectionId,
         sourceName: args.sourceName,
       });
       await emitTelemetryEvent({
@@ -262,7 +289,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
         projectDir: args.projectDir,
         io,
         fields: {
-          sourceCount: source ? 1 : 0,
+          sourceCount: 1,
           modelCount: 0,
           validationErrorCount: result.valid ? 0 : result.errors.length,
           outcome: result.valid ? 'ok' : 'error',
@@ -275,7 +302,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
         }
         return 1;
       }
-      io.stdout.write(`Valid semantic-layer source: ${args.connectionId}/${args.sourceName}\n`);
+      io.stdout.write(`Valid semantic-layer source: ${resolved.source.connectionId}/${args.sourceName}\n`);
       return 0;
     }
     if (args.command === 'query') {
