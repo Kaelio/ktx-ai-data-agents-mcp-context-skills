@@ -27,6 +27,17 @@ describe('createProjectCompletionProviders', () => {
       ['name: orders', 'table: public.orders', 'grain: [order_id]', 'columns: []', ''].join('\n'),
       'utf-8',
     );
+    await mkdir(join(projectDir, 'semantic-layer', 'analytics'), { recursive: true });
+    await writeFile(
+      join(projectDir, 'semantic-layer', 'analytics', 'orders.yaml'),
+      ['name: orders', 'table: public.analytics_orders', 'grain: [order_id]', 'columns: []', ''].join('\n'),
+      'utf-8',
+    );
+    await writeFile(
+      join(projectDir, 'semantic-layer', 'analytics', 'tickets.yaml'),
+      ['name: tickets', 'table: public.tickets', 'grain: [ticket_id]', 'columns: []', ''].join('\n'),
+      'utf-8',
+    );
     await mkdir(join(projectDir, 'wiki', 'global'), { recursive: true });
     await writeFile(
       join(projectDir, 'wiki', 'global', 'revenue.md'),
@@ -52,12 +63,20 @@ describe('createProjectCompletionProviders', () => {
     const providers = createProjectCompletionProviders();
 
     await expect(providers.positionalCandidates(['sl'], ['--project-dir', projectDir])).resolves.toEqual([]);
+    await expect(providers.positionalCandidates(['sl', 'read'], ['--project-dir', projectDir])).resolves.toEqual([
+      'orders',
+      'tickets',
+    ]);
+    await expect(providers.positionalCandidates(['sl', 'validate'], ['--project-dir', projectDir])).resolves.toEqual([
+      'orders',
+      'tickets',
+    ]);
     await expect(
       providers.positionalCandidates(['sl', 'read'], ['--project-dir', projectDir, '--connection-id', 'warehouse']),
     ).resolves.toEqual(['orders']);
     await expect(
-      providers.positionalCandidates(['sl', 'validate'], ['--project-dir', projectDir, '--connection-id', 'warehouse']),
-    ).resolves.toEqual(['orders']);
+      providers.positionalCandidates(['sl', 'validate'], ['--project-dir', projectDir, '--connection-id', 'analytics']),
+    ).resolves.toEqual(['orders', 'tickets']);
     await expect(providers.positionalCandidates(['wiki'], ['--project-dir', projectDir])).resolves.toEqual([]);
     await expect(providers.positionalCandidates(['wiki', 'read'], ['--project-dir', projectDir])).resolves.toEqual([
       'revenue',

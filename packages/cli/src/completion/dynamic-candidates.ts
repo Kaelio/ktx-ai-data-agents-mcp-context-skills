@@ -45,7 +45,7 @@ async function sourceNames(typedTokens: string[]): Promise<string[]> {
   const connectionId = extractOptionValue(typedTokens, '--connection-id');
   const { listLocalSlSources } = await import('../context/sl/local-sl.js');
   const summaries = await listLocalSlSources(project, connectionId !== undefined ? { connectionId } : {});
-  return summaries.map((summary) => summary.name);
+  return [...new Set(summaries.map((summary) => summary.name))];
 }
 
 async function wikiPageKeys(typedTokens: string[]): Promise<string[]> {
