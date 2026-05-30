@@ -146,6 +146,75 @@ describe('telemetry identity', () => {
     });
   });
 
+  it('enables a consented identity without a TTY (MCP servers run headless)', async () => {
+    await mkdir(join(homeDir, '.ktx'), { recursive: true });
+    await writeFile(
+      join(homeDir, '.ktx', 'telemetry.json'),
+      JSON.stringify(
+        {
+          installId: '00000000-0000-4000-8000-000000000000',
+          enabled: true,
+          noticeShownAt: '2026-05-22T14:33:02.000Z',
+          noticeShownVersion: 1,
+          createdAt: '2026-05-22T14:33:02.000Z',
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf-8',
+    );
+    const testIo = makeIo(false);
+
+    await expect(
+      loadTelemetryIdentity({
+        homeDir,
+        env,
+        stdoutIsTTY: false,
+        stderr: testIo.io.stderr,
+        now: () => new Date('2026-05-22T15:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      installId: '00000000-0000-4000-8000-000000000000',
+      enabled: true,
+      createdFile: false,
+      noticeShown: false,
+    });
+    // The one-time notice belongs to interactive surfaces only; a headless load
+    // must never write it (the MCP stdio protocol shares the process streams).
+    expect(testIo.stderr()).toBe('');
+  });
+
+  it('keeps opt-outs suppressing a consented identity without a TTY', async () => {
+    await mkdir(join(homeDir, '.ktx'), { recursive: true });
+    await writeFile(
+      join(homeDir, '.ktx', 'telemetry.json'),
+      JSON.stringify(
+        {
+          installId: '00000000-0000-4000-8000-000000000000',
+          enabled: true,
+          noticeShownAt: '2026-05-22T14:33:02.000Z',
+          noticeShownVersion: 1,
+          createdAt: '2026-05-22T14:33:02.000Z',
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf-8',
+    );
+
+    for (const optOut of [{ KTX_TELEMETRY_DISABLED: '1' }, { DO_NOT_TRACK: '1' }, { CI: '1' }]) {
+      await expect(
+        loadTelemetryIdentity({
+          homeDir,
+          env: optOut,
+          stdoutIsTTY: false,
+          stderr: makeIo(false).io.stderr,
+          now: () => new Date('2026-05-22T15:00:00.000Z'),
+        }),
+      ).resolves.toMatchObject({ enabled: false });
+    }
+  });
+
   it('recreates a corrupted file instead of surfacing an error to users', async () => {
     await mkdir(join(homeDir, '.ktx'), { recursive: true });
     await writeFile(join(homeDir, '.ktx', 'telemetry.json'), '{bad json', 'utf-8');

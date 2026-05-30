@@ -157,7 +157,9 @@
         "outcome",
         "durationMs",
         "errorClass",
-        "sampleRate"
+        "sampleRate",
+        "mcpClientName",
+        "mcpClientVersion"
       ]
     },
     {
@@ -1131,7 +1133,13 @@
         },
         "sampleRate": {
           "type": "number",
-          "const": 0.1
+          "const": 1
+        },
+        "mcpClientName": {
+          "type": "string"
+        },
+        "mcpClientVersion": {
+          "type": "string"
         }
       },
       "required": [

@@ -52,7 +52,11 @@ type TelemetryEventFields<Name extends TelemetryEventName> = Omit<
 >;
 
 const emittedProjectSnapshots = new Set<string>();
-const MCP_SAMPLE_RATE = 0.1 as const;
+// MCP tool calls are captured at full rate while ktx is early-stage: at current
+// install counts any sampling below 1.0 yields too few events to be useful, and
+// the recorded sampleRate lets us dial this down (and reweight history) once
+// per-session call volume justifies it.
+const MCP_SAMPLE_RATE = 1 as const;
 let mcpSampled: boolean | undefined;
 
 function telemetryDebugEnabled(): boolean {
@@ -64,7 +68,7 @@ export function shouldEmitMcpTelemetry(): boolean {
   return mcpSampled;
 }
 
-export function mcpTelemetrySampleRate(): 0.1 {
+export function mcpTelemetrySampleRate(): 1 {
   return MCP_SAMPLE_RATE;
 }
 

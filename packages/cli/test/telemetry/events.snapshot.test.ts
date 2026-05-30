@@ -128,7 +128,9 @@ describe('telemetry privacy snapshot', () => {
         outcome: 'error',
         errorClass: 'KtxProjectMissingAbortError',
         durationMs: 12,
-        sampleRate: 0.1,
+        sampleRate: 1,
+        mcpClientName: 'Claude Desktop',
+        mcpClientVersion: '0.7.1',
       }),
     ];
 

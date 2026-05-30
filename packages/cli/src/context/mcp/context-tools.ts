@@ -6,6 +6,7 @@ import type { MemoryAgentInput } from '../../context/memory/types.js';
 import { emitTelemetryEvent, mcpTelemetrySampleRate, shouldEmitMcpTelemetry } from '../../telemetry/index.js';
 import { scrubErrorClass } from '../../telemetry/scrubber.js';
 import type {
+  KtxMcpClientInfo,
   KtxMcpContextPorts,
   KtxMcpProgressCallback,
   KtxMcpServerLike,
@@ -21,6 +22,7 @@ export interface RegisterKtxContextToolsDeps {
   userContext: KtxMcpUserContext;
   projectDir?: string;
   io?: KtxCliIo;
+  getClientInfo?: () => KtxMcpClientInfo | undefined;
 }
 
 const connectionIdSchema = z.string().min(1);
@@ -473,9 +475,24 @@ function registerParsedTool<TSchema extends z.ZodType>(
   });
 }
 
+/**
+ * Resolves the connected client's identity into the raw telemetry fields. The
+ * strings are client-controlled and untrusted, so they only ever land in the
+ * telemetry property bag — never in paths, logs, or error messages.
+ */
+function clientTelemetryFields(
+  getClientInfo: (() => KtxMcpClientInfo | undefined) | undefined,
+): { mcpClientName?: string; mcpClientVersion?: string } {
+  const client = getClientInfo?.();
+  return {
+    ...(client?.name ? { mcpClientName: client.name } : {}),
+    ...(client?.version ? { mcpClientVersion: client.version } : {}),
+  };
+}
+
 function instrumentMcpServer(
   server: KtxMcpServerLike,
-  telemetry: { projectDir?: string; io?: KtxCliIo },
+  telemetry: { projectDir?: string; io?: KtxCliIo; getClientInfo?: () => KtxMcpClientInfo | undefined },
 ): KtxMcpServerLike {
   return {
     registerTool(name, config, handler) {
@@ -495,6 +512,7 @@ function instrumentMcpServer(
                 outcome: isError ? 'error' : 'ok',
                 durationMs: Math.max(0, performance.now() - startedAt),
                 sampleRate: mcpTelemetrySampleRate(),
+                ...clientTelemetryFields(telemetry.getClientInfo),
               },
             });
           }
@@ -512,6 +530,7 @@ function instrumentMcpServer(
                 ...(errorClass ? { errorClass } : {}),
                 durationMs: Math.max(0, performance.now() - startedAt),
                 sampleRate: mcpTelemetrySampleRate(),
+                ...clientTelemetryFields(telemetry.getClientInfo),
               },
             });
           }
@@ -524,7 +543,11 @@ function instrumentMcpServer(
 
 export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void {
   const { ports, userContext } = deps;
-  const server = instrumentMcpServer(deps.server, { projectDir: deps.projectDir, io: deps.io });
+  const server = instrumentMcpServer(deps.server, {
+    projectDir: deps.projectDir,
+    io: deps.io,
+    getClientInfo: deps.getClientInfo,
+  });
 
   if (ports.connections) {
     const connections = ports.connections;

@@ -156,7 +156,12 @@ const mcpRequestCompletedSchema = telemetryCommonEnvelopeSchema
     outcome: outcomeSchema,
     durationMs: z.number().nonnegative(),
     errorClass: z.string().optional(),
-    sampleRate: z.literal(0.1),
+    sampleRate: z.literal(1),
+    // Raw, client-tool-controlled identity from the MCP initialize handshake
+    // (clientInfo.name/version). Optional: clients may omit clientInfo. Stored
+    // verbatim — normalize the free-form names at query time, not at write time.
+    mcpClientName: z.string().optional(),
+    mcpClientVersion: z.string().optional(),
   })
   .strict();
 
@@ -325,7 +330,7 @@ export const telemetryEventCatalog = [
   {
     name: 'mcp_request_completed',
     description: 'Emitted for sampled MCP tool requests.',
-    fields: ['toolName', 'outcome', 'durationMs', 'errorClass', 'sampleRate'],
+    fields: ['toolName', 'outcome', 'durationMs', 'errorClass', 'sampleRate', 'mcpClientName', 'mcpClientVersion'],
   },
   {
     name: 'daemon_started',

@@ -47,10 +47,10 @@ function makeFakeServer() {
   };
 }
 
-function makeIo() {
+function makeIo(stdoutIsTTY = true) {
   let stderr = '';
   return {
-    stdout: { isTTY: true, write() {} },
+    stdout: { isTTY: stdoutIsTTY, write() {} },
     stderr: {
       write(chunk: string) {
         stderr += chunk;
@@ -272,8 +272,48 @@ describe('createKtxMcpServer', () => {
 
     expect(io.stderrText()).toContain('"event":"mcp_request_completed"');
     expect(io.stderrText()).toContain('"toolName":"wiki_search"');
-    expect(io.stderrText()).toContain('"sampleRate":0.1');
+    expect(io.stderrText()).toContain('"sampleRate":1');
     expect(io.stderrText()).not.toContain(projectDir);
+    // No client connected through the SDK here, so getClientInfo is absent: the
+    // event still emits and the optional client fields are simply omitted.
+    expect(io.stderrText()).not.toContain('mcpClientName');
+    expect(io.stderrText()).not.toContain('mcpClientVersion');
+  });
+
+  it('captures the connecting MCP client name and version', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    // Non-TTY io keeps the test hermetic (no ~/.ktx/telemetry.json is created)
+    // and mirrors a real headless MCP server; debug mode still emits the payload.
+    const io = makeIo(false);
+
+    const server = createDefaultKtxMcpServer({
+      name: 'ktx-test',
+      version: '0.0.0-test',
+      userContext: { userId: 'mcp-user' },
+      projectDir: '/tmp/ktx-mcp-client-telemetry',
+      io,
+      contextTools: {
+        knowledge: {
+          search: vi.fn<KtxKnowledgeMcpPort['search']>().mockResolvedValue({ results: [], totalFound: 0 }),
+          read: vi.fn<KtxKnowledgeMcpPort['read']>().mockResolvedValue(null),
+        },
+      },
+    });
+    const client = new Client({ name: 'test-agent', version: '9.9.9' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+    try {
+      await client.callTool({ name: 'wiki_search', arguments: { query: 'revenue recognition', limit: 5 } });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+
+    expect(io.stderrText()).toContain('"event":"mcp_request_completed"');
+    expect(io.stderrText()).toContain('"mcpClientName":"test-agent"');
+    expect(io.stderrText()).toContain('"mcpClientVersion":"9.9.9"');
   });
 
   it('registers parser-gated sql_execution when the host provides a SQL execution port', async () => {

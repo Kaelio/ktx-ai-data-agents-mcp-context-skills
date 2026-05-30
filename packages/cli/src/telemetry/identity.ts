@@ -75,17 +75,14 @@ export async function loadTelemetryIdentity(options: LoadTelemetryIdentityOption
   const env = options.env ?? process.env;
   const path = telemetryPath(options.homeDir ?? homedir());
 
-  if (envDisablesTelemetry(env) || options.stdoutIsTTY !== true) {
-    const existing = await readTelemetryFile(path);
-    return {
-      installId: existing?.installId,
-      enabled: false,
-      createdFile: false,
-      noticeShown: false,
-      path,
-    };
+  if (envDisablesTelemetry(env)) {
+    return { enabled: false, createdFile: false, noticeShown: false, path };
   }
 
+  // Honor an already-consented identity regardless of the current surface.
+  // Telemetry enablement follows the persisted decision and opt-out env vars,
+  // not whether this invocation happens to own a TTY — MCP servers always run
+  // headless (stdio stubs stdout; the HTTP server runs detached).
   const existing = await readTelemetryFile(path);
   if (existing) {
     return {
@@ -95,6 +92,13 @@ export async function loadTelemetryIdentity(options: LoadTelemetryIdentityOption
       noticeShown: false,
       path,
     };
+  }
+
+  // No identity yet. Minting one means showing the one-time opt-out notice, so
+  // first-run creation requires an interactive surface; a headless first run
+  // stays disabled and defers enablement until the next interactive run.
+  if (options.stdoutIsTTY !== true) {
+    return { enabled: false, createdFile: false, noticeShown: false, path };
   }
 
   const timestamp = (options.now ?? (() => new Date()))().toISOString();

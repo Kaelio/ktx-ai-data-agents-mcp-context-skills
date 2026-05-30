@@ -3,10 +3,14 @@ title: Telemetry
 description: Understand what anonymous usage telemetry ktx collects and how to opt out.
 ---
 
-**ktx** collects anonymous, aggregated usage telemetry from interactive CLI
-runs so maintainers can see which commands work, where setup fails, and which
-parts of the data-agent workflow need improvement. Telemetry is opt-out and
-disabled automatically in CI and non-interactive runs.
+**ktx** collects anonymous, aggregated usage telemetry so maintainers can see
+which commands work, where setup fails, and which parts of the data-agent
+workflow need improvement. Telemetry is opt-out: it turns on the first time you
+run **ktx** in an interactive terminal, which prints a one-time notice. From
+then on the same install also reports background activity that has no terminal
+of its own, such as the local MCP server your agent calls. It stays disabled in
+CI, whenever an opt-out is set, and until that first interactive run has shown
+the notice.
 
 ## Opt out
 
@@ -17,8 +21,7 @@ Use any of these mechanisms to disable telemetry:
 | `export KTX_TELEMETRY_DISABLED=1` | Disables telemetry for the shell and child processes |
 | `export DO_NOT_TRACK=1` | Standard do-not-track environment variable |
 | `CI=1` | Automatic in CI |
-| Non-TTY output | Automatic for pipes and scripts |
-| Edit `~/.ktx/telemetry.json` and set `"enabled": false` | Persistent for the machine |
+| Edit `~/.ktx/telemetry.json` and set `"enabled": false` | Persistent for the machine, including the MCP server |
 
 ## What we collect
 
@@ -26,6 +29,11 @@ High-level signals only: which commands run, how long they take, whether they
 succeed or fail, and basic environment metadata (CLI version, Node version, OS
 platform). For project-level analysis, **ktx** sends a salted hash of the
 project directory — never the raw path.
+
+When an agent reaches **ktx** through MCP, we also record the connecting client
+tool's self-reported name and version (for example Claude Desktop, Cursor, or
+Cline) so we can see which agents people use **ktx** with. That describes the
+tool, never you or your data.
 
 ## What we never collect
 

@@ -50,6 +50,16 @@ export interface KtxMcpUserContext {
   userId: string;
 }
 
+/**
+ * Identity of the connected MCP client tool (e.g. Claude Desktop, Cursor),
+ * read from the initialize handshake. Untrusted, client-controlled strings —
+ * use only as telemetry properties, never to build paths or log lines.
+ */
+export interface KtxMcpClientInfo {
+  name: string;
+  version: string;
+}
+
 export interface KtxMcpServerLike {
   registerTool(
     name: string,
@@ -174,4 +184,6 @@ export interface KtxMcpServerDeps {
   contextTools?: KtxMcpContextPorts;
   projectDir?: string;
   io?: KtxCliIo;
+  /** Reads the connected client's identity once the initialize handshake completes. */
+  getClientInfo?: () => KtxMcpClientInfo | undefined;
 }
