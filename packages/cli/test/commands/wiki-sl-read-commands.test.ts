@@ -97,7 +97,7 @@ describe('wiki and sl read command routing', () => {
     );
   });
 
-  it('requires --connection-id for sl read before invoking the runner', async () => {
+  it('routes sl read without --connection-id through the semantic-layer runner', async () => {
     const program = new Command().exitOverride().option('--project-dir <path>');
     const sl = vi.fn(async () => 0);
     const context = makeContext({ deps: { sl } });
@@ -105,8 +105,37 @@ describe('wiki and sl read command routing', () => {
 
     await expect(
       program.parseAsync(['--project-dir', '/tmp/ktx-project', 'sl', 'read', 'orders'], { from: 'user' }),
-    ).rejects.toThrow("error: required option '--connection-id <id>' not specified");
+    ).resolves.toBe(program);
 
-    expect(sl).not.toHaveBeenCalled();
+    expect(sl).toHaveBeenCalledWith(
+      {
+        command: 'read',
+        projectDir: '/tmp/ktx-project',
+        connectionId: undefined,
+        sourceName: 'orders',
+      },
+      context.io,
+    );
+  });
+
+  it('routes sl validate without --connection-id through the semantic-layer runner', async () => {
+    const program = new Command().exitOverride().option('--project-dir <path>');
+    const sl = vi.fn(async () => 0);
+    const context = makeContext({ deps: { sl } });
+    registerSlCommands(program, context);
+
+    await expect(
+      program.parseAsync(['--project-dir', '/tmp/ktx-project', 'sl', 'validate', 'orders'], { from: 'user' }),
+    ).resolves.toBe(program);
+
+    expect(sl).toHaveBeenCalledWith(
+      {
+        command: 'validate',
+        projectDir: '/tmp/ktx-project',
+        connectionId: undefined,
+        sourceName: 'orders',
+      },
+      context.io,
+    );
   });
 });
