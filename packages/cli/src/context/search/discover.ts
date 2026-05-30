@@ -167,7 +167,7 @@ async function wikiCandidates(
     query: input.query,
     userId: options.userId,
     embeddingService: options.embeddingService ?? null,
-    limit: Math.max(input.limit ?? 15, 25),
+    limit: Math.max(input.limit ?? 10, 25),
   });
   const records: CandidateRecord[] = [];
   for (const result of searchResults) {
@@ -421,7 +421,8 @@ function hydrate(
       }
       return {
         ...ref,
-        score: maxScore > 0 ? Number((candidate.score / maxScore).toFixed(6)) : 0,
+        // 3 decimals is plenty for a relative-rank hint; 6 just spent bytes on noise.
+        score: maxScore > 0 ? Number((candidate.score / maxScore).toFixed(3)) : 0,
       };
     })
     .filter((result): result is KtxDiscoverDataRef => result !== null);
@@ -433,7 +434,7 @@ export function createKtxDiscoverDataService(
 ): { search(input: KtxDiscoverDataInput): Promise<KtxDiscoverDataResponse> } {
   return {
     async search(input) {
-      const limit = Math.max(1, Math.min(input.limit ?? 15, 50));
+      const limit = Math.max(1, Math.min(input.limit ?? 10, 50));
       const query = input.query.trim();
       if (!query) {
         return [];

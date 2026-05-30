@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject, type KtxLocalProject } from '../../../src/context/project/project.js';
 import { LocalMetabaseDiscoveryCache } from '../../../src/context/ingest/adapters/metabase/local-source-state-store.js';
 import { getLocalIngestStatus, runLocalMetabaseIngest } from '../../../src/context/ingest/local-ingest.js';
+import { ingestReportOutcome } from '../../../src/context/ingest/reports.js';
 import type { ChunkResult, FetchContext, SourceAdapter } from '../../../src/context/ingest/types.js';
 
 class TestAgentRunner implements AgentRunnerPort {
@@ -200,6 +201,24 @@ describe('runLocalMetabaseIngest', () => {
     expect(result.status).toBe('partial_failure');
     expect(result.totals).toEqual({ workUnits: 2, failedWorkUnits: 1 });
     expect(result.children[1]?.report.body.failedWorkUnits).toEqual(['metabase-db-2']);
+  });
+
+  it('keeps a child that saved memory out of all_failed when another child fails', async () => {
+    await seedMetabaseState();
+    const agentRunner = new TestAgentRunner();
+    const ids = ['metabase-child-1', 'metabase-child-2'];
+
+    const result = await runLocalMetabaseIngest({
+      project,
+      adapters: [new FakeMetabaseSourceAdapter()],
+      metabaseConnectionId: 'prod-metabase',
+      agentRunner,
+      jobIdFactory: () => ids.shift() ?? 'metabase-child-extra',
+    });
+
+    expect(result.status).toBe('partial_failure');
+    expect(ingestReportOutcome(result.children[0].report)).toBe('done');
+    expect(ingestReportOutcome(result.children[1].report)).toBe('error');
   });
 
   it('captures fetch-time child failures and continues later mappings', async () => {

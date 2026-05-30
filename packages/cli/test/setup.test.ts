@@ -398,6 +398,59 @@ describe('setup status', () => {
     expect(rendered).toContain('KTX context built: yes');
   });
 
+  it('reports context ready after a partial ingest report saved memory', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'setup:',
+        '  database_connection_ids:',
+        '    - warehouse',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        'ingest:',
+        '  embeddings:',
+        '    backend: none',
+        '    dimensions: 8',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, { completed_steps: ['project', 'databases'] });
+    await persistLocalBundleReport(
+      tempDir,
+      localFakeBundleReport('warehouse-job-partial', {
+        connectionId: 'warehouse',
+        sourceKey: 'fake',
+        body: {
+          failedWorkUnits: ['orders-bad'],
+          workUnits: [
+            {
+              unitKey: 'orders-ok',
+              rawFiles: ['orders/orders.json'],
+              status: 'success',
+              actions: [{ target: 'wiki', type: 'created', key: 'wiki/orders.md', detail: 'orders' }],
+              touchedSlSources: [],
+            },
+            {
+              unitKey: 'orders-bad',
+              rawFiles: ['orders/bad.json'],
+              status: 'failed',
+              reason: 'writer tool failed',
+              actions: [],
+              touchedSlSources: [],
+            },
+          ],
+        },
+      }),
+    );
+
+    const status = await readKtxSetupStatus(tempDir);
+
+    expect(status.context).toMatchObject({ ready: true, status: 'completed' });
+  });
+
   it('formats plain and JSON setup status payloads', async () => {
     const status = await readKtxSetupStatus(tempDir);
     const rendered = formatKtxSetupStatus(status);

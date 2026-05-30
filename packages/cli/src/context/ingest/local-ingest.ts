@@ -13,6 +13,7 @@ import { localPullConfigForAdapter, type DefaultLocalIngestAdaptersOptions } fro
 import { createLocalBundleIngestRuntime } from './local-bundle-runtime.js';
 import type { MemoryFlowEventSink } from './memory-flow/types.js';
 import { buildSyncId } from './raw-sources-paths.js';
+import { ingestReportOutcome } from './reports.js';
 import type { IngestReportBody, IngestReportSnapshot } from './reports.js';
 import { SqliteBundleIngestStore } from './sqlite-bundle-ingest-store.js';
 import type { IngestBundleResult, IngestJobContext, IngestJobPhase, IngestTrigger, SourceAdapter } from './types.js';
@@ -79,7 +80,7 @@ export interface LocalMetabaseFanoutProgress {
     metabaseDatabaseId: number;
     targetConnectionId: string;
     jobId: string;
-    status: 'done' | 'failed';
+    status: 'done' | 'partial' | 'failed';
   }): void;
 }
 
@@ -232,11 +233,11 @@ export async function runLocalIngest(options: RunLocalIngestOptions): Promise<Lo
 }
 
 function metabaseFanoutStatus(children: LocalMetabaseFanoutChild[]): LocalMetabaseFanoutResult['status'] {
-  const succeeded = children.filter((child) => child.report.body.failedWorkUnits.length === 0).length;
-  if (succeeded === children.length) {
+  const outcomes = children.map((child) => ingestReportOutcome(child.report));
+  if (outcomes.every((outcome) => outcome === 'done')) {
     return 'all_succeeded';
   }
-  if (succeeded === 0) {
+  if (outcomes.every((outcome) => outcome === 'error')) {
     return 'all_failed';
   }
   return 'partial_failure';
@@ -401,12 +402,13 @@ export async function runLocalMetabaseIngest(
         error,
       });
     }
+    const childOutcome = ingestReportOutcome(child.report);
     options.progress?.onMetabaseChildCompleted?.({
       metabaseConnectionId,
       metabaseDatabaseId: childPlan.metabaseDatabaseId,
       targetConnectionId,
       jobId: child.report.jobId,
-      status: child.report.body.failedWorkUnits.length > 0 ? 'failed' : 'done',
+      status: childOutcome === 'error' ? 'failed' : childOutcome,
     });
     children.push({
       jobId: child.report.jobId,

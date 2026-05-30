@@ -120,7 +120,10 @@ interface KtxSemanticLayerReadResponse {
   yaml: string;
 }
 
-interface KtxSemanticLayerQueryResponse {
+/** @internal */
+export interface KtxSemanticLayerQueryResponse {
+  connectionId?: string;
+  dialect?: string;
   sql: string;
   headers: string[];
   rows: unknown[][];

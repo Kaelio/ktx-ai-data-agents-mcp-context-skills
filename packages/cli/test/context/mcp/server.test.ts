@@ -347,16 +347,12 @@ describe('createKtxMcpServer', () => {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(
-            {
-              headers: ['status', 'count'],
-              headerTypes: ['text', 'bigint'],
-              rows: [['paid', 42]],
-              rowCount: 1,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify({
+            headers: ['status', 'count'],
+            headerTypes: ['text', 'bigint'],
+            rows: [['paid', 42]],
+            rowCount: 1,
+          }),
         },
       ],
       structuredContent: {
@@ -638,6 +634,92 @@ describe('createKtxMcpServer', () => {
     );
   });
 
+  it('sl_query default response omits plan and sql but keeps compile-only and fan-out notes', async () => {
+    const fake = makeFakeServer();
+    const semanticLayer: KtxSemanticLayerMcpPort = {
+      readSource: vi.fn(),
+      query: vi.fn<KtxSemanticLayerMcpPort['query']>().mockResolvedValue({
+        connectionId: 'warehouse',
+        dialect: 'postgres',
+        sql: 'select count(*) from public.orders',
+        headers: ['order_count'],
+        rows: [],
+        totalRows: 0,
+        plan: {
+          sources_used: ['orders'],
+          has_fan_out: true,
+          fan_out_description: 'orders fans out across line_items',
+          execution: { mode: 'compile_only', reason: 'No execution adapter configured.' },
+        },
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { semanticLayer },
+    });
+
+    const result = await getTool(fake.tools, 'sl_query').handler({
+      connectionId: 'warehouse',
+      measures: ['orders.order_count'],
+    });
+
+    expect(result).toMatchObject({
+      structuredContent: {
+        connectionId: 'warehouse',
+        dialect: 'postgres',
+        headers: ['order_count'],
+        rows: [],
+        totalRows: 0,
+        notes: ['No execution adapter configured.', 'orders fans out across line_items'],
+      },
+    });
+    const structured = (result as { structuredContent: Record<string, unknown> }).structuredContent;
+    expect(structured.sql).toBeUndefined();
+    expect(structured.plan).toBeUndefined();
+  });
+
+  it('sl_query attaches sql and plan only when include requests them', async () => {
+    const fake = makeFakeServer();
+    const plan = { sources_used: ['orders'], execution: { mode: 'executed' } };
+    const semanticLayer: KtxSemanticLayerMcpPort = {
+      readSource: vi.fn(),
+      query: vi.fn<KtxSemanticLayerMcpPort['query']>().mockResolvedValue({
+        connectionId: 'warehouse',
+        dialect: 'postgres',
+        sql: 'select count(*) from public.orders',
+        headers: ['order_count'],
+        rows: [[3]],
+        totalRows: 1,
+        plan,
+      }),
+    };
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      contextTools: { semanticLayer },
+    });
+
+    const result = await getTool(fake.tools, 'sl_query').handler({
+      connectionId: 'warehouse',
+      measures: ['orders.order_count'],
+      include: ['plan', 'sql'],
+    });
+
+    expect(result).toMatchObject({
+      structuredContent: {
+        sql: 'select count(*) from public.orders',
+        plan,
+        rows: [[3]],
+        totalRows: 1,
+      },
+    });
+    const structured = (result as { structuredContent: Record<string, unknown> }).structuredContent;
+    expect(structured.notes).toBeUndefined();
+  });
+
   it('entity_details rejects sql-style schema table ref aliases', async () => {
     const fake = makeFakeServer();
     const entityDetails = makeAllContextTools().entityDetails!;
@@ -838,7 +920,7 @@ describe('createKtxMcpServer', () => {
         connectionId: '00000000-0000-4000-8000-000000000001',
       }),
     ).resolves.toEqual({
-      content: [{ type: 'text', text: JSON.stringify({ runId: 'run-1' }, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify({ runId: 'run-1' }) }],
       structuredContent: { runId: 'run-1' },
     });
     expect(ingest.ingest).toHaveBeenCalledWith({
@@ -865,21 +947,17 @@ describe('createKtxMcpServer', () => {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(
-            {
-              runId: 'run-1',
-              status: 'done',
-              stage: 'done',
-              done: true,
-              captured: { wiki: ['revenue'], sl: [], xrefs: [] },
-              error: null,
-              commitHash: 'abc123',
-              skillsLoaded: ['wiki_capture'],
-              signalDetected: true,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify({
+            runId: 'run-1',
+            status: 'done',
+            stage: 'done',
+            done: true,
+            captured: { wiki: ['revenue'], sl: [], xrefs: [] },
+            error: null,
+            commitHash: 'abc123',
+            skillsLoaded: ['wiki_capture'],
+            signalDetected: true,
+          }),
         },
       ],
       structuredContent: {
@@ -1087,19 +1165,15 @@ describe('createKtxMcpServer', () => {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(
-            {
-              connections: [
-                {
-                  id: '00000000-0000-4000-8000-000000000001',
-                  name: 'Warehouse',
-                  connectionType: 'POSTGRES',
-                },
-              ],
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify({
+            connections: [
+              {
+                id: '00000000-0000-4000-8000-000000000001',
+                name: 'Warehouse',
+                connectionType: 'POSTGRES',
+              },
+            ],
+          }),
         },
       ],
       structuredContent: {

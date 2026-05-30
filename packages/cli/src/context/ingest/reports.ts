@@ -146,6 +146,20 @@ export function savedMemoryCountsForReport(report: IngestReportSnapshot): Ingest
   };
 }
 
+/** @internal */
+export type IngestReportOutcome = 'done' | 'partial' | 'error';
+
+export function ingestReportOutcome(report: IngestReportSnapshot): IngestReportOutcome {
+  if (report.body.status === 'failed') {
+    return 'error';
+  }
+  if (report.body.failedWorkUnits.length === 0) {
+    return 'done';
+  }
+  const { wikiCount, slCount } = savedMemoryCountsForReport(report);
+  return wikiCount + slCount > 0 ? 'partial' : 'error';
+}
+
 export function buildStageIndexFromReportBody(jobId: string, connectionId: string, body: IngestReportBody): StageIndex {
   return {
     jobId,
