@@ -24,10 +24,10 @@ function fakeProviders(overrides: Partial<CompletionProviders> = {}): Completion
   return {
     async positionalCandidates(commandPath) {
       const key = commandPath.join(' ');
-      if (key === 'sl' || key === 'sl validate') {
+      if (key === 'sl read' || key === 'sl validate') {
         return SOURCES;
       }
-      if (key === 'wiki') {
+      if (key === 'wiki read') {
         return WIKI_KEYS;
       }
       return [];
@@ -62,20 +62,26 @@ describe('computeCompletions', () => {
     expect(result).toEqual(['logs', 'start', 'status', 'stdio', 'stop']);
   });
 
-  it('offers sl subcommands and source names together, sorted and deduped', async () => {
-    expect(await complete(['sl', ''])).toEqual(['customers', 'orders', 'query', 'validate']);
+  it('offers only sl subcommands at the bare sl positional', async () => {
+    expect(await complete(['sl', ''])).toEqual(['query', 'read', 'validate']);
   });
 
-  it('offers only source names for sl validate', async () => {
+  it('offers source names for sl read and sl validate', async () => {
+    expect(await complete(['sl', 'read', ''])).toEqual(['customers', 'orders']);
     expect(await complete(['sl', 'validate', ''])).toEqual(['customers', 'orders']);
   });
 
-  it('offers wiki page keys', async () => {
-    expect(await complete(['wiki', ''])).toEqual(['churn', 'revenue']);
+  it('offers only the wiki read subcommand at the bare wiki positional', async () => {
+    expect(await complete(['wiki', ''])).toEqual(['read']);
   });
 
-  it('filters positional candidates by prefix', async () => {
-    expect(await complete(['sl', 'o'])).toEqual(['orders']);
+  it('offers wiki page keys for wiki read', async () => {
+    expect(await complete(['wiki', 'read', ''])).toEqual(['churn', 'revenue']);
+  });
+
+  it('does not complete entity names for bare search positionals', async () => {
+    expect(await complete(['sl', 'o'])).toEqual([]);
+    expect(await complete(['wiki', 'r'])).toEqual(['read']);
   });
 
   it('completes flags (own + inherited globals) when the partial starts with a dash', async () => {
@@ -101,8 +107,7 @@ describe('computeCompletions', () => {
 
   it('falls through to positional completion after a boolean flag', async () => {
     const result = await complete(['sl', '--json', '']);
-    expect(result).toContain('orders');
-    expect(result).toContain('validate');
+    expect(result).toEqual(['query', 'read', 'validate']);
   });
 
   it('still returns subcommands/flags when dynamic providers yield nothing (no project)', async () => {
@@ -110,7 +115,7 @@ describe('computeCompletions', () => {
       positionalCandidates: async () => [],
       optionValueCandidates: async () => [],
     });
-    expect(await complete(['sl', ''], empty)).toEqual(['query', 'validate']);
+    expect(await complete(['sl', ''], empty)).toEqual(['query', 'read', 'validate']);
     expect(await complete(['-'], empty)).toContain('--debug');
   });
 

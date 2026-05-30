@@ -75,10 +75,10 @@ export function createProjectCompletionProviders(): CompletionProviders {
     async positionalCandidates(commandPath, typedTokens) {
       try {
         const key = commandPath.join(' ');
-        if (key === 'sl' || key === 'sl validate') {
+        if (key === 'sl read' || key === 'sl validate') {
           return await sourceNames(typedTokens);
         }
-        if (key === 'wiki') {
+        if (key === 'wiki read') {
           return await wikiPageKeys(typedTokens);
         }
         if (key === 'connection test' || key === 'ingest') {
