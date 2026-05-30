@@ -236,7 +236,7 @@ Testing warehouse
   Connection test passed
 
 Building schema context for warehouse
-  Running fast database ingest
+  Running database scan
 ```
 
 If setup exits early, rerun `ktx setup` in the same directory. **ktx** keeps
@@ -268,13 +268,13 @@ Agent integration ready: yes (codex:project)
 
 For a structured check inside scripts, use `ktx status --json`.
 
-When setup builds deep context, its final context check looks like:
+When setup finishes building context, its final context check looks like:
 
 ```text
 ktx context is ready for agents.
 
 Databases:
-  warehouse: deep context complete
+  warehouse: database context complete
 
 Context sources:
   dbt_main: memory update complete
@@ -326,7 +326,7 @@ ktx setup \
 Then build context:
 
 ```bash
-ktx ingest warehouse --fast
+ktx ingest warehouse
 ```
 
 See [ktx setup](/docs/cli-reference/ktx-setup) for the full automation flag

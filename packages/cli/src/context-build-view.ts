@@ -88,7 +88,6 @@ export interface ContextBuildArgs {
   targetConnectionId?: string;
   all?: boolean;
   entrypoint?: 'setup' | 'ingest';
-  depth?: Extract<KtxPublicIngestArgs, { command: 'run' }>['depth'];
   queryHistory?: Extract<KtxPublicIngestArgs, { command: 'run' }>['queryHistory'];
   queryHistoryWindowDays?: number;
   scanMode?: Extract<KtxPublicIngestArgs, { command: 'run' }>['scanMode'];
@@ -371,19 +370,17 @@ function retryCommand(input: {
   projectDir?: string;
   entrypoint?: 'setup' | 'ingest';
   connectionId?: string;
-  depth?: 'fast' | 'deep';
   queryHistory?: boolean;
   queryHistoryWindowDays?: number;
 }): string {
   const projectPart = input.projectDir ? ` --project-dir ${input.projectDir}` : '';
   if (input.entrypoint === 'ingest' && input.connectionId) {
-    const depthPart = input.depth ? ` --${input.depth}` : '';
     const queryHistoryPart = input.queryHistory ? ' --query-history' : '';
     const windowPart =
       input.queryHistory && input.queryHistoryWindowDays !== undefined
         ? ` --query-history-window-days ${input.queryHistoryWindowDays}`
         : '';
-    return `ktx ingest ${input.connectionId}${projectPart}${depthPart}${queryHistoryPart}${windowPart}`;
+    return `ktx ingest ${input.connectionId}${projectPart}${queryHistoryPart}${windowPart}`;
   }
   return input.projectDir ? `ktx setup --project-dir ${input.projectDir}` : 'ktx setup';
 }
@@ -746,7 +743,6 @@ function appendRetryIfNeeded(input: {
     projectDir: input.projectDir,
     entrypoint: input.entrypoint,
     connectionId: input.target.connectionId,
-    depth: input.target.databaseDepth,
     queryHistory: input.target.queryHistory?.enabled === true,
     queryHistoryWindowDays: input.target.queryHistory?.windowDays,
   })}`;
@@ -769,7 +765,6 @@ function failureTextForTarget(input: {
         projectDir: input.projectDir,
         entrypoint: input.entrypoint,
         connectionId: input.target.connectionId,
-        depth: input.target.databaseDepth,
         queryHistory: input.target.queryHistory?.enabled === true,
         queryHistoryWindowDays: input.target.queryHistory?.windowDays,
       })}`,
@@ -784,7 +779,6 @@ function failureTextForTarget(input: {
         projectDir: input.projectDir,
         entrypoint: input.entrypoint,
         connectionId: input.target.connectionId,
-        depth: input.target.databaseDepth,
         queryHistory: input.target.queryHistory?.enabled === true,
         queryHistoryWindowDays: input.target.queryHistory?.windowDays,
       })}`,
@@ -868,7 +862,6 @@ export async function runContextBuild(
     projectDir: args.projectDir,
     ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
     all: args.all ?? true,
-    ...(args.depth ? { depth: args.depth } : {}),
     ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
     ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
     ...(args.scanMode ? { scanMode: args.scanMode } : {}),
@@ -935,7 +928,6 @@ export async function runContextBuild(
     all: args.all ?? true,
     json: false,
     inputMode: args.inputMode,
-    ...(args.depth ? { depth: args.depth } : {}),
     ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
     ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
     ...(args.scanMode ? { scanMode: args.scanMode } : {}),

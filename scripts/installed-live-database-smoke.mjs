@@ -106,7 +106,6 @@ export function buildLiveDatabaseIngestArgs(projectDir, _databaseIntrospectionUr
     connectionId,
     '--project-dir',
     projectDir,
-    '--fast',
     '--no-input',
   ];
 }
@@ -152,18 +151,18 @@ function requireSuccess(label, result) {
   }
 }
 
+function requireFailure(label, result) {
+  if (result.code === 0) {
+    throw new Error(
+      `${label} unexpectedly succeeded\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
+  }
+}
+
 function requireOutput(label, result, pattern) {
   if (!pattern.test(result.stdout)) {
     throw new Error(`${label} output did not match ${pattern}\nstdout:\n${result.stdout}`);
   }
-}
-
-function getRunId(stdout) {
-  const match = stdout.match(/^Run: (.+)$/m);
-  if (!match) {
-    throw new Error(`ingest output did not include a run id\nstdout:\n${stdout}`);
-  }
-  return match[1];
 }
 
 async function requireDocker() {
@@ -310,13 +309,17 @@ async function main() {
       env: managedRuntimeEnv(cleanInstallDir),
       timeout: 120_000,
     });
-    requireSuccess('ktx ingest warehouse --fast', ingestRun);
-    requireOutput('ktx ingest warehouse --fast', ingestRun, /Ingest finished/);
-    requireOutput('ktx ingest warehouse --fast', ingestRun, /Database schema/);
+    // ktx ingest now always builds enriched context and requires a configured
+    // model and embeddings. This smoke project has neither, so the database
+    // target fails the enrichment-readiness preflight before any work runs.
+    // This still exercises the packaged binary, daemon startup, and the live
+    // database connection end to end.
+    requireFailure('ktx ingest warehouse', ingestRun);
+    requireOutput('ktx ingest warehouse', ingestRun, /Ingest finished with partial failures/);
+    requireOutput('ktx ingest warehouse', ingestRun, /enrichment is not configured/);
 
-    const runId = getRunId(ingestRun.stdout);
     await assertPathExists(join(projectDir, '.ktx', 'db.sqlite'), 'SQLite local ingest state');
-    process.stdout.write(`Installed live-database artifact smoke passed: ${runId}\n`);
+    process.stdout.write('Installed live-database artifact smoke passed: enrichment-readiness guard verified\n');
   } finally {
     if (daemonStarted && cleanInstallDir) {
       await stopDaemon(cleanInstallDir);

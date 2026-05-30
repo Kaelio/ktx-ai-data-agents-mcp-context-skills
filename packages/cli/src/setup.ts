@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { getLatestLocalIngestStatus } from './context/ingest/local-ingest.js';
-import { savedMemoryCountsForReport } from './context/ingest/reports.js';
+import { ingestReportOutcome, savedMemoryCountsForReport } from './context/ingest/reports.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { readKtxSetupState } from './context/project/setup-config.js';
@@ -306,7 +306,7 @@ function sourceConnections(config: Awaited<ReturnType<typeof loadKtxProject>>['c
 type LocalIngestStatusReport = NonNullable<Awaited<ReturnType<typeof getLatestLocalIngestStatus>>>;
 
 function reportHasSavedContext(report: LocalIngestStatusReport): boolean {
-  if (report.body.failedWorkUnits.length > 0) {
+  if (ingestReportOutcome(report) === 'error') {
     return false;
   }
   const counts = savedMemoryCountsForReport(report);

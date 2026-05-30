@@ -403,7 +403,7 @@ describe('runKtxIngest', () => {
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
-  it('returns a non-zero code when Metabase fanout has failed children', async () => {
+  it('returns a non-zero code when a Metabase fanout child fully fails', async () => {
     const projectDir = join(tempDir, 'project');
     await writeMetabaseConfig(projectDir);
     const io = makeIo();
@@ -441,7 +441,7 @@ describe('runKtxIngest', () => {
         {
           runLocalMetabaseIngest: async () => ({
             metabaseConnectionId: 'prod-metabase',
-            status: 'partial_failure',
+            status: 'all_failed',
             totals: { workUnits: 1, failedWorkUnits: 1 },
             children: [
               {
@@ -467,9 +467,83 @@ describe('runKtxIngest', () => {
       ),
     ).resolves.toBe(1);
 
-    expect(io.stdout()).toContain('Metabase fanout: partial_failure');
-    expect(io.stdout()).toContain('Failed tasks: 1');
+    expect(io.stdout()).toContain('Metabase fanout: all_failed');
     expect(io.stdout()).toContain('status=error');
+  });
+
+  it('exits 0 and reports status=partial when a Metabase child saved memory despite a failure', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeMetabaseConfig(projectDir);
+    const io = makeIo();
+    const report = localFakeBundleReport('metabase-child-1', {
+      id: 'report-metabase-child-1',
+      runId: 'run-a',
+      jobId: 'metabase-child-1',
+      connectionId: 'warehouse_a',
+      sourceKey: 'metabase',
+      body: {
+        failedWorkUnits: ['metabase-db-2'],
+        workUnits: [
+          {
+            unitKey: 'metabase-db-1',
+            rawFiles: ['cards/1.json'],
+            status: 'success',
+            actions: [{ target: 'sl', type: 'updated', key: 'warehouse.orders', detail: 'measure' }],
+            touchedSlSources: [],
+          },
+          {
+            unitKey: 'metabase-db-2',
+            rawFiles: ['cards/2.json'],
+            status: 'failed',
+            reason: 'bad SQL',
+            actions: [],
+            touchedSlSources: [],
+          },
+        ],
+      },
+    });
+
+    await expect(
+      runKtxIngest(
+        {
+          command: 'run',
+          projectDir,
+          connectionId: 'prod-metabase',
+          adapter: 'metabase',
+          outputMode: 'plain',
+        },
+        io.io,
+        {
+          runLocalMetabaseIngest: async () => ({
+            metabaseConnectionId: 'prod-metabase',
+            status: 'partial_failure',
+            totals: { workUnits: 2, failedWorkUnits: 1 },
+            children: [
+              {
+                jobId: 'metabase-child-1',
+                metabaseConnectionId: 'prod-metabase',
+                metabaseDatabaseId: 1,
+                targetConnectionId: 'warehouse_a',
+                result: {
+                  jobId: 'metabase-child-1',
+                  runId: 'run-a',
+                  syncId: 'sync-a',
+                  diffSummary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+                  workUnitCount: 2,
+                  failedWorkUnits: ['metabase-db-2'],
+                  artifactsWritten: 1,
+                  commitSha: 'abc',
+                },
+                report,
+              },
+            ],
+          }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Metabase fanout: partial_failure');
+    expect(io.stdout()).toContain('status=partial');
     expect(io.stderr()).toContain('Metabase ingest: prod-metabase');
   });
 
@@ -1138,6 +1212,63 @@ describe('runKtxIngest', () => {
 
     expect(io.stderr()).toBe('');
     expect(io.stdout()).toContain('Status: error\n');
+  });
+
+  it('exits 0 and reports Status: partial when a single-source ingest saved memory despite a failure', async () => {
+    const projectDir = join(tempDir, 'project');
+    await writeWarehouseConfig(projectDir);
+    const sourceDir = join(tempDir, 'source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+
+    const partialReport = localFakeBundleReport('local-job-partial', {
+      connectionId: 'warehouse',
+      sourceKey: 'fake',
+      body: {
+        failedWorkUnits: ['orders-bad'],
+        workUnits: [
+          {
+            unitKey: 'orders-ok',
+            rawFiles: ['orders/orders.json'],
+            status: 'success',
+            actions: [{ target: 'wiki', type: 'created', key: 'wiki/orders.md', detail: 'orders' }],
+            touchedSlSources: [],
+          },
+          {
+            unitKey: 'orders-bad',
+            rawFiles: ['orders/bad.json'],
+            status: 'failed',
+            reason: 'writer tool failed',
+            actions: [],
+            touchedSlSources: [],
+          },
+        ],
+      },
+    });
+    const runLocal = vi.fn(async (_input: RunLocalIngestOptions) => ({
+      result: {
+        jobId: 'local-job-partial',
+        runId: partialReport.runId,
+        syncId: partialReport.body.syncId,
+        diffSummary: partialReport.body.diffSummary,
+        workUnitCount: partialReport.body.workUnits.length,
+        failedWorkUnits: partialReport.body.failedWorkUnits,
+        artifactsWritten: 1,
+        commitSha: partialReport.body.commitSha,
+      },
+      report: partialReport,
+    }));
+
+    const io = makeIo();
+    await expect(
+      runKtxIngest(
+        { command: 'run', projectDir, connectionId: 'warehouse', adapter: 'fake', sourceDir, outputMode: 'plain' },
+        io.io,
+        { runLocalIngest: runLocal, jobIdFactory: () => 'local-job-partial' },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Status: partial\n');
   });
 
   it('prints trace path and error status for stored failed ingest reports', async () => {

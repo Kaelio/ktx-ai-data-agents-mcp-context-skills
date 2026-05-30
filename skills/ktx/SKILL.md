@@ -87,16 +87,17 @@ Do not discover these inputs across multiple setup runs.
    pass the database flags from the previous run** — setup validates current
    flags, not persisted `ktx.yaml` state.
 
-4. **Run fast ingest** if setup did not already complete one:
+4. **Build context** if setup did not already complete one:
 
    ```bash
-   ktx ingest <connection-id> --fast --no-input
+   ktx ingest <connection-id> --no-input
    ```
 
-   Note: `ktx ingest` rejects `--yes` together with `--no-input`
-   (*Choose only one runtime install mode*); `ktx setup` accepts both. Use
-   `--no-input` only for ingest. Do not run `--deep` ingest unless the user
-   explicitly asks for LLM-backed enrichment.
+   `ktx ingest` always builds enriched context and requires a configured model
+   and embeddings (set during setup); a database connection without them fails
+   with an enrichment-readiness error. Note: `ktx ingest` rejects `--yes`
+   together with `--no-input` (*Choose only one runtime install mode*);
+   `ktx setup` accepts both. Use `--no-input` only for ingest.
 
 5. **Install agent integration:**
 
@@ -138,7 +139,7 @@ ktx setup --no-input --yes --skip-databases --skip-llm --skip-embeddings \
 # Notion
 ktx setup --no-input --yes --skip-databases --skip-llm --skip-embeddings \
   --source notion --source-connection-id <id> \
-  --source-api-key-ref env:NOTION_TOKEN \
+  --source-auth-token-ref env:NOTION_TOKEN \
   --notion-crawl-mode selected_roots --notion-root-page-id <page-id>
 ```
 
@@ -151,7 +152,7 @@ Notes:
   `--notion-root-page-id` (repeatable); use `all_accessible` to crawl
   everything the token can see.
 - After adding sources, ingest each new connection so its context is queryable:
-  `ktx ingest <source-connection-id> --fast --no-input`.
+  `ktx ingest <source-connection-id> --no-input`.
 
 ## Files to inspect
 

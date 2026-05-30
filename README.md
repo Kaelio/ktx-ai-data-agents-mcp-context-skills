@@ -248,6 +248,6 @@ event catalog and opt-out options.
 
 <p align="center">
   <a href="https://star-history.com/#Kaelio/ktx&Date">
-    <img src="https://api.star-history.com/svg?repos=Kaelio/ktx&type=Date" alt="ktx Star History Chart" width="700" />
+    <img src="assets/star-history.svg" alt="ktx Star History Chart" width="700" />
   </a>
 </p>

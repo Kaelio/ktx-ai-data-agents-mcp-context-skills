@@ -88,7 +88,7 @@ function deepReadyProject(
 
 describe('buildPublicIngestPlan', () => {
   it('plans warehouse connections as scan targets and source connections as source ingest targets', () => {
-    const project = projectWithConnections({
+    const project = deepReadyProject({
       warehouse: { driver: 'postgres' },
       prod_metabase: { driver: 'metabase', api_url: 'https://metabase.example.com' },
       docs: { driver: 'notion' },
@@ -103,8 +103,7 @@ describe('buildPublicIngestPlan', () => {
           operation: 'database-ingest',
           debugCommand: 'ktx ingest warehouse --debug',
           steps: ['database-schema'],
-          databaseDepth: 'fast',
-          detectRelationships: false,
+          detectRelationships: true,
           queryHistory: { enabled: false },
         },
         {
@@ -139,61 +138,6 @@ describe('buildPublicIngestPlan', () => {
     expect(plan.targets.map((target) => target.connectionId).sort()).toEqual(['docs', 'warehouse']);
   });
 
-  it('resolves database depth from flags, stored context, and defaults', () => {
-    const project = projectWithConnections({
-      fast_default: { driver: 'postgres' },
-      deep_default: { driver: 'postgres', context: { depth: 'deep' } },
-      docs: { driver: 'notion' },
-    });
-
-    expect(
-      buildPublicIngestPlan(project, {
-        projectDir: '/tmp/project',
-        targetConnectionId: 'fast_default',
-        all: false,
-        queryHistory: 'default',
-      }).targets[0],
-    ).toMatchObject({ connectionId: 'fast_default', databaseDepth: 'fast', queryHistory: { enabled: false } });
-
-    expect(
-      buildPublicIngestPlan(project, {
-        projectDir: '/tmp/project',
-        targetConnectionId: 'deep_default',
-        all: false,
-        queryHistory: 'default',
-      }).targets[0],
-    ).toMatchObject({ connectionId: 'deep_default', databaseDepth: 'deep' });
-
-    expect(
-      buildPublicIngestPlan(project, {
-        projectDir: '/tmp/project',
-        targetConnectionId: 'docs',
-        all: false,
-        depth: 'deep',
-        queryHistory: 'default',
-      }).warnings,
-    ).toEqual(['--deep affects database ingest only; ignoring it for docs.']);
-  });
-
-  it('does not infer deep ingest from legacy scanMode values', () => {
-    const project = projectWithConnections({
-      warehouse: { driver: 'postgres' },
-    });
-
-    const plan = buildPublicIngestPlan(project, {
-      projectDir: '/tmp/project',
-      targetConnectionId: 'warehouse',
-      all: false,
-      scanMode: 'enriched',
-    });
-
-    expect(plan.targets[0]).toMatchObject({
-      connectionId: 'warehouse',
-      databaseDepth: 'fast',
-      steps: ['database-schema'],
-    });
-  });
-
   it('rejects stale local Looker source driver aliases', () => {
     const project = projectWithConnections({
       local_looker: { driver: 'local_looker' } as never,
@@ -204,8 +148,8 @@ describe('buildPublicIngestPlan', () => {
     );
   });
 
-  it('upgrades effective depth when query history is explicitly enabled', () => {
-    const project = projectWithConnections({
+  it('enables query history when explicitly requested even if stored config disables it', () => {
+    const project = deepReadyProject({
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: false } } },
     });
 
@@ -213,17 +157,16 @@ describe('buildPublicIngestPlan', () => {
       projectDir: '/tmp/project',
       targetConnectionId: 'warehouse',
       all: false,
-      depth: 'fast',
       queryHistory: 'enabled',
       queryHistoryWindowDays: 30,
     });
 
     expect(plan.targets[0]).toMatchObject({
       connectionId: 'warehouse',
-      databaseDepth: 'deep',
       queryHistory: { enabled: true, windowDays: 30, dialect: 'postgres' },
+      steps: ['database-schema', 'query-history'],
     });
-    expect(plan.warnings).toEqual(['--query-history requires deep ingest; running warehouse with --deep.']);
+    expect(plan.warnings).toEqual([]);
   });
 
   it('warns and skips query history for unsupported database drivers', () => {
@@ -238,7 +181,6 @@ describe('buildPublicIngestPlan', () => {
 
     expect(plan.targets[0]).toMatchObject({
       connectionId: 'local',
-      databaseDepth: 'fast',
       queryHistory: { enabled: false, unsupported: true },
     });
     expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
@@ -249,12 +191,11 @@ describe('buildPublicIngestPlan', () => {
       deepReadyProject({
         local: { driver: 'sqlite' },
         mysql_warehouse: { driver: 'mysql' },
-        warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+        warehouse: { driver: 'postgres' },
       }),
       {
         projectDir: '/tmp/project',
         all: true,
-        depth: 'deep',
         queryHistory: 'enabled',
       },
     );
@@ -326,7 +267,6 @@ describe('buildPublicIngestPlan', () => {
 
     expect(plan.targets[0]).toMatchObject({
       connectionId: 'warehouse',
-      databaseDepth: 'deep',
       queryHistory: { enabled: true, dialect: 'postgres', windowDays: 30 },
       steps: ['database-schema', 'query-history'],
     });
@@ -334,7 +274,7 @@ describe('buildPublicIngestPlan', () => {
 
   it('adds a schema-first notice when query history is explicitly enabled', () => {
     const project = deepReadyProject({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
 
     expect(
@@ -363,34 +303,15 @@ describe('buildPublicIngestPlan', () => {
 
     expect(plan.targets[0]).toMatchObject({
       connectionId: 'local',
-      databaseDepth: 'fast',
       queryHistory: { enabled: false, windowDays: 30, unsupported: true },
       steps: ['database-schema'],
     });
     expect(plan.warnings).toEqual(['--query-history is not supported for sqlite; running schema ingest for local.']);
   });
 
-  it('aggregates ignored database-depth warnings for all source targets', () => {
-    const plan = buildPublicIngestPlan(
-      projectWithConnections({
-        warehouse: { driver: 'postgres' },
-        docs: { driver: 'notion' },
-        dbt: { driver: 'dbt' },
-      }),
-      {
-        projectDir: '/tmp/project',
-        all: true,
-        depth: 'deep',
-        queryHistory: 'default',
-      },
-    );
-
-    expect(plan.warnings).toEqual(['--deep ignored for 2 non-database sources.']);
-  });
-
-  it('records a preflight failure for deep database ingest when readiness config is missing', () => {
+  it('records a preflight failure for database ingest when enrichment readiness config is missing', () => {
     const project = projectWithConnections({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
 
     const plan = buildPublicIngestPlan(project, {
@@ -402,15 +323,14 @@ describe('buildPublicIngestPlan', () => {
 
     expect(plan.targets[0]).toMatchObject({
       connectionId: 'warehouse',
-      databaseDepth: 'deep',
       preflightFailure:
-        'warehouse requires deep ingest readiness: model configuration, scan enrichment mode, scan embeddings. Run ktx setup or rerun with --fast.',
+        'warehouse cannot be ingested: enrichment is not configured (model configuration, scan enrichment mode, scan embeddings). Run ktx setup to configure a model and embeddings.',
     });
   });
 
-  it('honors scan.relationships.enabled when planning deep database ingest', () => {
+  it('honors scan.relationships.enabled when planning database ingest', () => {
     const plan = buildPublicIngestPlan(
-      deepReadyProject({ warehouse: { driver: 'postgres', context: { depth: 'deep' } } }, false),
+      deepReadyProject({ warehouse: { driver: 'postgres' } }, false),
       {
         projectDir: '/tmp/project',
         targetConnectionId: 'warehouse',
@@ -421,7 +341,6 @@ describe('buildPublicIngestPlan', () => {
 
     expect(plan.targets[0]).toMatchObject({
       connectionId: 'warehouse',
-      databaseDepth: 'deep',
       detectRelationships: false,
     });
   });
@@ -432,11 +351,11 @@ describe('runKtxPublicIngest', () => {
     vi.unstubAllEnvs();
   });
 
-  it('maps fast and deep database targets to scan internals', async () => {
+  it('maps database targets to enriched scan internals', async () => {
     const io = makeIo();
     const project = deepReadyProject({
-      fast: { driver: 'postgres' },
-      deep: { driver: 'postgres', context: { depth: 'deep' } },
+      first: { driver: 'postgres' },
+      second: { driver: 'postgres' },
     });
     const runScan = vi.fn(async () => 0);
 
@@ -450,12 +369,12 @@ describe('runKtxPublicIngest', () => {
 
     expect(runScan).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ connectionId: 'deep', mode: 'enriched', detectRelationships: true }),
+      expect.objectContaining({ connectionId: 'first', mode: 'enriched', detectRelationships: true }),
       expect.anything(),
     );
     expect(runScan).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ connectionId: 'fast', mode: 'structural', detectRelationships: false }),
+      expect.objectContaining({ connectionId: 'second', mode: 'enriched', detectRelationships: true }),
       expect.anything(),
     );
   });
@@ -467,7 +386,7 @@ describe('runKtxPublicIngest', () => {
     try {
       await initKtxProject({ projectDir });
       const io = makeIo({ isTTY: true });
-      const project = projectWithConnections({
+      const project = deepReadyProject({
         warehouse: { driver: 'sqlite', path: join(projectDir, 'warehouse.sqlite') },
       });
 
@@ -614,7 +533,7 @@ describe('runKtxPublicIngest', () => {
   it('prints the schema-first notice for explicit query-history runs', async () => {
     const io = makeIo();
     const project = deepReadyProject({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
     const runScan = vi.fn(async () => 0);
     const runIngest = vi.fn(async () => 0);
@@ -640,7 +559,7 @@ describe('runKtxPublicIngest', () => {
 
   it('suppresses internal scan output for public database ingest summaries', async () => {
     const io = makeIo();
-    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn(async (_args, scanIo) => {
       scanIo.stdout.write('KTX scan completed\n');
       scanIo.stdout.write('Mode: structural\n');
@@ -674,7 +593,7 @@ describe('runKtxPublicIngest', () => {
 
   it('sanitizes captured database scan failure details in direct public output', async () => {
     const io = makeIo();
-    const project = deepReadyProject({ warehouse: { driver: 'postgres', context: { depth: 'deep' } } });
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn(async (_args, scanIo) => {
       scanIo.stdout.write('KTX scan enrichment failed after structural scan completed: embedding service timed out\n');
       return 1;
@@ -689,7 +608,6 @@ describe('runKtxPublicIngest', () => {
           all: false,
           json: false,
           inputMode: 'disabled',
-          depth: 'deep',
         },
         io.io,
         { loadProject: vi.fn(async () => project), runScan },
@@ -699,7 +617,7 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain(
       'warehouse failed: Database enrichment failed after schema context completed: embedding service timed out.',
     );
-    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project');
     expect(io.stdout()).not.toContain('KTX scan enrichment failed');
     expect(io.stdout()).not.toContain('structural scan');
   });
@@ -743,7 +661,7 @@ describe('runKtxPublicIngest', () => {
   it('suppresses historic-sql report output during direct public query-history ingest', async () => {
     const io = makeIo();
     const project = deepReadyProject({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
     const runScan = vi.fn(async () => 0);
     const runIngest = vi.fn(async (_args, ingestIo) => {
@@ -794,7 +712,6 @@ describe('runKtxPublicIngest', () => {
           all: false,
           json: false,
           inputMode: 'auto',
-          depth: 'fast',
           queryHistory: 'default',
         },
         io.io,
@@ -809,7 +726,6 @@ describe('runKtxPublicIngest', () => {
         targetConnectionId: 'warehouse',
         all: false,
         entrypoint: 'ingest',
-        depth: 'fast',
         queryHistory: 'default',
       }),
       io.io,
@@ -821,7 +737,7 @@ describe('runKtxPublicIngest', () => {
     const io = makeIo({ isTTY: true, interactive: true });
     const calls: string[] = [];
     const project = projectWithConnections({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
     const ensureRuntime = vi.fn(async (): Promise<ManagedPythonCommandRuntime> => {
       calls.push('runtime');
@@ -923,10 +839,13 @@ describe('runKtxPublicIngest', () => {
 
   it('runs all independent targets and reports partial failures', async () => {
     const io = makeIo();
-    const project = projectWithConnections({
-      warehouse: { driver: 'postgres' },
-      prod_metabase: { driver: 'metabase', api_url: 'https://metabase.example.com' },
-    });
+    const project = deepReadyProject(
+      {
+        warehouse: { driver: 'postgres' },
+        prod_metabase: { driver: 'metabase', api_url: 'https://metabase.example.com' },
+      },
+      false,
+    );
     const runScan = vi.fn(async () => 1);
     const runIngest = vi.fn(async () => 0);
 
@@ -959,7 +878,7 @@ describe('runKtxPublicIngest', () => {
         command: 'run',
         projectDir: '/tmp/project',
         connectionId: 'warehouse',
-        mode: 'structural',
+        mode: 'enriched',
         detectRelationships: false,
         dryRun: false,
       },
@@ -967,14 +886,14 @@ describe('runKtxPublicIngest', () => {
     );
     expect(io.stdout()).toContain('Ingest finished with partial failures');
     expect(io.stdout()).toContain('warehouse failed at database-schema.');
-    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --fast');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project');
     expect(io.stdout()).not.toContain('Debug:');
   });
 
   it('skips the query-history facet but keeps the target green when query-history fails', async () => {
     const io = makeIo();
     const project = deepReadyProject({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
     const runScan = vi.fn(async () => 0);
     const runIngest = vi.fn(async (_args, ingestIo) => {
@@ -1007,14 +926,14 @@ describe('runKtxPublicIngest', () => {
       'Query history failed for 60 tasks. First failure: Google Cloud authentication failed while analyzing query history',
     );
     expect(io.stdout()).not.toContain('warehouse failed: Error:');
-    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --query-history');
     expect(io.stdout()).not.toContain('historic-sql');
   });
 
   it('prints the runtime artifact build hint for missing query-history runtime assets', async () => {
     const io = makeIo();
     const project = deepReadyProject({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
     });
     const runScan = vi.fn(async () => 0);
     const runIngest = vi.fn(async (_args, ingestIo) => {
@@ -1045,14 +964,14 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain(
       'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',
     );
-    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --query-history');
     expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
   });
 
-  it('fails deep-readiness targets before work starts while continuing independent --all targets', async () => {
+  it('fails enrichment-readiness targets before work starts while continuing independent --all targets', async () => {
     const io = makeIo();
     const project = projectWithConnections({
-      warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+      warehouse: { driver: 'postgres' },
       docs: { driver: 'notion' },
     });
     const runScan = vi.fn(async () => 0);
@@ -1071,12 +990,12 @@ describe('runKtxPublicIngest', () => {
       expect.objectContaining({ command: 'run', connectionId: 'docs', adapter: 'notion' }),
       expect.anything(),
     );
-    expect(io.stdout()).toContain('warehouse requires deep ingest readiness');
+    expect(io.stdout()).toContain('warehouse cannot be ingested: enrichment is not configured');
   });
 
-  it('does not infer enriched relationship scans from legacy scanMode values', async () => {
+  it('drives scan relationship detection from project config, not from legacy args', async () => {
     const io = makeIo();
-    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } }, false);
     const runScan = vi.fn(async () => 0);
 
     await expect(
@@ -1103,7 +1022,7 @@ describe('runKtxPublicIngest', () => {
         command: 'run',
         projectDir: '/tmp/project',
         connectionId: 'warehouse',
-        mode: 'structural',
+        mode: 'enriched',
         detectRelationships: false,
         dryRun: false,
       },
@@ -1113,7 +1032,7 @@ describe('runKtxPublicIngest', () => {
 
   it('prints stable JSON results', async () => {
     const io = makeIo();
-    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
 
     await expect(
       runKtxPublicIngest(

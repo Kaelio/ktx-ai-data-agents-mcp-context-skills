@@ -7,12 +7,7 @@ import { serializeKtxProjectConfig } from './context/project/config.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { errorMessage, writePrefixedLines } from './clack.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
-import {
-  type KtxDatabaseContextDepth,
-  databaseContextDepth,
-} from './ingest-depth.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
-import { ensureSetupDatabaseContextDepths } from './setup-database-context-depth.js';
 import {
   type ContextBuildSourceProgressUpdate,
   runContextBuild,
@@ -353,16 +348,6 @@ async function readLatestScanReport(projectDir: string, connectionId: string): P
   return reports.at(-1)?.report ?? null;
 }
 
-function scanReportHasSchemaManifest(report: unknown, connectionId: string): boolean {
-  if (!isRecord(report)) {
-    return false;
-  }
-  if (report.connectionId !== connectionId || report.dryRun === true) {
-    return false;
-  }
-  return stringArrayValue(isRecord(report.artifactPaths) ? report.artifactPaths.manifestShards : undefined).length > 0;
-}
-
 function scanReportHasCompletedDeepEnrichment(
   report: unknown,
   connectionId: string,
@@ -389,18 +374,6 @@ function scanReportHasCompletedDeepEnrichment(
   );
 }
 
-function scanReportSatisfiesDepth(input: {
-  report: unknown;
-  connectionId: string;
-  depth: KtxDatabaseContextDepth;
-  relationshipsRequired: boolean;
-}): boolean {
-  if (input.depth === 'fast') {
-    return scanReportHasSchemaManifest(input.report, input.connectionId);
-  }
-  return scanReportHasCompletedDeepEnrichment(input.report, input.connectionId, input.relationshipsRequired);
-}
-
 async function verifyPrimarySourceScans(
   project: KtxLocalProject,
   connectionIds: string[],
@@ -408,15 +381,9 @@ async function verifyPrimarySourceScans(
   const details: string[] = [];
   const relationshipsRequired = project.config.scan.relationships.enabled;
   for (const connectionId of connectionIds) {
-    const connection = project.config.connections[connectionId];
-    const depth = connection ? (databaseContextDepth(connection) ?? 'fast') : 'fast';
     const report = await readLatestScanReport(project.projectDir, connectionId);
-    if (!scanReportSatisfiesDepth({ report, connectionId, depth, relationshipsRequired })) {
-      details.push(
-        depth === 'fast'
-          ? `${connectionId}: schema context has not completed.`
-          : `${connectionId}: deep database context has not completed.`,
-      );
+    if (!scanReportHasCompletedDeepEnrichment(report, connectionId, relationshipsRequired)) {
+      details.push(`${connectionId}: database context has not completed.`);
     }
   }
   return { ready: details.length === 0, details };
@@ -482,7 +449,6 @@ function writeSkippedContext(projectDir: string, io: KtxCliIo): void {
 }
 
 function writeSuccess(
-  project: KtxLocalProject,
   readiness: KtxSetupContextReadiness,
   targets: KtxSetupContextTargets,
   io: KtxCliIo,
@@ -493,9 +459,7 @@ function writeSuccess(
     io.stdout.write('  none\n');
   } else {
     for (const connectionId of targets.primarySourceConnectionIds) {
-      const connection = project.config.connections[connectionId];
-      const depth = connection ? (databaseContextDepth(connection) ?? 'fast') : 'fast';
-      io.stdout.write(`  ${connectionId}: ${depth === 'deep' ? 'deep context complete' : 'schema context complete'}\n`);
+      io.stdout.write(`  ${connectionId}: database context complete\n`);
     }
   }
   io.stdout.write('\nContext sources:\n');
@@ -636,7 +600,7 @@ async function runBuild(
     failureReason: undefined,
     ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
   });
-  writeSuccess(project, readiness, targets, io);
+  writeSuccess(readiness, targets, io);
   return { status: 'ready', projectDir: args.projectDir, runId };
 }
 
@@ -678,17 +642,8 @@ export async function runKtxSetupContextStep(
   deps: KtxSetupContextDeps = {},
 ): Promise<KtxSetupContextResult> {
   try {
-    let project = await loadKtxProject({ projectDir: args.projectDir });
+    const project = await loadKtxProject({ projectDir: args.projectDir });
     const prompts = deps.prompts ?? createPromptAdapter();
-    const depthProject = await ensureSetupDatabaseContextDepths({
-      project,
-      args,
-      prompts,
-    });
-    if (depthProject === 'back') {
-      return { status: 'back', projectDir: args.projectDir };
-    }
-    project = depthProject;
     const existingState = await readKtxSetupContextState(args.projectDir);
     const completedSteps = (await readKtxSetupState(args.projectDir)).completed_steps;
     if (completedSteps.includes('context') && existingState.status === 'completed') {

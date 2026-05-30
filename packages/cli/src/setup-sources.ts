@@ -217,6 +217,39 @@ function credentialRef(value: string | undefined, label: string): string {
   return ref;
 }
 
+type SourceCredentialFlag = {
+  field: 'sourceAuthTokenRef' | 'sourceApiKeyRef' | 'sourceClientSecretRef';
+  flag: string;
+};
+
+// Each connector reads exactly one credential ref; the flag name mirrors the
+// ktx.yaml field it writes (auth_token_ref / api_key_ref / client_secret_ref).
+const SOURCE_CREDENTIAL_FLAG: Record<KtxSetupSourceType, SourceCredentialFlag> = {
+  dbt: { field: 'sourceAuthTokenRef', flag: '--source-auth-token-ref' },
+  metricflow: { field: 'sourceAuthTokenRef', flag: '--source-auth-token-ref' },
+  lookml: { field: 'sourceAuthTokenRef', flag: '--source-auth-token-ref' },
+  notion: { field: 'sourceAuthTokenRef', flag: '--source-auth-token-ref' },
+  metabase: { field: 'sourceApiKeyRef', flag: '--source-api-key-ref' },
+  looker: { field: 'sourceClientSecretRef', flag: '--source-client-secret-ref' },
+};
+
+const ALL_SOURCE_CREDENTIAL_FLAGS: SourceCredentialFlag[] = [
+  { field: 'sourceAuthTokenRef', flag: '--source-auth-token-ref' },
+  { field: 'sourceApiKeyRef', flag: '--source-api-key-ref' },
+  { field: 'sourceClientSecretRef', flag: '--source-client-secret-ref' },
+];
+
+// Reject a credential ref flag the chosen source does not read, so a wrong flag
+// fails loudly instead of being silently dropped (KLO-724).
+function assertSourceCredentialFlags(source: KtxSetupSourceType, args: KtxSetupSourcesArgs): void {
+  const allowed = SOURCE_CREDENTIAL_FLAG[source];
+  for (const { field, flag } of ALL_SOURCE_CREDENTIAL_FLAGS) {
+    if (args[field] && field !== allowed.field) {
+      throw new Error(`${flag} does not apply to --source ${source}; use ${allowed.flag}.`);
+    }
+  }
+}
+
 async function chooseSourceCredentialRef(input: {
   prompts: KtxSetupSourcesPromptAdapter;
   projectDir: string;
@@ -515,7 +548,7 @@ function buildNotionConnection(args: KtxSetupSourcesArgs): KtxProjectConnectionC
   }
   return {
     driver: 'notion',
-    auth_token_ref: credentialRef(args.sourceApiKeyRef, 'Notion token ref'),
+    auth_token_ref: credentialRef(args.sourceAuthTokenRef, 'Notion token ref'),
     crawl_mode: crawlMode,
     ...(rootPageIds.length > 0 ? { root_page_ids: rootPageIds } : {}),
     root_database_ids: [],
@@ -1295,10 +1328,10 @@ async function promptForInteractiveSource(
         label: 'Notion integration token',
         envName: 'NOTION_TOKEN',
         secretFileName: `${currentState.sourceConnectionId ?? 'notion-main'}-token`,
-        existingRef: currentState.sourceApiKeyRef,
+        existingRef: currentState.sourceAuthTokenRef,
       });
       if (ref === 'back') return 'back';
-      currentState.sourceApiKeyRef = ref;
+      currentState.sourceAuthTokenRef = ref;
       return 'next';
     },
     async (currentState) => {
@@ -1326,7 +1359,7 @@ async function promptForInteractiveSource(
                 connectionId,
                 connection: {
                   driver: 'notion',
-                  auth_token_ref: credentialRef(currentState.sourceApiKeyRef, 'Notion token ref'),
+                  auth_token_ref: credentialRef(currentState.sourceAuthTokenRef, 'Notion token ref'),
                   crawl_mode: 'selected_roots',
                   root_page_ids: currentState.notionRootPageIds ?? [],
                   root_database_ids: [],
@@ -1516,7 +1549,7 @@ function sourceArgsFromExistingConnection(input: {
     return sourceArgs;
   }
 
-  sourceArgs.sourceApiKeyRef = stringField(input.connection.auth_token_ref);
+  sourceArgs.sourceAuthTokenRef = stringField(input.connection.auth_token_ref);
   sourceArgs.notionCrawlMode =
     input.connection.crawl_mode === 'all_accessible' ? 'all_accessible' : 'selected_roots';
   if (Array.isArray(input.connection.root_page_ids)) {
@@ -1815,6 +1848,10 @@ export async function runKtxSetupSourcesStep(
       await markSourcesComplete(args.projectDir);
       io.stdout.write('│  Context source setup skipped.\n');
       return { status: 'skipped', projectDir: args.projectDir };
+    }
+
+    if (args.source) {
+      assertSourceCredentialFlags(args.source, args);
     }
 
     const prompts = deps.prompts ?? createPromptAdapter();

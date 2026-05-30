@@ -29,7 +29,6 @@ import {
 } from './database-tree-picker.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxScan } from './scan.js';
-import { applySetupDatabaseContextDepth } from './setup-database-context-depth.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitTelemetryEvent } from './telemetry/index.js';
@@ -1614,45 +1613,10 @@ async function applyHistoricSqlConfigToExistingConnection(input: {
     prompts: input.prompts,
   });
   if (withHistoricSql === 'back') return 'back';
-  const withContextDepth = await maybeApplyContextDepthConfig({
-    projectDir: input.projectDir,
-    connectionId: input.connectionId,
-    connection: withHistoricSql,
-    args: input.args,
-    prompts: input.prompts,
-  });
-  if (withContextDepth === 'back') return 'back';
   await writeConnectionConfig({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
-    connection: withContextDepth,
-  });
-}
-
-async function maybeApplyContextDepthConfig(input: {
-  projectDir: string;
-  connectionId: string;
-  connection: KtxProjectConnectionConfig;
-  args: KtxSetupDatabasesArgs;
-  prompts: KtxSetupDatabasesPromptAdapter;
-}): Promise<KtxProjectConnectionConfig | 'back'> {
-  const project = await loadKtxProject({ projectDir: input.projectDir });
-  return await applySetupDatabaseContextDepth({
-    project: {
-      ...project,
-      config: {
-        ...project.config,
-        connections: {
-          ...project.config.connections,
-          [input.connectionId]: input.connection,
-        },
-      },
-    },
-    connection: input.connection,
-    args: {
-      inputMode: input.args.inputMode === 'disabled' || input.args.databaseUrl ? 'disabled' : input.args.inputMode,
-    },
-    prompts: input.prompts,
+    connection: withHistoricSql,
   });
 }
 
@@ -1698,7 +1662,7 @@ async function validateAndScanConnection(input: {
     deps: input.deps,
   });
   writeSetupSection(input.io, `Building schema context for ${input.connectionId}`, [
-    'Running fast database ingest…',
+    'Running database scan…',
   ]);
   let scanIo = createBufferedCommandIo();
   let scanCode = await scanConnection(input.projectDir, input.connectionId, scanIo);
@@ -1708,7 +1672,7 @@ async function validateAndScanConnection(input: {
       writePrefixedLines(
         (chunk) => input.io.stderr.write(chunk),
           [
-            `Fast database ingest failed for ${input.connectionId}.`,
+            `Database scan failed for ${input.connectionId}.`,
             'Native SQLite is built for a different Node.js ABI.',
             `Detail: ${nativeSqliteDetail}`,
             'Rebuilding Native SQLite with pnpm run native:rebuild…',
@@ -1719,7 +1683,7 @@ async function validateAndScanConnection(input: {
       if (rebuildCode === 0) {
         writePrefixedLines(
           (chunk) => input.io.stderr.write(chunk),
-          'Native SQLite rebuild complete. Retrying fast database ingest…',
+          'Native SQLite rebuild complete. Retrying database scan…',
         );
         const retryScanIo = createBufferedCommandIo();
         scanCode = await scanConnection(input.projectDir, input.connectionId, retryScanIo);
@@ -1730,10 +1694,10 @@ async function validateAndScanConnection(input: {
           (chunk) => input.io.stderr.write(chunk),
           [
             rebuildCode === 0
-              ? `Fast database ingest still failed for ${input.connectionId} after rebuilding Native SQLite.`
+              ? `Database scan still failed for ${input.connectionId} after rebuilding Native SQLite.`
               : `Native SQLite rebuild failed for ${input.connectionId}.`,
             'Fix: pnpm run native:rebuild',
-            `Retry: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --fast`,
+            `Retry: ktx ingest ${input.connectionId} --project-dir ${input.projectDir}`,
           ].join('\n'),
         );
       }
@@ -1742,8 +1706,8 @@ async function validateAndScanConnection(input: {
       writePrefixedLines(
         (chunk) => input.io.stderr.write(chunk),
         [
-          `Fast database ingest failed for ${input.connectionId}.`,
-          `Debug command: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --fast --debug`,
+          `Database scan failed for ${input.connectionId}.`,
+          `Debug command: ktx ingest ${input.connectionId} --project-dir ${input.projectDir} --debug`,
         ].join('\n'),
       );
     }
@@ -2167,22 +2131,10 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
-        const withContextDepth = await maybeApplyContextDepthConfig({
-          projectDir: args.projectDir,
-          connectionId: connectionChoice.connectionId,
-          connection: withHistoricSql,
-          args,
-          prompts,
-        });
-        if (withContextDepth === 'back') {
-          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-          returnToDriverSelection = true;
-          break;
-        }
         await writeConnectionConfig({
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
-          connection: withContextDepth,
+          connection: withHistoricSql,
           io,
         });
       } else {
@@ -2193,22 +2145,10 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
-        const withContextDepth = await maybeApplyContextDepthConfig({
-          projectDir: args.projectDir,
-          connectionId: connectionChoice.connectionId,
-          connection: withHistoricSql,
-          args,
-          prompts,
-        });
-        if (withContextDepth === 'back') {
-          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-          returnToDriverSelection = true;
-          break;
-        }
         await writeConnectionConfig({
           projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
-          connection: withContextDepth,
+          connection: withHistoricSql,
           io,
         });
       }
@@ -2291,22 +2231,10 @@ export async function runKtxSetupDatabasesStep(
             returnToDriverSelection = true;
             break;
           }
-          const withContextDepth = await maybeApplyContextDepthConfig({
-            projectDir: args.projectDir,
-            connectionId: connectionChoice.connectionId,
-            connection: withHistoricSql,
-            args,
-            prompts,
-          });
-          if (withContextDepth === 'back') {
-            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-            returnToDriverSelection = true;
-            break;
-          }
           await writeConnectionConfig({
             projectDir: args.projectDir,
             connectionId: connectionChoice.connectionId,
-            connection: withContextDepth,
+            connection: withHistoricSql,
             io,
           });
           setupStatus = await validateAndScanConnection({

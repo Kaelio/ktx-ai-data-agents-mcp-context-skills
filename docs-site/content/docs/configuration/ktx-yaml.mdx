@@ -66,8 +66,9 @@ read, how to think, and where to put the results.
 ## Minimal config
 
 A working `ktx.yaml` needs one entry in `connections`. Everything else accepts
-defaults. The example below is enough for `ktx ingest warehouse` to run a fast
-schema scan against a local Postgres.
+defaults. The example below registers a local Postgres connection; building
+context with `ktx ingest warehouse` also needs a model and embeddings, which
+`ktx setup` configures.
 
 ```yaml
 connections:
@@ -123,7 +124,7 @@ context-source drivers share the map.
 
 Warehouse connections are open objects: the listed fields are validated, and
 any other field is preserved and passed through to the connector. Use
-`enabled_tables` to scope deep ingest to a specific list of
+`enabled_tables` to scope ingest to a specific list of
 `schema.table` names - useful for smoke tests.
 
 ```yaml

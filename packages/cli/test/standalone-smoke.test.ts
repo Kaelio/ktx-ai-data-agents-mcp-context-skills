@@ -185,7 +185,7 @@ describe('standalone built ktx CLI smoke', () => {
     expect([0, 1]).toContain(result.code);
   });
 
-  it('runs fast public database ingest through the built binary with manifest artifacts', async () => {
+  it('blocks public database ingest through the built binary when enrichment is not configured', async () => {
     const projectDir = join(tempDir, 'database-ingest-project');
     const init = await runSetupNewProject(projectDir);
     expectSetupStderr(init);
@@ -200,19 +200,10 @@ describe('standalone built ktx CLI smoke', () => {
     expect(connectionTest.stdout).toContain('Driver: sqlite');
     expect(connectionTest.stdout).toContain('Status: ok');
 
-    const ingest = await runBuiltCli(['ingest', 'warehouse', '--project-dir', projectDir, '--fast', '--no-input']);
-    expectProjectStderr(ingest, projectDir);
-    expect(ingest.stdout).toContain('Ingest finished');
-    expect(ingest.stdout).toContain('warehouse');
-    expect(ingest.stdout).toContain('Database schema');
-    expect(ingest.stdout).toContain('warehouse      done');
+    const ingest = await runBuiltCli(['ingest', 'warehouse', '--project-dir', projectDir, '--no-input']);
+    expect(ingest.code).toBe(1);
+    expect(ingest.stdout).toContain('warehouse cannot be ingested: enrichment is not configured');
     expect(ingest.stdout).not.toContain('KTX scan completed');
-
-    const manifest = await readFile(join(projectDir, 'semantic-layer/warehouse/_schema/public.yaml'), 'utf-8');
-    expect(manifest).toContain('customers:');
-    expect(manifest).toContain('orders:');
-    expect(manifest).toContain('source: formal');
-    expect(manifest).not.toContain('ai:');
   }, 30_000);
 
   it('parses gateway LLM config and OpenAI enrichment embeddings used by standalone scans without network calls', async () => {

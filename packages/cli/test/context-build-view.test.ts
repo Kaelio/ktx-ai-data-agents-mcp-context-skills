@@ -228,11 +228,11 @@ describe('renderContextBuildView', () => {
 
     const rendered = renderContextBuildView(state, {
       styled: false,
-      warnings: ['--deep affects database ingest only; ignoring it for docs.'],
+      warnings: ['--query-history affects database ingest only; ignoring it for docs.'],
     });
 
     expect(rendered).toContain('Warnings:');
-    expect(rendered).toContain('--deep affects database ingest only; ignoring it for docs.');
+    expect(rendered).toContain('--query-history affects database ingest only; ignoring it for docs.');
   });
 
   it('renders public notices in the foreground view before warnings', () => {
@@ -243,7 +243,6 @@ describe('renderContextBuildView', () => {
         operation: 'database-ingest',
         debugCommand: 'ktx ingest warehouse --debug',
         steps: ['database-schema', 'query-history'],
-        databaseDepth: 'deep',
         detectRelationships: true,
         queryHistory: { enabled: true, dialect: 'postgres' },
       },
@@ -252,12 +251,12 @@ describe('renderContextBuildView', () => {
     const rendered = renderContextBuildView(state, {
       styled: false,
       notices: ['Schema ingest runs before query history for warehouse.'],
-      warnings: ['--query-history requires deep ingest; running warehouse with --deep.'],
+      warnings: ['--query-history is not supported for sqlite; running schema ingest for local.'],
     });
 
     expect(rendered.indexOf('Notices:')).toBeLessThan(rendered.indexOf('Warnings:'));
     expect(rendered).toContain('Schema ingest runs before query history for warehouse.');
-    expect(rendered).toContain('--query-history requires deep ingest; running warehouse with --deep.');
+    expect(rendered).toContain('--query-history is not supported for sqlite; running schema ingest for local.');
   });
 
   it('renders dynamic separator matching header width', () => {
@@ -653,7 +652,6 @@ describe('runContextBuild', () => {
           inputMode: 'disabled',
           targetConnectionId: 'warehouse',
           all: false,
-          depth: 'fast',
           queryHistory: 'default',
         },
         io.io,
@@ -665,7 +663,6 @@ describe('runContextBuild', () => {
     expect(executeTarget.mock.calls[0]?.[0]).toMatchObject({
       connectionId: 'warehouse',
       operation: 'database-ingest',
-      databaseDepth: 'fast',
     });
     expect(io.stdout()).toContain('Databases:');
     expect(io.stdout()).toContain('warehouse');
@@ -716,7 +713,7 @@ describe('runContextBuild', () => {
   it('renders localhost SQL analysis refusal as a runtime failure during query history', async () => {
     const io = makeIo();
     const project = projectWithConnections({
-      warehouse: { driver: 'postgres', context: { depth: 'deep', queryHistory: { enabled: true } } },
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true } } },
     });
     const executeTarget = vi.fn(async (target, _args, targetIo) => {
       targetIo.stderr.write('connect ECONNREFUSED 127.0.0.1:8765\n');
@@ -751,7 +748,7 @@ describe('runContextBuild', () => {
   it('uses captured query-history stderr instead of generic failed-at detail', async () => {
     const io = makeIo();
     const project = projectWithConnections({
-      warehouse: { driver: 'postgres', context: { depth: 'deep', queryHistory: { enabled: true } } },
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true } } },
     });
     const executeTarget = vi.fn(async (target, _args, targetIo) => {
       targetIo.stdout.write('KTX scan completed\n');
@@ -768,7 +765,7 @@ describe('runContextBuild', () => {
             operation: 'query-history',
             status: 'failed',
             detail:
-              'warehouse failed at query-history. Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history',
+              'warehouse failed at query-history. Retry: ktx ingest warehouse --project-dir /tmp/project --query-history',
           },
           { operation: 'source-ingest', status: 'skipped' },
           { operation: 'memory-update', status: 'skipped' },
@@ -785,7 +782,7 @@ describe('runContextBuild', () => {
 
     expect(result).toEqual({ exitCode: 1 });
     expect(io.stdout()).toContain('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json.');
-    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --deep --query-history');
+    expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --query-history');
     expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
     expect(io.stdout()).not.toContain('warehouse failed at query-history');
     expect(io.stdout().match(/Retry: /g)).toHaveLength(1);
@@ -899,12 +896,12 @@ describe('runContextBuild', () => {
     const io = makeIo();
     const project: KtxPublicIngestProject = {
       ...projectWithConnections({
-        warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+        warehouse: { driver: 'postgres' },
       }),
       config: {
         ...projectWithConnections({ warehouse: { driver: 'postgres' } }).config,
         connections: {
-          warehouse: { driver: 'postgres', context: { depth: 'deep' } },
+          warehouse: { driver: 'postgres' },
         },
         llm: {
           provider: { backend: 'gateway', gateway: { api_key: 'env:KTX_GATEWAY_API_KEY' } }, // pragma: allowlist secret

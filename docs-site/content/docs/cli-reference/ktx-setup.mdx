@@ -131,8 +131,8 @@ BigQuery; and `databases` for ClickHouse.
 Query history setup is supported for Postgres, BigQuery, and Snowflake. The
 window flag applies to BigQuery and Snowflake; Postgres reads the current
 `pg_stat_statements` aggregate data instead of a time-windowed history table.
-Enabling query history makes deep ingest readiness matter for later
-`ktx ingest` runs.
+Later `ktx ingest` runs build enriched context and need a configured model and
+embeddings, including when query history is enabled.
 
 When query history is enabled for PostgreSQL, Snowflake, or BigQuery,
 `ktx setup` runs a non-blocking readiness probe after the connection test
@@ -160,9 +160,9 @@ sources. This is equivalent to passing `--skip-sources` in scripted setup.
 | `--source-git-url <url>` | Git URL for dbt, MetricFlow, or LookML |
 | `--source-branch <branch>` | Git branch for context-source setup |
 | `--source-subpath <path>` | Repo subpath for context-source setup |
-| `--source-auth-token-ref <ref>` | `env:` or `file:` credential reference for source repo auth |
+| `--source-auth-token-ref <ref>` | `env:` or `file:` credential reference for source repo auth or Notion integration token |
 | `--source-url <url>` | Source service URL for Metabase or Looker |
-| `--source-api-key-ref <ref>` | `env:` or `file:` API key reference for Metabase or Notion |
+| `--source-api-key-ref <ref>` | `env:` or `file:` API key reference for Metabase |
 | `--source-client-id <id>` | Looker client id |
 | `--source-client-secret-ref <ref>` | `env:` or `file:` Looker client secret reference |
 | `--source-warehouse-connection-id <id>` | Warehouse connection id used for context-source mapping |
@@ -220,6 +220,14 @@ ktx setup \
   --source-api-key-ref env:METABASE_API_KEY \
   --source-warehouse-connection-id warehouse \
   --metabase-database-id 1
+
+# Add a Notion source that crawls selected root pages
+ktx setup \
+  --source notion \
+  --source-connection-id notion-main \
+  --source-auth-token-ref env:NOTION_TOKEN \
+  --notion-crawl-mode selected_roots \
+  --notion-root-page-id abc123def456
 
 # Install project-scoped agent integration for Codex
 ktx setup --agents --target codex

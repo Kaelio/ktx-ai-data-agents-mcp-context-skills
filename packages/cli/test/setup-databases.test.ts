@@ -262,48 +262,6 @@ describe('setup databases step', () => {
     expect(prompts.select).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves context.depth when editing an existing database connection', async () => {
-    await writeFile(
-      join(tempDir, 'ktx.yaml'),
-      [
-        'connections:',
-        '  warehouse:',
-        '    driver: sqlite',
-        '    path: ./warehouse.sqlite',
-        '    context:',
-        '      depth: deep',
-        '',
-      ].join('\n'),
-      'utf-8',
-    );
-    const prompts = makePromptAdapter({
-      selectValues: ['edit', 'warehouse', 'continue'],
-      textValues: ['./warehouse.sqlite'],
-    });
-    const testConnection = vi.fn(async () => 0);
-    const scanConnection = vi.fn(async () => 0);
-    const io = makeIo();
-    const result = await runKtxSetupDatabasesStep(
-      {
-        projectDir: tempDir,
-        inputMode: 'auto',
-        skipDatabases: false,
-        databaseSchemas: [],
-        disableQueryHistory: true,
-      },
-      io.io,
-      { prompts, testConnection, scanConnection },
-    );
-
-    expect(result.status, io.stderr()).toBe('ready');
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.connections.warehouse).toMatchObject({
-      driver: 'sqlite',
-      path: './warehouse.sqlite',
-      context: { depth: 'deep' },
-    });
-  });
-
   it('labels existing database connections with the database type', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
@@ -376,7 +334,6 @@ describe('setup databases step', () => {
     expect(config.connections['postgres-warehouse']).toEqual({
       driver: 'postgres',
       url: 'env:DATABASE_URL',
-      context: { depth: 'fast' },
     });
   });
 
@@ -1558,7 +1515,7 @@ describe('setup databases step', () => {
     );
     expect(io.stdout()).not.toContain('Tables: 2');
     expect(io.stdout()).toContain('◇  Building schema context for postgres-warehouse');
-    expect(io.stdout()).toContain('│  Running fast database ingest…');
+    expect(io.stdout()).toContain('│  Running database scan…');
     expect(io.stdout()).toContain('◇  Schema context complete for postgres-warehouse');
     expect(io.stdout()).toContain('│  Changes: 2 new tables');
     expect(io.stdout()).toContain('◇  Database ready');
@@ -1907,7 +1864,7 @@ describe('setup databases step', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
       schemas: ['public'],
-      context: { queryHistory: { enabled: false }, depth: 'fast' },
+      context: { queryHistory: { enabled: false } },
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -1946,7 +1903,6 @@ describe('setup databases step', () => {
     expect(config.connections.warehouse).toEqual({
       driver: 'sqlite',
       path: './warehouse.sqlite',
-      context: { depth: 'fast' },
     });
     expect(config.setup).toEqual({
       database_connection_ids: ['warehouse'],
@@ -2023,11 +1979,11 @@ describe('setup databases step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({ driver: 'postgres', url: 'env:DATABASE_URL' });
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
-    expect(io.stderr()).toContain('Fast database ingest failed for warehouse.');
-    expect(io.stderr()).toContain('│  Fast database ingest failed for warehouse.');
-    expect(io.stderr()).toContain(`Debug command: ktx ingest warehouse --project-dir ${tempDir} --fast --debug`);
+    expect(io.stderr()).toContain('Database scan failed for warehouse.');
+    expect(io.stderr()).toContain('│  Database scan failed for warehouse.');
+    expect(io.stderr()).toContain(`Debug command: ktx ingest warehouse --project-dir ${tempDir} --debug`);
     expect(io.stderr()).not.toContain('Structural scan failed for warehouse.');
-    expect(io.stderr()).not.toMatch(/^Fast database ingest failed for warehouse\./m);
+    expect(io.stderr()).not.toMatch(/^Database scan failed for warehouse\./m);
   });
 
   it('prints the native SQLite rebuild command when scanning hits a Node ABI mismatch', async () => {
@@ -2066,7 +2022,7 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('│  Native SQLite is built for a different Node.js ABI.');
     expect(io.stderr()).toContain('Fix: pnpm run native:rebuild');
-    expect(io.stderr()).toContain(`Retry: ktx ingest warehouse --project-dir ${tempDir} --fast`);
+    expect(io.stderr()).toContain(`Retry: ktx ingest warehouse --project-dir ${tempDir}`);
     expect(io.stderr()).not.toContain('ktx scan');
     expect(io.stderr()).not.toContain('npm rebuild');
     expect(io.stderr()).not.toMatch(/^Native SQLite is built for a different Node.js ABI\./m);
@@ -2364,7 +2320,7 @@ describe('setup databases step', () => {
       'utf-8',
     );
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['yes', 'deep'] });
+    const prompts = makePromptAdapter({ selectValues: ['yes'] });
     const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
     const historicSqlReadinessProbe = vi.fn(async () => ({
       ok: true as const,
@@ -2399,12 +2355,6 @@ describe('setup databases step', () => {
         { value: 'back', label: 'Back' },
       ],
     });
-    expect(prompts.select).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        message: expect.stringContaining('How much database context should KTX build?'),
-      }),
-    );
     expect(historicSqlReadinessProbe).toHaveBeenCalledWith(
       expect.objectContaining({
         projectDir: tempDir,
@@ -2420,7 +2370,6 @@ describe('setup databases step', () => {
           minExecutions: 5,
           filters: { dropTrivialProbes: true },
         },
-        depth: 'deep',
       },
     });
   });

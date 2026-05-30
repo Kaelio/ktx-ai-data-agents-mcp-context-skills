@@ -166,7 +166,7 @@ describe('memory-flow event mapping', () => {
       runId: 'run-1',
       connectionId: 'warehouse',
       adapter: 'lookml',
-      status: 'error',
+      status: 'done',
       sourceDir: null,
       syncId: 'sync-2',
       reportId: 'report-1',
@@ -308,7 +308,7 @@ describe('memory-flow event mapping', () => {
       sourceReportPath: 'report-1',
       fallbackReason: null,
     });
-    expect(replay.status).toBe('error');
+    expect(replay.status).toBe('done');
     expect(replay.reportId).toBe('report-1');
     expect(replay.reportPath).toBe('report-1');
     expect(replay.events[0]).toMatchObject({ type: 'source_acquired', emittedAt: '2026-05-01T10:00:00.000Z' });

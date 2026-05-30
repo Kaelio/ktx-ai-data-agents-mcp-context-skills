@@ -77,8 +77,6 @@ maintains, validates, and serves that layer.
 | Connection ref in prose | **connection id** (lowercase, two words) | "connection ID" |
 | CLI arg/flag literal | `connectionId` (code font) | — |
 | File path placeholder | `<connection-id>` (code font) | — |
-| Fast schema mode | **fast ingest** | schema ingest, schema-only ingest |
-| AI-enriched mode | **deep ingest** | AI-enriched ingest |
 | Ingest of a primary connection | **database ingest** | — |
 | Ingest of a context-source connection | **context-source ingest** | bare "source ingest" |
 | Wiki capture | **text ingest** | — |

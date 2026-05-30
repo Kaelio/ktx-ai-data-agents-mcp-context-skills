@@ -24,7 +24,9 @@ external metadata can attach to known warehouse tables.
 
 ## Database ingest
 
-Database ingest records table, column, type, constraint, and row-count context.
+Database ingest always builds enriched context: tables, columns, types,
+constraints, and row counts, plus AI-generated descriptions, embeddings, and
+relationship evidence.
 
 ```bash
 # Build one configured database connection
@@ -34,23 +36,8 @@ ktx ingest warehouse
 ktx ingest --all
 ```
 
-Depth controls how much context **ktx** builds:
-
-| Flag | Best for | What it does |
-|------|----------|--------------|
-| `--fast` | First setup, quick refreshes, CI smoke checks | Deterministic fast ingest with tables, columns, types, constraints, and row counts |
-| `--deep` | Agent-ready context for real analysis | Fast ingest plus deep enrichment with descriptions, embeddings, relationship evidence, and optional query history |
-
-Examples:
-
-```bash
-ktx ingest warehouse --fast
-ktx ingest warehouse --deep
-ktx ingest --all --deep
-```
-
-Deep ingest needs LLM and embedding readiness. Otherwise run `ktx setup` or use
-`--fast`.
+Enriched ingest needs a configured model and embeddings. Run `ktx setup` first;
+connections without that configuration fail before any work starts.
 
 With `claude-code`, **ktx** agent loops can invoke only the **ktx** MCP tools for the
 current run.
@@ -64,7 +51,7 @@ Enable it during setup, store it under `connections.<id>.context.queryHistory`,
 or request it for one run:
 
 ```bash
-ktx ingest warehouse --deep --query-history
+ktx ingest warehouse --query-history
 # Set the lookback window for BigQuery or Snowflake query history
 ktx ingest warehouse --query-history-window-days 30
 ```
@@ -74,8 +61,8 @@ for one run.
 
 ## Relationship evidence
 
-**ktx** scores relationship candidates during supported deep database ingest. The
-public CLI does not expose separate relationship review subcommands.
+**ktx** scores relationship candidates during database ingest. The public CLI
+does not expose separate relationship review subcommands.
 
 ## Context-source ingest
 
@@ -159,7 +146,7 @@ After interactive setup:
 
 ```bash
 ktx status
-ktx ingest --all --deep
+ktx ingest --all
 ktx status
 ```
 
@@ -176,8 +163,8 @@ ktx wiki "revenue" --json --limit 10
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | Connection not configured | The connection id is missing from `ktx.yaml` | Add it with `ktx setup` |
-| Deep readiness is missing | LLM or embeddings are not setup-ready | Run `ktx setup`, or rerun with `--fast` |
-| Query history is unsupported | The selected database driver does not expose query history | Run fast ingest without query-history flags |
+| Enrichment is not configured | LLM or embeddings are not setup-ready | Run `ktx setup` to configure a model and embeddings |
+| Query history is unsupported | The selected database driver does not expose query history | Run ingest without query-history flags |
 | No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or context-source connection |
-| Context-source flags have no effect | Depth and query-history flags were supplied for a context-source connector | Use those flags only for database connections |
+| Context-source flags have no effect | Query-history flags were supplied for a context-source connector | Use query-history flags only for database connections |
 | Text ingest stops early | `--fail-fast` stopped on the first failed item | Fix the item or rerun without `--fail-fast` |

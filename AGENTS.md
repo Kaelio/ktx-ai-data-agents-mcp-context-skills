@@ -350,8 +350,9 @@ error messages — including the disambiguation rule for the overloaded word
 `source` (semantic / primary / context / source of truth) — see
 [`docs/terminology.md`](docs/terminology.md). Follow that file when choosing
 between near-synonyms (e.g. `connector` vs `adapter`, `data agent` vs
-`database agent`, `fast ingest` vs `schema ingest`). Product-name rules in
-this section take precedence over anything in that file when they conflict.
+`database agent`, `context-source ingest` vs `source ingest`). Product-name
+rules in this section take precedence over anything in that file when they
+conflict.
 
 ### Updating `docs-site/` After Code Changes
 

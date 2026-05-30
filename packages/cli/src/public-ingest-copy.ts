@@ -12,7 +12,7 @@ const DATABASE_INGEST_REPLACEMENTS: Array<[RegExp, string]> = [
     'Database enrichment failed after schema context completed',
   ],
   [/\bstructural scan\b/gi, 'schema context'],
-  [/\benriched scan\b/gi, 'deep database ingest'],
+  [/\benriched scan\b/gi, 'database ingest'],
   [/\bscan results\b/gi, 'database context'],
 ];
 

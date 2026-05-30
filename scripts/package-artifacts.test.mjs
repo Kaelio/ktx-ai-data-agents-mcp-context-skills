@@ -530,10 +530,11 @@ describe('verification snippets', () => {
     assert.doesNotMatch(source, /ktx admin runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);
     assert.match(source, /pnpmCommand\(\['exec', 'ktx', 'ingest', 'warehouse'/);
-    assert.match(source, /'--deep'/);
+    assert.doesNotMatch(source, /'--fast'/);
+    assert.doesNotMatch(source, /'--deep'/);
     assert.doesNotMatch(source, /'--enrich'/);
-    assert.match(source, /ktx ingest fast verified/);
-    assert.match(source, /ktx ingest deep readiness guard verified/);
+    assert.match(source, /ktx ingest enrichment guard verified/);
+    assert.match(source, /enrichment is not configured/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
     assert.doesNotMatch(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);
