@@ -138,4 +138,20 @@ describe('wiki and sl read command routing', () => {
       context.io,
     );
   });
+
+  it('keeps sl query requiring --connection-id before invoking the runner', async () => {
+    const program = new Command().exitOverride().option('--project-dir <path>');
+    const sl = vi.fn(async () => 0);
+    const context = makeContext({ deps: { sl } });
+    registerSlCommands(program, context);
+
+    await expect(
+      program.parseAsync(
+        ['--project-dir', '/tmp/ktx-project', 'sl', 'query', '--measure', 'orders.count'],
+        { from: 'user' },
+      ),
+    ).rejects.toThrow("error: required option '--connection-id <id>' not specified");
+
+    expect(sl).not.toHaveBeenCalled();
+  });
 });
