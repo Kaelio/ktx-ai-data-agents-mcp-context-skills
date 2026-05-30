@@ -44,7 +44,7 @@ async function getPostHogClient(projectApiKey: string, host: string): Promise<Po
   }
 
   clientPromise ??= import('posthog-node')
-    .then(({ PostHog }) => new PostHog(projectApiKey, { host, flushAt: 1, flushInterval: 0 }))
+    .then(({ PostHog }) => new PostHog(projectApiKey, { host, flushAt: 1, flushInterval: 0, disableGeoip: false }))
     .catch(() => null);
 
   return await clientPromise;

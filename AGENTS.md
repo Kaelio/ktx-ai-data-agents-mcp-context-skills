@@ -278,7 +278,7 @@ use `PascalCase` without the suffix.
 
 ## Telemetry
 
-**ktx** ships anonymous PostHog telemetry. When adding commands or events:
+**ktx** ships PostHog usage telemetry. When adding commands or events:
 
 - **MUST NOT**: Add fields that carry user data — file paths, hostnames,
   environment values, SQL text, schema/table/column names, error messages,

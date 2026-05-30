@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 /** @internal */
 export const TELEMETRY_NOTICE =
-  'ktx collects anonymous usage data to improve the product. Opt out: set KTX_TELEMETRY_DISABLED=1.';
+  'ktx collects usage data to improve the product. Opt out: set KTX_TELEMETRY_DISABLED=1.';
 
 const NOTICE_VERSION = 1;
 
