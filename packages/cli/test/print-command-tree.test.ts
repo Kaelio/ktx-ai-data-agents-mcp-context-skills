@@ -35,7 +35,10 @@ describe('renderKtxCommandTree', () => {
     expect(output).not.toMatch(/[├└]── run(\s|$)/m);
     expect(output).not.toContain('│   ├── watch');
     expect(output).not.toContain('│   └── watch');
-    expect(output).not.toContain('│   ├── read');
+    expect(output).toContain('│   └── read <key>                      Read a wiki page file by key');
+    expect(output).toContain(
+      '│   ├── read <sourceName>               Read a semantic-layer source YAML file (set --connection-id on `ktx sl`)',
+    );
     expect(output).not.toContain('│   ├── write');
     expect(output).not.toContain('│   └── write');
   });
