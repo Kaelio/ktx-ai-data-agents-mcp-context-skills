@@ -113,6 +113,48 @@ describe('runKtxSl', () => {
     });
   });
 
+  it('reads a semantic-layer source as raw YAML', async () => {
+    const projectDir = join(tempDir, 'read-project');
+    await seedSlSource({ projectDir });
+
+    const readIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'read',
+          projectDir,
+          connectionId: 'warehouse',
+          sourceName: 'orders',
+        },
+        readIo.io,
+      ),
+    ).resolves.toBe(0);
+
+    expect(readIo.stdout()).toBe(ORDERS_YAML);
+    expect(readIo.stderr()).toBe('');
+  });
+
+  it('reports a clear error when a semantic-layer source is missing', async () => {
+    const projectDir = join(tempDir, 'missing-read-project');
+    await seedSlSource({ projectDir });
+
+    const readIo = makeIo();
+    await expect(
+      runKtxSl(
+        {
+          command: 'read',
+          projectDir,
+          connectionId: 'warehouse',
+          sourceName: 'missing_orders',
+        },
+        readIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(readIo.stdout()).toBe('');
+    expect(readIo.stderr()).toBe("No semantic-layer source 'missing_orders' for connection 'warehouse'\n");
+  });
+
   it('prints semantic-layer search rank badges in pretty output', async () => {
     const projectDir = join(tempDir, 'rank-project');
     await seedSlSource({ projectDir });

@@ -98,6 +98,46 @@ describe('runKtxKnowledge', () => {
     expect(searchIo.stdout()).toContain('metrics-revenue');
   });
 
+  it('reads a wiki page as raw markdown with frontmatter', async () => {
+    const projectDir = join(tempDir, 'read-project');
+    await initKtxProject({ projectDir });
+    await seedWikiPage(projectDir, {
+      key: 'metrics-revenue',
+      summary: 'Revenue',
+      content: 'Revenue is paid order value.',
+      tags: ['finance'],
+      slRefs: ['orders'],
+    });
+
+    const readIo = makeIo();
+    await expect(
+      runKtxKnowledge({ command: 'read', projectDir, key: 'metrics-revenue', userId: 'local' }, readIo.io),
+    ).resolves.toBe(0);
+
+    expect(readIo.stdout()).toContain('---\n');
+    expect(readIo.stdout()).toContain('summary: Revenue');
+    expect(readIo.stdout()).toContain('tags:');
+    expect(readIo.stdout()).toContain('- finance');
+    expect(readIo.stdout()).toContain('sl_refs:');
+    expect(readIo.stdout()).toContain('- orders');
+    expect(readIo.stdout()).toContain('usage_mode: auto');
+    expect(readIo.stdout()).toContain('Revenue is paid order value.');
+    expect(readIo.stderr()).toBe('');
+  });
+
+  it('reports a clear error when a wiki page key is missing', async () => {
+    const projectDir = join(tempDir, 'missing-read-project');
+    await initKtxProject({ projectDir });
+
+    const readIo = makeIo();
+    await expect(
+      runKtxKnowledge({ command: 'read', projectDir, key: 'missing-page', userId: 'local' }, readIo.io),
+    ).resolves.toBe(1);
+
+    expect(readIo.stdout()).toBe('');
+    expect(readIo.stderr()).toBe("No wiki page found for key 'missing-page'\n");
+  });
+
   it('emits debug telemetry for wiki search without query text', async () => {
     vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
     vi.stubEnv('CI', '');
