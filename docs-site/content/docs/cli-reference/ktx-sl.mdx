@@ -60,7 +60,7 @@ ktx sl query [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | **ktx** connection id | - |
+| `--connection-id <id>` | Required **ktx** connection id | - |
 | `--query-file <path>` | JSON semantic query file | - |
 | `--measure <measure>` | Measure to query; repeatable (at least one required) | - |
 | `--dimension <dimension>` | Dimension to include; repeatable | - |
@@ -75,8 +75,9 @@ ktx sl query [options]
 | `--no-input` | Disable interactive managed runtime installation | - |
 | `--max-rows <n>` | Maximum rows to return when executing | - |
 
-`sl query` requires at least one `--measure` unless `--query-file` is set.
-`--query-file` should point to a JSON semantic query object.
+`sl query` requires `--connection-id` and at least one `--measure` unless
+`--query-file` is set. `--query-file` must point to a JSON semantic query
+object.
 
 ## Examples
 
