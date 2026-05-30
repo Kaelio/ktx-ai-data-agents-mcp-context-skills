@@ -18,9 +18,12 @@ interface ResolvedCommand {
   commandPath: string[];
 }
 
-function isHiddenCommandName(name: string): boolean {
-  // Internal commands (e.g. `__complete`) use a `__` prefix and never complete.
-  return name.startsWith('__');
+function isHiddenCommand(command: CommandUnknownOpts): boolean {
+  // Completion mirrors `ktx --help`: commands registered with `{ hidden: true }`
+  // (the `__complete` helper and `mcp serve-internal`) are internal and must not
+  // surface. Commander exposes this only through the private `_hidden` field its
+  // own help renderer reads, so a name heuristic like a `__` prefix is not enough.
+  return (command as { _hidden?: boolean })._hidden === true;
 }
 
 function resolveCommand(program: CommandUnknownOpts, typedTokens: string[]): ResolvedCommand {
@@ -145,8 +148,8 @@ export async function computeCompletions(
 
   // (d) Positional: subcommand names union static argument choices union dynamic operand candidates.
   const candidates: string[] = resolved.command.commands
-    .map((sub) => sub.name())
-    .filter((name) => !isHiddenCommandName(name));
+    .filter((sub) => !isHiddenCommand(sub))
+    .map((sub) => sub.name());
   for (const argument of resolved.command.registeredArguments) {
     if (argument.argChoices) {
       candidates.push(...argument.argChoices);

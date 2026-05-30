@@ -56,6 +56,12 @@ describe('computeCompletions', () => {
     expect(await complete(['co'])).toEqual(['completion', 'connection']);
   });
 
+  it('hides Commander-hidden subcommands such as `mcp serve-internal`', async () => {
+    const result = await complete(['mcp', '']);
+    expect(result).not.toContain('serve-internal');
+    expect(result).toEqual(['logs', 'start', 'status', 'stdio', 'stop']);
+  });
+
   it('offers sl subcommands and source names together, sorted and deduped', async () => {
     expect(await complete(['sl', ''])).toEqual(['customers', 'orders', 'query', 'validate']);
   });
