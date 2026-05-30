@@ -19,8 +19,8 @@ ktx sl query [options]
 - Bare `ktx sl` lists semantic sources.
 - `ktx sl <query...>` searches semantic sources. Multi-word queries are joined
   with a space.
-- `ktx sl read <sourceName>` prints the YAML for one source. Set
-  `--connection-id` on `ktx sl`.
+- `ktx sl read <sourceName>` prints the YAML for one source. Add
+  `--connection-id` only when the source name exists in multiple connections.
 - `ktx sl validate` and `ktx sl query` remain as explicit subcommands.
 
 ## Subcommands
@@ -48,13 +48,13 @@ ktx sl query [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | **ktx** connection id (required) | - |
+| `--connection-id <id>` | Optional **ktx** connection id for disambiguation | - |
 
 ### `sl validate`
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--connection-id <id>` | **ktx** connection id (required) | - |
+| `--connection-id <id>` | Optional **ktx** connection id for disambiguation | - |
 
 ### `sl query`
 
@@ -93,10 +93,16 @@ ktx sl --json
 # Search sources as JSON
 ktx sl "revenue" --json
 
-# Print the YAML for a known source
+# Print the YAML for a source name that is unique across connections
+ktx sl read orders
+
+# Print the YAML for a source name that exists in multiple connections
 ktx sl --connection-id my-warehouse read orders
 
-# Validate a source against the live schema
+# Validate a source name that is unique across connections
+ktx sl validate orders
+
+# Validate a source name that exists in multiple connections
 ktx sl validate orders --connection-id my-warehouse
 
 # Compile a query and view the generated SQL
@@ -157,7 +163,9 @@ shows `#1`, `#2`, and later rank badges for the displayed results. Plain and
 JSON output keep the raw `score` value, which is a ranking score rather than a
 percentage.
 
-`ktx sl read <sourceName>` prints the source YAML directly to stdout. It does
+`ktx sl read <sourceName>` prints the source YAML directly to stdout when the
+source name is unique across connections. If the name exists in multiple
+connections, rerun the command with `--connection-id <id>`. The command does
 not wrap output in pretty, plain, or JSON formatting, so it can be piped to
 other tools.
 
@@ -177,7 +185,8 @@ other tools.
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
-| Source not found | Source name or connection id is wrong | Run `ktx sl <query>` or `ktx sl --connection-id <id>` to find the exact source name, then retry `ktx sl --connection-id <id> read <sourceName>` |
+| Source not found | Source name or connection id is wrong | Run `ktx sl <query>` or `ktx sl --connection-id <id>` to find the exact source name, then retry `ktx sl read <sourceName>` or `ktx sl validate <sourceName>` |
+| Source name is ambiguous | The same source name exists in multiple connections | Rerun with `--connection-id <id>` from the error message |
 | Validation fails | YAML references missing columns, invalid joins, or invalid SQL expressions | Fix the source YAML and rerun `ktx sl validate` |
 | Query compile fails | Measure, dimension, filter, or segment name is invalid | Search sources with `ktx sl <query>`, inspect the source YAML in your project files, then retry using declared fields |
 | Execution returns too many rows | `--max-rows` is missing or too high | Add `--max-rows` with a bounded value before executing |
