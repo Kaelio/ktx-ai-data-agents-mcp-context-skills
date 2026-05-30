@@ -12,6 +12,7 @@ import type {
   KtxMcpToolHandlerContext,
   KtxMcpToolResult,
   KtxMcpUserContext,
+  KtxSemanticLayerQueryResponse,
   NonArrayObject,
 } from './types.js';
 
@@ -60,7 +61,7 @@ const toolDescriptions = {
   sl_read_source:
     'Read a semantic-layer YAML source by connection id and source name. Example: sl_read_source({ connectionId: "warehouse", sourceName: "orders" }).',
   sl_query:
-    'Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ field: "orders.created_at", granularity: "month" }] }).',
+    'Execute a semantic-layer query and return headers, rows, and total row count, plus correctness notes (e.g. compile-only or fan-out) when relevant. The generated SQL and full query plan are omitted by default; request them with include: ["sql"] and/or include: ["plan"]. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ field: "orders.created_at", granularity: "month" }], include: ["sql"] }).',
   sql_execution:
     'Execute one parser-validated read-only SQL query against a configured KTX connection. Example: sql_execution({ connectionId: "warehouse", sql: "select count(*) from public.orders", maxRows: 100 }).',
   memory_ingest:
@@ -73,7 +74,7 @@ const connectionListSchema = z.object({});
 
 const knowledgeSearchSchema = z.object({
   query: z.string().min(1).describe('Natural-language wiki search query, e.g. "revenue recognition policy".'),
-  limit: z.number().int().min(1).max(50).default(10).describe('Maximum wiki pages to return. Defaults to 10.'),
+  limit: z.number().int().min(1).max(50).default(10).describe('Maximum wiki pages to return.'),
 });
 
 const knowledgeReadSchema = z.object({
@@ -109,10 +110,7 @@ const slQueryOrderBySchema = z.object({
       .describe(
         'Field/measure/dimension id to order by, e.g. "orders.created_at", a dimension key like "mart_nrr_quarterly.quarter_label", or a measure alias.',
       ),
-    direction: z
-      .enum(['asc', 'desc'])
-      .default('asc')
-      .describe('Sort direction: "asc" or "desc". Defaults to "asc".'),
+    direction: z.enum(['asc', 'desc']).default('asc').describe('Sort direction for this field.'),
   });
 
 const slQuerySchema = z.object({
@@ -136,8 +134,12 @@ const slQuerySchema = z.object({
     .array(slQueryOrderBySchema)
     .default([])
     .describe('Sort clauses. Use {field, direction?} entries.'),
-  limit: z.number().int().min(0).default(1000).describe('Maximum rows to return. Defaults to 1000.'),
-  include_empty: z.boolean().default(true).describe('Whether to include empty dimension groups. Defaults to true.'),
+  limit: z.number().int().min(0).default(1000).describe('Maximum rows to return.'),
+  include_empty: z.boolean().default(true).describe('Whether to include empty dimension groups.'),
+  include: z
+    .array(z.enum(['plan', 'sql']))
+    .default([])
+    .describe('Extra detail to attach to the response: "sql" for the generated SQL, "plan" for the full query plan.'),
 });
 
 const entityDetailsTableRefSchema = z.object({
@@ -184,13 +186,13 @@ const discoverDataSchema = z.object({
     .optional()
     .describe('Optional connection id. Pass it when user intent pins a specific warehouse.'),
   kinds: z.array(discoverDataKindSchema.describe('Reference kind to include.')).optional().describe('Optional kind filter.'),
-  limit: z.number().int().min(1).max(50).default(15).optional().describe('Maximum refs to return. Defaults to 15.'),
+  limit: z.number().int().min(1).max(50).default(10).optional().describe('Maximum refs to return.'),
 });
 
 const sqlExecutionSchema = z.object({
   connectionId: connectionIdSchema.describe('Connection id to execute against. Required for raw SQL.'),
   sql: z.string().min(1).describe('Parser-validated read-only SQL, e.g. "select count(*) from public.orders".'),
-  maxRows: z.number().int().min(1).max(10_000).default(1000).optional().describe('Maximum rows to return. Defaults to 1000.'),
+  maxRows: z.number().int().min(1).max(10_000).default(1000).optional().describe('Maximum rows to return.'),
 });
 
 const memoryIngestSchema = z.object({
@@ -266,10 +268,14 @@ const slReadSourceOutputSchema = z.object({
 const slQueryOutputSchema = z.object({
   connectionId: z.string().optional(),
   dialect: z.string().optional(),
-  sql: z.string(),
   headers: z.array(z.string()),
   rows: z.array(z.array(z.unknown())),
   totalRows: z.number(),
+  // Correctness signals hoisted out of `plan` so they survive default projection (e.g. compile-only
+  // status, fan-out warnings). Present only when there is something to report.
+  notes: z.array(z.string()).optional(),
+  // Opt-in detail, attached only when requested via the `include` input.
+  sql: z.string().optional(),
   plan: unknownRecordSchema.optional(),
 });
 
@@ -411,9 +417,56 @@ const memoryIngestStatusOutputSchema = z.object({
 
 /** @internal */
 export function jsonToolResult<T extends NonArrayObject>(structuredContent: T): KtxMcpToolResult<T> {
+  // Compact (non-indented) JSON: this `content` text is the copy the model reads. Pretty-printing
+  // arrays-of-arrays (every `rows` payload) puts one scalar per line, inflating tabular results by
+  // a large constant factor. `structuredContent` carries the same data for structured-output clients.
   return {
-    content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
+    content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
     structuredContent,
+  };
+}
+
+/**
+ * Pull the correctness-critical signals out of a query plan so they survive even when the caller
+ * did not opt into the full `plan`. Returns an empty list when there is nothing to flag.
+ */
+function slQueryNotes(plan: Record<string, unknown> | undefined): string[] {
+  if (!plan) {
+    return [];
+  }
+  const notes: string[] = [];
+  const execution = plan.execution;
+  if (
+    execution &&
+    typeof execution === 'object' &&
+    (execution as Record<string, unknown>).mode === 'compile_only'
+  ) {
+    const reason = (execution as Record<string, unknown>).reason;
+    notes.push(typeof reason === 'string' ? reason : 'Compiled SQL only; no rows were executed.');
+  }
+  if (plan.has_fan_out === true) {
+    const description = typeof plan.fan_out_description === 'string' ? plan.fan_out_description.trim() : '';
+    notes.push(description.length > 0 ? description : 'Fan-out detected: measure totals may be inflated by joins.');
+  }
+  return notes;
+}
+
+/**
+ * Default sl_query response is the minimum the agent needs to read the result: connection, headers,
+ * rows, totals, plus any correctness notes. The generated `sql` and the full `plan` are attached only
+ * when explicitly requested via `include`, since both are large and echo information the caller already has.
+ */
+function projectSlQueryResult(result: KtxSemanticLayerQueryResponse, include: ('plan' | 'sql')[]) {
+  const notes = slQueryNotes(result.plan);
+  return {
+    ...(result.connectionId !== undefined ? { connectionId: result.connectionId } : {}),
+    ...(result.dialect !== undefined ? { dialect: result.dialect } : {}),
+    headers: result.headers,
+    rows: result.rows,
+    totalRows: result.totalRows,
+    ...(notes.length > 0 ? { notes } : {}),
+    ...(include.includes('sql') ? { sql: result.sql } : {}),
+    ...(include.includes('plan') && result.plan ? { plan: result.plan } : {}),
   };
 }
 
@@ -618,23 +671,22 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       slQuerySchema,
       async (input, context) => {
         const onProgress = mcpProgressCallback(context);
-        return jsonToolResult(
-          await semanticLayer.query(
-            {
-              connectionId: input.connectionId,
-              query: {
-                measures: input.measures,
-                dimensions: input.dimensions,
-                filters: input.filters,
-                segments: input.segments,
-                order_by: input.order_by,
-                limit: input.limit,
-                include_empty: input.include_empty,
-              },
+        const result = await semanticLayer.query(
+          {
+            connectionId: input.connectionId,
+            query: {
+              measures: input.measures,
+              dimensions: input.dimensions,
+              filters: input.filters,
+              segments: input.segments,
+              order_by: input.order_by,
+              limit: input.limit,
+              include_empty: input.include_empty,
             },
-            onProgress ? { onProgress } : undefined,
-          ),
+          },
+          onProgress ? { onProgress } : undefined,
         );
+        return jsonToolResult(projectSlQueryResult(result, input.include));
       },
     );
   }

@@ -65,7 +65,7 @@
         },
         "limit": {
           "default": 10,
-          "description": "Maximum wiki pages to return. Defaults to 10.",
+          "description": "Maximum wiki pages to return.",
           "type": "integer",
           "minimum": 1,
           "maximum": 50
@@ -307,7 +307,7 @@
   {
     "name": "sl_query",
     "title": "Semantic Layer Query",
-    "description": "Execute a semantic-layer query and return rows, headers, generated SQL, and plan details. Example: sl_query({ connectionId: \"warehouse\", measures: [\"orders.order_count\"], dimensions: [{ field: \"orders.created_at\", granularity: \"month\" }] }).",
+    "description": "Execute a semantic-layer query and return headers, rows, and total row count, plus correctness notes (e.g. compile-only or fan-out) when relevant. The generated SQL and full query plan are omitted by default; request them with include: [\"sql\"] and/or include: [\"plan\"]. Example: sl_query({ connectionId: \"warehouse\", measures: [\"orders.order_count\"], dimensions: [{ field: \"orders.created_at\", granularity: \"month\" }], include: [\"sql\"] }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -403,7 +403,7 @@
               },
               "direction": {
                 "default": "asc",
-                "description": "Sort direction: \"asc\" or \"desc\". Defaults to \"asc\".",
+                "description": "Sort direction for this field.",
                 "type": "string",
                 "enum": [
                   "asc",
@@ -418,15 +418,27 @@
         },
         "limit": {
           "default": 1000,
-          "description": "Maximum rows to return. Defaults to 1000.",
+          "description": "Maximum rows to return.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
         },
         "include_empty": {
           "default": true,
-          "description": "Whether to include empty dimension groups. Defaults to true.",
+          "description": "Whether to include empty dimension groups.",
           "type": "boolean"
+        },
+        "include": {
+          "default": [],
+          "description": "Extra detail to attach to the response: \"sql\" for the generated SQL, \"plan\" for the full query plan.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "sql"
+            ]
+          }
         }
       },
       "required": [
@@ -441,9 +453,6 @@
           "type": "string"
         },
         "dialect": {
-          "type": "string"
-        },
-        "sql": {
           "type": "string"
         },
         "headers": {
@@ -462,6 +471,15 @@
         "totalRows": {
           "type": "number"
         },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sql": {
+          "type": "string"
+        },
         "plan": {
           "type": "object",
           "propertyNames": {
@@ -471,7 +489,6 @@
         }
       },
       "required": [
-        "sql",
         "headers",
         "rows",
         "totalRows"
@@ -1241,8 +1258,8 @@
           }
         },
         "limit": {
-          "description": "Maximum refs to return. Defaults to 15.",
-          "default": 15,
+          "description": "Maximum refs to return.",
+          "default": 10,
           "type": "integer",
           "minimum": 1,
           "maximum": 50
@@ -1396,7 +1413,7 @@
           "description": "Parser-validated read-only SQL, e.g. \"select count(*) from public.orders\"."
         },
         "maxRows": {
-          "description": "Maximum rows to return. Defaults to 1000.",
+          "description": "Maximum rows to return.",
           "default": 1000,
           "type": "integer",
           "minimum": 1,

@@ -28,7 +28,12 @@ You have access to KTX MCP tools for data discovery, semantic-layer analysis, ra
 - Read entity details before writing SQL against an unfamiliar table. Do not assume column names.
 - Treat `sql_execution` as read-only. Writes are rejected by the server.
 - Validate value mentions with `dictionary_search` instead of guessing case or spelling. Treat a `dictionary_search` miss as non-authoritative. The index is built from profile-sampled values, so a missing value may simply have been outside the sample. Follow up with `sql_execution` against the most plausible columns before concluding the value is absent.
-- When `connection_list` shows multiple connections, pass an explicit `connectionId` to every tool that takes one and where user intent pins a specific warehouse. Required: `entity_details`, `sl_read_source`, and `sql_execution`. Required when user intent is warehouse-specific, including wording like "in our warehouse" or "this warehouse": `memory_ingest`; without `connectionId`, the memory agent cannot update the semantic layer and the knowledge lands as wiki-only. Pass `connectionId` when intent pins a warehouse, otherwise omit for unscoped discovery: `sl_query`, `discover_data`, and `dictionary_search`. Never pass `connectionId` to `connection_list`, `wiki_search`, `wiki_read`, or `memory_ingest_status`. If intent is ambiguous for a required-or-scoped tool, ask the user which warehouse before calling.
+- `connectionId` scoping when `connection_list` shows multiple connections:
+  - Always pass it: `entity_details`, `sl_read_source`, `sql_execution`.
+  - Pass it when intent pins a warehouse, otherwise omit for unscoped discovery: `sl_query`, `discover_data`, `dictionary_search`.
+  - `memory_ingest`: pass it for warehouse-specific knowledge (e.g. "in our warehouse"); without it the memory lands as wiki-only and cannot update the semantic layer.
+  - Never pass it: `connection_list`, `wiki_search`, `wiki_read`, `memory_ingest_status`.
+  - If scoping is required but intent is ambiguous, ask which warehouse before calling.
 - Show compact result tables for small outputs. For broad results, summarize the top findings and mention the applied limit.
 - Ask a concise clarification only when the metric, date range, entity, or grain is genuinely ambiguous and cannot be inferred from context.
 </rules>
