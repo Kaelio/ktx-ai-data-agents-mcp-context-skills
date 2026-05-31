@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runCommanderKtxCli } from '../src/cli-program.js';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from '../src/cli-runtime.js';
+import { TELEMETRY_NOTICE } from '../src/telemetry/identity.js';
 
 function makeIo(stdoutIsTTY = true): { io: KtxCliIo; stdout: () => string; stderr: () => string } {
   let stdout = '';
@@ -85,7 +86,7 @@ describe('runCommanderKtxCli telemetry', () => {
     expect(statusIo.stderr()).toContain('"connectionCount"');
     expect(statusIo.stderr()).not.toContain(tempDir);
 
-    const noticeIndex = statusIo.stderr().indexOf('ktx collects anonymous usage data');
+    const noticeIndex = statusIo.stderr().indexOf(TELEMETRY_NOTICE);
     const firstTelemetryIndex = statusIo.stderr().indexOf('[telemetry]');
     expect(noticeIndex).toBeGreaterThanOrEqual(0);
     expect(firstTelemetryIndex).toBeGreaterThan(noticeIndex);
