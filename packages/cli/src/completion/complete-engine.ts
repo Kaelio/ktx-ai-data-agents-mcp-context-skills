@@ -29,8 +29,20 @@ function isHiddenCommand(command: CommandUnknownOpts): boolean {
 function resolveCommand(program: CommandUnknownOpts, typedTokens: string[]): ResolvedCommand {
   let command: CommandUnknownOpts = program;
   const commandPath: string[] = [];
-  for (const token of typedTokens) {
+  for (let index = 0; index < typedTokens.length; index += 1) {
+    const token = typedTokens[index];
     if (token.startsWith('-')) {
+      // A value-taking option in the `--flag value` form consumes the next token
+      // as its value, so skip that value before matching subcommands. Otherwise a
+      // connection id like `query` would be resolved as the `sl query` subcommand
+      // instead of being treated as the `--connection-id` value. The `--flag=value`
+      // form carries its own value and consumes nothing extra.
+      if (!token.includes('=')) {
+        const option = findOption(command, token);
+        if (option && !option.isBoolean()) {
+          index += 1;
+        }
+      }
       continue;
     }
     const sub = command.commands.find((candidate) => candidate.name() === token || candidate.aliases().includes(token));

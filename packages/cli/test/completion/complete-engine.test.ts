@@ -110,6 +110,14 @@ describe('computeCompletions', () => {
     expect(result).toEqual(['query', 'read', 'validate']);
   });
 
+  it('does not treat a value-taking option value as a subcommand', async () => {
+    // A connection id that happens to match a subcommand name (`query`, `read`)
+    // is the `--connection-id` value, not a subcommand: the next positional must
+    // still offer the `sl` subcommands rather than resolving into `sl query`/`sl read`.
+    expect(await complete(['sl', '--connection-id', 'query', ''])).toEqual(['query', 'read', 'validate']);
+    expect(await complete(['sl', '--connection-id', 'read', ''])).toEqual(['query', 'read', 'validate']);
+  });
+
   it('still returns subcommands/flags when dynamic providers yield nothing (no project)', async () => {
     const empty = fakeProviders({
       positionalCandidates: async () => [],
