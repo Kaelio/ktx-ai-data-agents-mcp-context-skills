@@ -34,12 +34,47 @@ function promptWithSystem(system: string | undefined, prompt: string): string {
   return [system, prompt].filter(Boolean).join('\n\n');
 }
 
-async function collectEvents(events: AsyncIterable<unknown>): Promise<unknown[]> {
+interface CollectCodexEventsOptions {
+  stepBudget?: number;
+  abortController?: AbortController;
+}
+
+interface CollectCodexEventsResult {
+  events: unknown[];
+  budgetExceeded: boolean;
+}
+
+function eventRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+}
+
+function isCompletedMcpToolCall(event: unknown): boolean {
+  const record = eventRecord(event);
+  const item = eventRecord(record?.item);
+  return record?.type === 'item.completed' && item?.type === 'mcp_tool_call';
+}
+
+async function collectEvents(
+  events: AsyncIterable<unknown>,
+  options: CollectCodexEventsOptions = {},
+): Promise<CollectCodexEventsResult> {
   const collected: unknown[] = [];
+  let completedToolSteps = 0;
+  let budgetExceeded = false;
+
   for await (const event of events) {
     collected.push(event);
+    if (options.stepBudget !== undefined && isCompletedMcpToolCall(event)) {
+      completedToolSteps += 1;
+      if (completedToolSteps >= options.stepBudget) {
+        budgetExceeded = true;
+        options.abortController?.abort();
+        break;
+      }
+    }
   }
-  return collected;
+
+  return { events: collected, budgetExceeded };
 }
 
 function metrics(summary: CodexExecEventSummary, startedAt: number): { totalMs: number; usage: LlmTokenUsage } {
@@ -125,7 +160,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const events = await collectEvents(
+      const collected = await collectEvents(
         await this.runner.runStreamed({
           projectDir: this.deps.projectDir,
           model,
@@ -134,7 +169,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           env: config.env,
         }),
       );
-      const summary = summarizeCodexExecEvents(events, { startedAt });
+      const summary = summarizeCodexExecEvents(collected.events, { startedAt });
       input.onMetrics?.(metrics(summary, startedAt));
       return assertSuccessfulText(summary);
     } finally {
@@ -166,7 +201,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const events = await collectEvents(
+      const collected = await collectEvents(
         await this.runner.runStreamed({
           projectDir: this.deps.projectDir,
           model,
@@ -176,7 +211,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           outputSchema: z.toJSONSchema(input.schema, { target: 'draft-7' }) as Record<string, unknown>,
         }),
       );
-      const summary = summarizeCodexExecEvents(events, { startedAt });
+      const summary = summarizeCodexExecEvents(collected.events, { startedAt });
       input.onMetrics?.(metrics(summary, startedAt));
       return parseStructuredOutput(input.schema, assertSuccessfulText(summary));
     } finally {
@@ -207,16 +242,19 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const events = await collectEvents(
+      const abortController = new AbortController();
+      const collected = await collectEvents(
         await this.runner.runStreamed({
           projectDir: this.deps.projectDir,
           model,
           prompt: promptWithSystem(params.systemPrompt, params.userPrompt),
           configOverrides: config.configOverrides,
           env: config.env,
+          signal: abortController.signal,
         }),
+        { stepBudget: params.stepBudget, abortController },
       );
-      const summary = summarizeCodexExecEvents(events, { startedAt });
+      const summary = summarizeCodexExecEvents(collected.events, { startedAt });
       for (let index = 1; index <= summary.stepCount; index += 1) {
         try {
           await params.onStepFinish?.({ stepIndex: index, stepBudget: params.stepBudget });
@@ -227,7 +265,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
         }
       }
       const error = summaryError(summary);
-      const stopReason = error ? 'error' : summary.stopReason;
+      const stopReason = collected.budgetExceeded ? 'budget' : error ? 'error' : summary.stopReason;
       return {
         stopReason,
         ...(stopReason === 'error' && error ? { error } : {}),
