@@ -747,6 +747,9 @@ describe('runKtxPublicIngest', () => {
       return 0;
     });
     const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async (ingestArgs, ingestIo, deps) => {
+      if (ingestArgs.command !== 'run') {
+        throw new Error(`Unexpected ingest command: ${ingestArgs.command}`);
+      }
       ingestIo.stdout.write(`Adapter: ${ingestArgs.adapter}\n`);
       ingestIo.stdout.write('Report: report-progress-1\n');
       if (ingestArgs.adapter === 'historic-sql') {
