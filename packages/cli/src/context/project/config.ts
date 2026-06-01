@@ -110,6 +110,12 @@ const ingestSchema = z
       .prefault({ backend: 'none' })
       .describe('Embedding configuration used when ingest adapters need to embed documents.'),
     workUnits: workUnitsSchema.prefault({}).describe('Concurrency and failure handling for ingest work units.'),
+    profile: z
+      .union([z.boolean(), z.literal('json')])
+      .default(false)
+      .describe(
+        'Print a timing breakdown to stderr at the end of each ingest run. `true` prints a human table; `"json"` prints the raw structured profile for coding agents; `false` disables it. Equivalent to the KTX_PROFILE_INGEST environment variable (`1`/`true`/`json`).',
+      ),
   })
   .describe('Ingest pipeline configuration: adapters, embeddings, and work-unit policy.');
 

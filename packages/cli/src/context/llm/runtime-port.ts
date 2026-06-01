@@ -23,6 +23,24 @@ export interface RunLoopStepInfo {
   stepBudget: number;
 }
 
+export interface LlmTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+/** Timing and token metrics for a multi-step agent loop, used for ingest profiling. */
+export interface RunLoopMetrics {
+  /** Wall-clock time around the whole `generateText` call, in milliseconds. */
+  totalMs: number;
+  /** Aggregate token usage across all steps. */
+  usage: LlmTokenUsage;
+  /** Number of agent steps (model round-trips) that actually ran. */
+  stepCount: number;
+  /** Wall-clock offset (ms from loop start) at which each step finished. */
+  stepBoundariesMs: number[];
+}
+
 export interface RunLoopParams {
   modelRole: KtxModelRole;
   systemPrompt: string;
@@ -36,6 +54,7 @@ export interface RunLoopParams {
 export interface RunLoopResult {
   stopReason: RunLoopStopReason;
   error?: Error;
+  metrics?: RunLoopMetrics;
 }
 
 export interface KtxGenerateTextInput {
@@ -44,6 +63,7 @@ export interface KtxGenerateTextInput {
   system?: string;
   tools?: KtxRuntimeToolSet;
   temperature?: number;
+  onMetrics?: (metrics: { totalMs: number; usage: LlmTokenUsage }) => void;
 }
 
 export interface KtxGenerateObjectInput<TOutput, TSchema extends z.ZodType<TOutput>> {
@@ -53,6 +73,7 @@ export interface KtxGenerateObjectInput<TOutput, TSchema extends z.ZodType<TOutp
   tools?: KtxRuntimeToolSet;
   temperature?: number;
   schema: TSchema;
+  onMetrics?: (metrics: { totalMs: number; usage: LlmTokenUsage }) => void;
 }
 
 export interface KtxLlmRuntimePort {

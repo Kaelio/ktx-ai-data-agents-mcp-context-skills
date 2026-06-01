@@ -25,6 +25,7 @@ import {
   deriveFinalizationWikiPageKeys,
 } from './finalization-scope.js';
 import { FileIngestTraceWriter, ingestTracePathForJob, type IngestTraceWriter, traceTimed } from './ingest-trace.js';
+import { formatIngestProfile, formatIngestProfileJson, readIngestProfile, resolveIngestProfileMode } from './ingest-profile.js';
 import { integrateWorkUnitPatch } from './isolated-diff/patch-integrator.js';
 import { resolveTextualConflict } from './isolated-diff/textual-conflict-resolver.js';
 import { runIsolatedWorkUnit } from './isolated-diff/work-unit-executor.js';
@@ -239,6 +240,38 @@ export class IngestBundleRunner {
     } catch (error) {
       ctx?.memoryFlow?.finish('error', [sanitizeMemoryFlowError(error)]);
       throw error;
+    } finally {
+      await this.maybeEmitIngestProfile(job.jobId);
+    }
+  }
+
+  /**
+   * When profiling is enabled — via the `KTX_PROFILE_INGEST` env var or the
+   * `ingest.profile` config setting — read the job's trace + tool transcripts
+   * and print a rolled-up timing breakdown to stderr. `json` emits the raw
+   * structured profile for coding agents; `table` emits a human summary.
+   * Best-effort: profiling never affects the run outcome.
+   */
+  private async maybeEmitIngestProfile(jobId: string): Promise<void> {
+    const mode = resolveIngestProfileMode(this.deps.settings.profileIngest);
+    if (mode === 'off') {
+      return;
+    }
+    try {
+      const storage = this.deps.storage as typeof this.deps.storage & {
+        resolveTracePath?: (jobId: string) => string;
+      };
+      const profile = await readIngestProfile(jobId, {
+        tracePath: storage.resolveTracePath?.(jobId) ?? ingestTracePathForJob(this.deps.storage.homeDir, jobId),
+        transcriptDir: this.deps.storage.resolveTranscriptDir(jobId),
+      });
+      process.stderr.write(`\n${mode === 'json' ? formatIngestProfileJson(profile) : formatIngestProfile(profile)}`);
+    } catch (error) {
+      this.logger.warn(
+        `[ingest-bundle] ingest profile unavailable for job=${jobId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
@@ -1100,8 +1133,15 @@ export class IngestBundleRunner {
 
     const scopeDescriptor = adapter.describeScope ? await adapter.describeScope(stagedDir) : null;
 
-    const sessionWorktree = await this.deps.lockingService.withLock('config:repo', () =>
-      this.deps.sessionWorktreeService.create(job.jobId, baseSha),
+    const sessionWorktree = await traceTimed(
+      trace,
+      'worktree',
+      'session_worktree_created',
+      { jobId: job.jobId },
+      () =>
+        this.deps.lockingService.withLock('config:repo', () =>
+          this.deps.sessionWorktreeService.create(job.jobId, baseSha),
+        ),
     );
     let cleanupOutcome: 'success' | 'crash' | 'conflict' = 'crash';
 
@@ -1272,26 +1312,34 @@ export class IngestBundleRunner {
         sourceContextReport = chunk.contextReport;
         parseArtifacts = chunk.parseArtifacts;
         reconcileNotes = chunk.reconcileNotes ?? [];
+        const pageTriage = this.deps.pageTriage;
+        const triageRunId = runRow.id;
         triageResult =
-          contextReport && adapter.triageSupported && this.deps.pageTriage
-            ? await this.deps.pageTriage.triageRun({
-                stagedDir,
-                runId: runRow.id,
-                connectionId: job.connectionId,
-                sourceKey: job.sourceKey,
-                syncId,
-                jobId: job.jobId,
-                diffSet,
-                adapter,
-              })
+          contextReport && adapter.triageSupported && pageTriage
+            ? await traceTimed(runTrace, 'triage', 'page_triage', { sourceKey: job.sourceKey }, () =>
+                pageTriage.triageRun({
+                  stagedDir,
+                  runId: triageRunId,
+                  connectionId: job.connectionId,
+                  sourceKey: job.sourceKey,
+                  syncId,
+                  jobId: job.jobId,
+                  diffSet,
+                  adapter,
+                }),
+              )
             : null;
         workUnits = this.filterWorkUnitsForTriage(workUnits, triageResult);
-        if (adapter.clusterWorkUnits && workUnits.length > 0) {
-          workUnits = await adapter.clusterWorkUnits({
-            workUnits,
-            stagedDir,
-            embedding: this.deps.embedding,
-          });
+        const clusterWorkUnits = adapter.clusterWorkUnits;
+        if (clusterWorkUnits && workUnits.length > 0) {
+          const preClusterCount = workUnits.length;
+          workUnits = await traceTimed(
+            runTrace,
+            'clustering',
+            'cluster_work_units',
+            { workUnitCount: preClusterCount },
+            () => clusterWorkUnits({ workUnits, stagedDir, embedding: this.deps.embedding }),
+          );
         }
         await stage2?.updateProgress(1.0, `Planned ${workUnits.length} update${workUnits.length === 1 ? '' : 's'}`);
       }
@@ -1326,7 +1374,13 @@ export class IngestBundleRunner {
       });
 
       // Build shared per-job context.
-      const [wikiIndex, slIndex] = await Promise.all([this.buildWikiIndex(), this.buildSlIndex(slConnectionIds)]);
+      const [wikiIndex, slIndex] = await traceTimed(
+        runTrace,
+        'index_build',
+        'build_indexes',
+        { connectionCount: slConnectionIds.length },
+        () => Promise.all([this.buildWikiIndex(), this.buildSlIndex(slConnectionIds)]),
+      );
 
       const baseFraming = await this.deps.promptService.loadPrompt('memory_agent_bundle_ingest_work_unit');
       const wuSkillNames = Array.from(
@@ -1881,6 +1935,8 @@ export class IngestBundleRunner {
       let curatorWarnings: string[] = [];
       let reconcileOutcome: Awaited<ReturnType<typeof runReconciliationStage4>>;
 
+      const reconcileStartedAt = Date.now();
+      const reconcileMode = contextReport && this.deps.curatorPagination ? 'curator' : 'single';
       if (contextReport && this.deps.curatorPagination) {
         const curatorOutcome = await this.deps.curatorPagination.reconcile({
           runId: runRow.id,
@@ -1989,6 +2045,33 @@ export class IngestBundleRunner {
             : undefined,
         });
       }
+      await runTrace.event(
+        'debug',
+        'reconciliation',
+        'reconciliation_executed',
+        {
+          mode: reconcileMode,
+          skipped: reconcileOutcome.skipped,
+          ...(reconcileOutcome.stopReason ? { stopReason: reconcileOutcome.stopReason } : {}),
+          ...(reconcileOutcome.metrics
+            ? {
+                agentLoopMs: reconcileOutcome.metrics.totalMs,
+                stepCount: reconcileOutcome.metrics.stepCount,
+                ...(reconcileOutcome.metrics.usage.inputTokens !== undefined
+                  ? { inputTokens: reconcileOutcome.metrics.usage.inputTokens }
+                  : {}),
+                ...(reconcileOutcome.metrics.usage.outputTokens !== undefined
+                  ? { outputTokens: reconcileOutcome.metrics.usage.outputTokens }
+                  : {}),
+                ...(reconcileOutcome.metrics.usage.totalTokens !== undefined
+                  ? { totalTokens: reconcileOutcome.metrics.usage.totalTokens }
+                  : {}),
+              }
+            : {}),
+        },
+        undefined,
+        Date.now() - reconcileStartedAt,
+      );
       latestReconciliationSkipped = reconcileOutcome.skipped;
 
       const danglingReconcileWikiRefs = await findDanglingWikiRefsForActions({
@@ -2036,6 +2119,7 @@ export class IngestBundleRunner {
       activePhase = 'finalization';
       if (adapter.finalize) {
         const stageFinalization = ctx?.startPhase(0.04);
+        const finalizationStartedAt = Date.now();
         emitStageProgress('finalization', 87, 'Running deterministic finalization');
         await stageFinalization?.updateProgress(0.0, 'Running deterministic finalization');
         await runTrace.event('debug', 'finalization', 'finalization_started', { sourceKey: job.sourceKey });
@@ -2215,14 +2299,21 @@ export class IngestBundleRunner {
         latestFinalizationOutcome = finalizationOutcome;
         emitStageProgress('finalization', 88, 'Deterministic finalization complete');
         await stageFinalization?.updateProgress(1.0, 'Deterministic finalization complete');
-        await runTrace.event('debug', 'finalization', 'finalization_committed', {
-          sourceKey: job.sourceKey,
-          commitSha: finalizationSha,
-          touchedPaths: finalizationTouchedPaths,
-          touchedSources: finalizationTouchedSources,
-          changedWikiPageKeys: finalizationChangedWikiPageKeys,
-          warnings: result.warnings,
-        });
+        await runTrace.event(
+          'debug',
+          'finalization',
+          'finalization_committed',
+          {
+            sourceKey: job.sourceKey,
+            commitSha: finalizationSha,
+            touchedPaths: finalizationTouchedPaths,
+            touchedSources: finalizationTouchedSources,
+            changedWikiPageKeys: finalizationChangedWikiPageKeys,
+            warnings: result.warnings,
+          },
+          undefined,
+          Date.now() - finalizationStartedAt,
+        );
       } else {
         await runTrace.event('debug', 'finalization', 'finalization_skipped', { sourceKey: job.sourceKey });
       }
@@ -2504,6 +2595,7 @@ export class IngestBundleRunner {
       const stage6 = ctx?.startPhase(0.04);
       emitStageProgress('save', 91, 'Saving changes');
       await stage6?.updateProgress(0.0, 'Saving changes');
+      const squashStartedAt = Date.now();
       try {
         await sessionWorktree.git.assertWorktreeClean();
       } catch (error) {
@@ -2527,10 +2619,17 @@ export class IngestBundleRunner {
         throw new Error(`squash merge conflict: ${mergeResult.conflictPaths.join(', ')}`);
       }
       const commitSha = mergeResult.touchedPaths.length === 0 ? null : mergeResult.squashSha;
-      await runTrace.event('debug', 'squash', 'squash_finished', {
-        commitSha,
-        touchedPaths: mergeResult.touchedPaths,
-      });
+      await runTrace.event(
+        'debug',
+        'squash',
+        'squash_finished',
+        {
+          commitSha,
+          touchedPaths: mergeResult.touchedPaths,
+        },
+        undefined,
+        Date.now() - squashStartedAt,
+      );
       const memoryFlowSavedActions = stageIndex.workUnits
         .flatMap((wu) => wu.actions)
         .concat(reconcileActions)
@@ -2547,6 +2646,7 @@ export class IngestBundleRunner {
       // transaction. If this throws, the run fails and no partial index state
       // survives (thanks to the transactional upsert in applyDiffTransactional).
       if (commitSha) {
+        const indexSyncStartedAt = Date.now();
         // Multi-file squash → omit path so the handler diffs the whole commit
         // (a comma-joined pathspec would match nothing and the job would no-op).
         const pathFilter = mergeResult.touchedPaths.length === 1 ? mergeResult.touchedPaths[0] : '';
@@ -2571,6 +2671,14 @@ export class IngestBundleRunner {
             );
           }
         }
+        await runTrace.event(
+          'debug',
+          'index_sync',
+          'post_squash_index_sync_finished',
+          { connectionCount: touchedConnections.length },
+          undefined,
+          Date.now() - indexSyncStartedAt,
+        );
       }
 
       const stage5 = ctx?.startPhase(0.04);

@@ -143,6 +143,42 @@ verbosity:
 KTX_INGEST_TRACE_LEVEL=trace ktx ingest metabase
 ```
 
+### Profiling a slow ingest
+
+Each timed phase and work unit records a `durationMs` in the trace, and each
+agent loop records its step count and token usage. To see where wall-clock time
+went, enable profiling and **ktx** prints a rolled-up breakdown to stderr at the
+end of the run. There are two ways to turn it on, and two output formats.
+
+Turn it on per run with the `KTX_PROFILE_INGEST` environment variable, or
+persistently with `ingest.profile` in `ktx.yaml` (useful for CI or while
+iterating on a slow source):
+
+```bash
+KTX_PROFILE_INGEST=1 ktx ingest metabase       # human-readable table
+KTX_PROFILE_INGEST=json ktx ingest metabase    # raw JSON for coding agents
+```
+
+```yaml
+ingest:
+  profile: true   # human table; use "json" for the machine-readable form
+```
+
+Both formats report total wall time, time per phase, and the slowest work units,
+splitting each work unit's agent-loop time into model time versus tool-execution
+time. The `json` form emits the full structured profile (raw milliseconds and
+token counts, stable keys) plus a `summary.headline` one-line diagnosis, so a
+coding agent can parse it directly instead of scraping the table. If both the env
+var and the config request profiling, `json` wins. Example headline:
+
+```text
+Slowest phase: reconciliation (2m 05s, 48% of wall time). 2 work units (1 failed), ~88% model generation vs ~12% tools.
+```
+
+Work units run serially by default (`ingest.workUnits.maxConcurrency` is `1`);
+raise it in `ktx.yaml` if the profile shows the run is bound by serialized
+work-unit agent loops.
+
 ## Common errors
 
 | Error | Cause | Recovery |

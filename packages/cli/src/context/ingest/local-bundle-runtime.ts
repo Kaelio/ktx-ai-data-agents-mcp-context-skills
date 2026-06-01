@@ -716,6 +716,7 @@ export function createLocalBundleIngestRuntime(
       workUnitMaxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
+      profileIngest: options.project.config.ingest.profile,
       ingestTraceLevel: ingestTraceLevelFromEnv(),
     },
     skillsRegistry: new SkillsRegistryService({ skillsDir, logger }),

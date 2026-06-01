@@ -1,5 +1,5 @@
 import type { KtxModelRole } from '../../../llm/types.js';
-import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet, RunLoopMetrics } from '../../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../../context/memory/types.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
 import type { WorkUnit } from '../types.js';
@@ -44,6 +44,8 @@ export interface WorkUnitOutcome {
   patchPath?: string;
   patchTouchedPaths?: string[];
   childWorktreePath?: string;
+  /** Timing and token metrics for the work-unit agent loop, used for ingest profiling. */
+  metrics?: RunLoopMetrics;
 }
 
 export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit): Promise<WorkUnitOutcome> {
@@ -125,6 +127,7 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
       touchedSlSources: [],
       slDisallowed: wu.slDisallowed,
       slDisallowedReason: wu.slDisallowedReason,
+      ...(runResult.metrics ? { metrics: runResult.metrics } : {}),
     };
   };
 
@@ -162,5 +165,6 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
     touchedSlSources: touched,
     slDisallowed: wu.slDisallowed,
     slDisallowedReason: wu.slDisallowedReason,
+    ...(runResult.metrics ? { metrics: runResult.metrics } : {}),
   };
 }

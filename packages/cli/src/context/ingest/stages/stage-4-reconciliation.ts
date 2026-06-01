@@ -1,4 +1,4 @@
-import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
+import type { AgentRunnerPort, KtxRuntimeToolSet, RunLoopMetrics } from '../../../context/llm/runtime-port.js';
 import type { KtxModelRole } from '../../../llm/types.js';
 import type { EvictionUnit } from '../types.js';
 import type { StageIndex } from './stage-index.types.js';
@@ -23,6 +23,7 @@ export interface ReconciliationOutcome {
   skipped: boolean;
   stopReason?: 'budget' | 'natural' | 'error';
   error?: Error;
+  metrics?: RunLoopMetrics;
 }
 
 export async function runReconciliationStage4(ctx: ReconciliationContext): Promise<ReconciliationOutcome> {
@@ -40,5 +41,5 @@ export async function runReconciliationStage4(ctx: ReconciliationContext): Promi
     telemetryTags: { operationName: 'ingest-bundle-reconcile', source: ctx.sourceKey, jobId: ctx.jobId },
     onStepFinish: ctx.onStepFinish,
   });
-  return { skipped: false, stopReason: run.stopReason, error: run.error };
+  return { skipped: false, stopReason: run.stopReason, error: run.error, ...(run.metrics ? { metrics: run.metrics } : {}) };
 }

@@ -15,12 +15,27 @@ import type {
   KtxGenerateTextInput,
   KtxLlmRuntimePort,
   KtxRuntimeToolSet,
+  LlmTokenUsage,
   RunLoopParams,
   RunLoopResult,
   RunLoopStopReason,
 } from './runtime-port.js';
 
 type QueryFn = (params: Parameters<typeof defaultQuery>[0]) => AsyncIterable<SDKMessage>;
+
+function claudeTokenUsage(result: SDKResultMessage): LlmTokenUsage {
+  const usage = (result as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+  if (!usage) {
+    return {};
+  }
+  const { input_tokens: inputTokens, output_tokens: outputTokens } = usage;
+  const totalTokens = inputTokens !== undefined && outputTokens !== undefined ? inputTokens + outputTokens : undefined;
+  return {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+  };
+}
 
 export interface ClaudeCodeKtxLlmRuntimeDeps {
   projectDir: string;
@@ -236,6 +251,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       maxTurns: 1,
       tools: input.tools,
     });
+    const startedAt = Date.now();
     const result = await collectResult({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
@@ -243,6 +259,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
+    input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
     if (error) {
       throw error;
@@ -271,6 +288,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       }),
       outputFormat: { type: 'json_schema' as const, schema: jsonSchema(input.schema as z.ZodType) },
     };
+    const startedAt = Date.now();
     const result = await collectResult({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
@@ -278,6 +296,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       allowedToolIds: new Set([...mcpToolIds(input.tools ?? {}), STRUCTURED_OUTPUT_TOOL_NAME]),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
     });
+    input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
     if (error) {
       throw error;
@@ -290,6 +309,8 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
 
   async runAgentLoop(params: RunLoopParams): Promise<RunLoopResult> {
     let stepIndex = 0;
+    const startedAt = Date.now();
+    const stepBoundariesMs: number[] = [];
     try {
       const options = baseOptions({
         projectDir: this.deps.projectDir,
@@ -306,6 +327,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
         onAssistantTurn: async () => {
           stepIndex += 1;
+          stepBoundariesMs.push(Date.now() - startedAt);
           if (!params.onStepFinish) {
             return;
           }
@@ -322,10 +344,23 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       });
       const stopReason = mapClaudeCodeStopReason(result);
       const error = resultError(result);
-      return { stopReason, ...(stopReason === 'error' && error ? { error } : {}) };
+      return {
+        stopReason,
+        ...(stopReason === 'error' && error ? { error } : {}),
+        metrics: {
+          totalMs: Date.now() - startedAt,
+          stepCount: stepIndex,
+          stepBoundariesMs,
+          usage: claudeTokenUsage(result),
+        },
+      };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      return { stopReason: 'error', error: err };
+      return {
+        stopReason: 'error',
+        error: err,
+        metrics: { totalMs: Date.now() - startedAt, stepCount: stepIndex, stepBoundariesMs, usage: {} },
+      };
     }
   }
 }

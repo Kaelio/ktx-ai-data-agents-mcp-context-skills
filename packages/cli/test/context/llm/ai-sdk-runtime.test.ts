@@ -107,6 +107,73 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     expect(result.error).toBe(err);
   });
 
+  it('returns metrics with stepCount, per-step boundaries, and aggregate token usage', async () => {
+    (generateText as any).mockImplementation(async (opts: any) => {
+      await opts.onStepFinish({});
+      await opts.onStepFinish({});
+      return {
+        text: 'ok',
+        toolCalls: [],
+        steps: [],
+        totalUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+      };
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.metrics).toBeDefined();
+    expect(result.metrics?.stepCount).toBe(2);
+    expect(result.metrics?.stepBoundariesMs).toHaveLength(2);
+    expect(result.metrics?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(result.metrics?.usage).toEqual({ inputTokens: 100, outputTokens: 20, totalTokens: 120 });
+  });
+
+  it('falls back to result.usage when totalUsage is absent', async () => {
+    (generateText as any).mockResolvedValue({
+      text: 'ok',
+      toolCalls: [],
+      steps: [],
+      usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10 },
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.metrics?.usage).toEqual({ inputTokens: 7, outputTokens: 3, totalTokens: 10 });
+    expect(result.metrics?.stepCount).toBe(0);
+  });
+
+  it('returns partial metrics even when the loop errors', async () => {
+    (generateText as any).mockRejectedValue(new Error('boom'));
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(result.metrics).toBeDefined();
+    expect(result.metrics?.stepCount).toBe(0);
+    expect(result.metrics?.usage).toEqual({});
+  });
+
   it('invokes caller onStepFinish with incrementing stepIndex and total budget', async () => {
     const calls: RunLoopStepInfo[] = [];
     (generateText as any).mockImplementation(async (opts: any) => {

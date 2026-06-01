@@ -144,6 +144,8 @@ interface IngestSettingsPort {
   workUnitMaxConcurrency?: number;
   workUnitStepBudget?: number;
   workUnitFailureMode?: 'abort' | 'continue';
+  /** Print a timing breakdown to stderr at the end of each run (config-driven; see also KTX_PROFILE_INGEST). `'json'` emits the raw structured profile. */
+  profileIngest?: boolean | 'json';
   ingestTraceLevel?: IngestTraceLevel;
 }
 

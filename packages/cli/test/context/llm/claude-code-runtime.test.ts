@@ -284,7 +284,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
         stepBudget: 1,
         telemetryTags: { operationName: 'test' },
       }),
-    ).resolves.toEqual({ stopReason: 'budget' });
+    ).resolves.toMatchObject({ stopReason: 'budget' });
 
     const options = query.mock.calls[0][0].options;
     expect(options.allowedTools).toEqual(['mcp__ktx__load_skill']);
@@ -467,7 +467,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
         telemetryTags: { operationName: 'test' },
         onStepFinish,
       }),
-    ).resolves.toEqual({ stopReason: 'natural' });
+    ).resolves.toMatchObject({ stopReason: 'natural' });
 
     expect(onStepFinish).toHaveBeenCalledTimes(1);
     expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 40 });
@@ -513,7 +513,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
           throw new Error('callback exploded');
         },
       }),
-    ).resolves.toEqual({ stopReason: 'natural' });
+    ).resolves.toMatchObject({ stopReason: 'natural' });
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('callback exploded'));
   });
 
@@ -523,6 +523,45 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     expect(mapClaudeCodeStopReason(resultMessage({ stop_reason: 'max_turns' }))).toBe('budget');
     expect(mapClaudeCodeStopReason(resultMessage({ subtype: 'success', terminal_reason: 'completed' }))).toBe('natural');
     expect(mapClaudeCodeStopReason(resultMessage({ subtype: 'error_during_execution' }))).toBe('error');
+  });
+
+  it('returns loop metrics including step count and mapped token usage', async () => {
+    const query = vi.fn((_input: any) =>
+      stream([
+        initMessage(),
+        {
+          type: 'assistant',
+          message: { role: 'assistant', content: [] },
+          parent_tool_use_id: null,
+          uuid: '00000000-0000-4000-8000-000000000006',
+          session_id: 'session-id',
+        } as unknown as SDKMessage,
+        resultMessage({
+          subtype: 'success',
+          terminal_reason: 'completed',
+          usage: { input_tokens: 50, output_tokens: 10 } as never,
+        }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      toolSet: {},
+      stepBudget: 40,
+      telemetryTags: { operationName: 'test' },
+    });
+
+    expect(result.metrics?.stepCount).toBe(1);
+    expect(result.metrics?.stepBoundariesMs).toHaveLength(1);
+    expect(result.metrics?.usage).toEqual({ inputTokens: 50, outputTokens: 10, totalTokens: 60 });
   });
 
   it('auth probe uses isolation options and a scrubbed env', async () => {

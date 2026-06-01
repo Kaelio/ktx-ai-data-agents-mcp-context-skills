@@ -299,6 +299,7 @@ describe('createLocalBundleIngestRuntime', () => {
       'ingestTraceLevel',
       'memoryIngestionModel',
       'probeRowCount',
+      'profileIngest',
       'workUnitFailureMode',
       'workUnitMaxConcurrency',
       'workUnitStepBudget',

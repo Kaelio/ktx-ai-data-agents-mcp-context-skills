@@ -9,12 +9,30 @@ import type {
   KtxGenerateObjectInput,
   KtxGenerateTextInput,
   KtxLlmRuntimePort,
+  LlmTokenUsage,
   RunLoopParams,
   RunLoopResult,
 } from './runtime-port.js';
 
 interface AgentTelemetryPort {
   createTelemetry(tags: Record<string, string>): TelemetrySettings;
+}
+
+interface MaybeUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+function toLlmTokenUsage(usage: MaybeUsage | undefined): LlmTokenUsage {
+  if (!usage) {
+    return {};
+  }
+  return {
+    ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+    ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
+    ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
+  };
 }
 
 export interface AiSdkKtxLlmRuntimeDeps {
@@ -48,6 +66,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
       model,
     });
     const split = splitKtxSystemMessages(built.messages);
+    const startedAt = Date.now();
     const result = await generateText({
       model,
       temperature: input.temperature ?? 0,
@@ -62,6 +81,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
           }
         : {}),
     });
+    input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (typeof result.text !== 'string') {
       throw new Error('KTX LLM text generation returned no text');
     }
@@ -80,6 +100,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
       model,
     });
     const split = splitKtxSystemMessages(built.messages);
+    const startedAt = Date.now();
     const result = await generateText({
       model,
       temperature: input.temperature ?? 0,
@@ -95,6 +116,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         : {}),
       output: Output.object({ schema: input.schema as unknown as FlexibleSchema<TOutput> }),
     });
+    input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (result.output == null) {
       throw new Error('KTX LLM object generation returned no output');
     }
@@ -103,6 +125,8 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
 
   async runAgentLoop(params: RunLoopParams): Promise<RunLoopResult> {
     let stepIndex = 0;
+    const startedAt = Date.now();
+    const stepBoundariesMs: number[] = [];
     try {
       const model = this.deps.llmProvider.getModel(params.modelRole);
       const tools = createAiSdkToolSet(params.toolSet);
@@ -128,7 +152,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         }),
       );
 
-      await generateText({
+      const result = await generateText({
         model,
         temperature: 0,
         stopWhen: stepCountIs(params.stepBudget),
@@ -141,6 +165,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         tools: built.tools as ToolSet,
         onStepFinish: async () => {
           stepIndex += 1;
+          stepBoundariesMs.push(Date.now() - startedAt);
           if (!params.onStepFinish) {
             return;
           }
@@ -155,11 +180,23 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
           }
         },
       });
-      return { stopReason: 'natural' };
+      return {
+        stopReason: 'natural',
+        metrics: {
+          totalMs: Date.now() - startedAt,
+          stepCount: stepIndex,
+          stepBoundariesMs,
+          usage: toLlmTokenUsage(result.totalUsage ?? result.usage),
+        },
+      };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn(`[agent-runner] loop failed: ${err.message}`);
-      return { stopReason: 'error', error: err };
+      return {
+        stopReason: 'error',
+        error: err,
+        metrics: { totalMs: Date.now() - startedAt, stepCount: stepIndex, stepBoundariesMs, usage: {} },
+      };
     }
   }
 }

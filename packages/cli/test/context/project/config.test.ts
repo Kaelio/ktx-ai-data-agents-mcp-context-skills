@@ -50,6 +50,7 @@ connections:
           maxConcurrency: 1,
           failureMode: 'continue',
         },
+        profile: false,
       },
       agent: {
         run_research: {
@@ -154,6 +155,12 @@ ingest:
       maxConcurrency: 2,
       failureMode: 'abort',
     });
+  });
+
+  it('parses the ingest.profile flag (false default, true, or "json")', () => {
+    expect(parseKtxProjectConfig('ingest:\n  adapters: []\n').ingest.profile).toBe(false);
+    expect(parseKtxProjectConfig('ingest:\n  profile: true\n').ingest.profile).toBe(true);
+    expect(parseKtxProjectConfig('ingest:\n  profile: json\n').ingest.profile).toBe('json');
   });
 
   it('parses global Vertex LLM config', () => {
