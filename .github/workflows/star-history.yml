@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           # cachebust forces star-history to regenerate instead of serving its
           # own server-side cache; --location follows the slug-normalizing 301.
-          url="https://api.star-history.com/svg?repos=Kaelio/ktx-ai-data-agents-context&type=Date&cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          url="https://api.star-history.com/svg?repos=Kaelio/ktx&type=Date&cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           curl --fail --location --silent --show-error \
             --retry 3 --retry-delay 5 --max-time 60 \
             -o assets/star-history.svg.new "$url"

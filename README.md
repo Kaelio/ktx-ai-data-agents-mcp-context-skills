@@ -8,11 +8,11 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@kaelio/ktx"><img src="https://img.shields.io/npm/v/@kaelio/ktx?style=flat-square&color=f97316" alt="npm version" /></a>
-  <a href="https://codecov.io/gh/Kaelio/ktx-ai-data-agents-context"><img src="https://codecov.io/gh/Kaelio/ktx-ai-data-agents-context/graph/badge.svg?branch=main" alt="Codecov" /></a>
-  <a href="https://github.com/Kaelio/ktx-ai-data-agents-context/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/Kaelio/ktx-ai-data-agents-context/ci.yml?branch=main&label=tests&style=flat-square" alt="Tests" /></a>
+  <a href="https://codecov.io/gh/Kaelio/ktx"><img src="https://codecov.io/gh/Kaelio/ktx/graph/badge.svg?branch=main" alt="Codecov" /></a>
+  <a href="https://github.com/Kaelio/ktx/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/Kaelio/ktx/ci.yml?branch=main&label=tests&style=flat-square" alt="Tests" /></a>
   <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-ktx-22c55e?style=flat-square" alt="Documentation" /></a>
   <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the ktx Slack community" /></a>
-  <a href="https://github.com/Kaelio/ktx-ai-data-agents-context/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
   <a href="https://www.ycombinator.com/companies?batch=P25"><img src="https://img.shields.io/badge/Y%20Combinator-P25-orange?style=flat-square" alt="Y Combinator P25" /></a>
 </p>
 
@@ -130,7 +130,7 @@ Agent integration ready: yes (codex:project)
 > your project directory:
 >
 > ```text
-> Run npx skills add Kaelio/ktx-ai-data-agents-context --skill ktx and use the ktx skill to install
+> Run npx skills add Kaelio/ktx --skill ktx and use the ktx skill to install
 > and configure ktx in this project.
 > ```
 
@@ -201,7 +201,7 @@ then the current directory. Pass `--project-dir <path>` when scripting.
 ## Community
 
 - **[Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ)** — ask questions, share what you're building, and chat with maintainers.
-- **[GitHub Issues](https://github.com/Kaelio/ktx-ai-data-agents-context/issues)** — report bugs and request features.
+- **[GitHub Issues](https://github.com/Kaelio/ktx/issues)** — report bugs and request features.
 - **[Contributing](https://docs.kaelio.com/ktx/docs/community/contributing)** — set up the repo, run tests, and open a PR.
 
 ## Development
@@ -258,7 +258,7 @@ event catalog and opt-out options.
 ## Star History
 
 <p align="center">
-  <a href="https://star-history.com/#Kaelio/ktx-ai-data-agents-context&Date">
+  <a href="https://star-history.com/#Kaelio/ktx&Date">
     <img src="assets/star-history.svg" alt="ktx Star History Chart" width="700" />
   </a>
 </p>

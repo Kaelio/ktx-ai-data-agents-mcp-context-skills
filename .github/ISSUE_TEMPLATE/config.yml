@@ -10,5 +10,5 @@ contact_links:
     url: https://docs.kaelio.com/ktx/docs/community/support
     about: Full guide on where to ask what — Slack vs. GitHub Issues vs. docs.
   - name: Security issues
-    url: https://github.com/Kaelio/ktx-ai-data-agents-context/security/advisories/new
+    url: https://github.com/Kaelio/ktx/security/advisories/new
     about: Report security vulnerabilities privately via GitHub Security Advisories. Please do not file security issues publicly.

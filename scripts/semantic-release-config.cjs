@@ -104,22 +104,6 @@ function releaseTag(kind, env = process.env) {
   return `branch-${branchPrereleaseId(branchName)}`;
 }
 
-function repositoryUrl(env = process.env) {
-  // @semantic-release/github compares this URL's owner/repo against the live
-  // GitHub clone_url with an exact match (no redirect following), so a repo
-  // rename breaks the release unless repositoryUrl tracks the *current* name.
-  // In CI, derive it from the runner's repository so renames never re-break the
-  // release. Outside CI, return undefined so semantic-release falls back to the
-  // package.json `repository` field (its documented default).
-  const repository = env.GITHUB_REPOSITORY;
-  if (!repository) {
-    return undefined;
-  }
-
-  const server = env.GITHUB_SERVER_URL || 'https://github.com';
-  return `${server}/${repository}.git`;
-}
-
 function releaseBranches(env = process.env) {
   const kind = releaseKind(env);
 
@@ -143,12 +127,10 @@ function releaseBranches(env = process.env) {
 function createReleaseConfig(env = process.env) {
   const kind = releaseKind(env);
   const tag = releaseTag(kind, env);
-  const url = repositoryUrl(env);
 
   return {
     tagFormat: 'v${version}',
     branches: releaseBranches(env),
-    ...(url ? { repositoryUrl: url } : {}),
     plugins: [
       [
         '@semantic-release/commit-analyzer',
@@ -221,5 +203,4 @@ module.exports = {
   releaseBranches,
   releaseKind,
   releaseTag,
-  repositoryUrl,
 };
