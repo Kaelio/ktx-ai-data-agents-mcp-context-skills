@@ -1,6 +1,10 @@
 import { stat as statAsync, readdir as readdirAsync } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import {
+  CODEX_ISOLATION_WARNING,
+  CODEX_ISOLATION_WARNING_FIX,
+} from './context/llm/codex-isolation.js';
 import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
 import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
@@ -606,6 +610,13 @@ function buildWarnings(
     warnings.push({
       message: warning,
       fix: formatClaudeCodePromptCachingFix(),
+    });
+  }
+
+  if (llm.backend === 'codex') {
+    warnings.push({
+      message: CODEX_ISOLATION_WARNING,
+      fix: CODEX_ISOLATION_WARNING_FIX,
     });
   }
 

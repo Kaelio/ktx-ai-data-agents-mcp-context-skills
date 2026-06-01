@@ -415,6 +415,16 @@ describe('buildProjectStatus codex', () => {
       status: 'ok',
       detail: 'local Codex session authenticated',
     });
+    expect(status.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('Codex backend isolation is limited'),
+          fix: expect.stringContaining('claude-code'),
+        }),
+      ]),
+    );
+    const rendered = renderProjectStatus(status, { verbose: false, useColor: false });
+    expect(rendered).toContain('Codex backend isolation is limited');
   });
 
   it('skips Codex auth probe with --fast', async () => {
