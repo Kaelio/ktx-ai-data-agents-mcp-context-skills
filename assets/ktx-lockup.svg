@@ -19,14 +19,9 @@
   <path d="M 80 84 Q 86 77 92 84" fill="none" stroke="#F5F1EA" stroke-width="3.5" stroke-linecap="round" />
   <path d="M 108 84 Q 114 77 120 84" fill="none" stroke="#F5F1EA" stroke-width="3.5" stroke-linecap="round" />
 
-  <!-- wordmark: 'ktx', half the logo height, vertically centered -->
-  <text
-    x="225"
-    y="145"
-    font-family="'JetBrains Mono', 'Fira Code', ui-monospace, 'SF Mono', Menlo, monospace"
-    font-size="140"
-    font-weight="600"
-    fill="#1B3139"
-    letter-spacing="-0.04em"
-  >ktx</text>
+  <!-- wordmark: "ktx" outlined from Outfit SemiBold (the docs-site display font)
+       so it renders identically everywhere, independent of installed fonts -->
+  <g transform="translate(242 145)" fill="#1B3139">
+    <path d="M51.17 0 25.06 -34.79 51.03 -67.62H72.17L41.65 -30.7L42.35 -39.55L73.57 0ZM8.05 0V-101.22H26.46V0ZM88.41 0V-95.69H106.82V0ZM72.66 -51.52V-67.62H122.57V-51.52ZM171.75 0 153.93 -27.41 150.22 -30.17 123.83 -67.62H145.64L161.91 -42.77L165.48 -40.18L193.38 0ZM122.54 0 150.05 -38.61 160.62 -26.22 143.19 0ZM166.11 -30.38 155.44 -42.67 171.54 -67.62H192.08Z" />
+  </g>
 </svg>
