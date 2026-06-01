@@ -51,8 +51,9 @@ prompts.
 
 | Flag | Description |
 |------|-------------|
-| `--llm-backend <backend>` | LLM backend: `anthropic`, `vertex`, or `claude-code` |
+| `--llm-backend <backend>` | LLM backend: `anthropic`, `vertex`, `claude-code`, or `codex` |
 | `--llm-backend claude-code` | Use the local Claude Code session for **ktx** LLM calls |
+| `--llm-backend codex` | Use local Codex authentication for **ktx** LLM calls |
 | `--llm-model <model>` | LLM model ID or backend model alias to validate and save |
 | `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
 | `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
@@ -65,6 +66,9 @@ valid with the Anthropic backend; Vertex flags are only valid with the Vertex
 backend. The `claude-code` backend uses local Claude Code authentication instead
 of Anthropic API key or Vertex flags. For Claude Code, `--llm-model` accepts
 `sonnet`, `opus`, `haiku`, or a full Claude model ID.
+The `codex` backend uses local Codex authentication instead of Anthropic API key
+or Vertex flags. For Codex, `--llm-model` accepts `gpt-5.3-codex`, `gpt-5.4`,
+or another `gpt-*` or `codex-*` model ID.
 
 ### Embeddings
 
@@ -190,6 +194,9 @@ ktx setup \
   --project-dir ./analytics \
   --llm-backend claude-code \
   --llm-model opus
+
+# Configure ktx to use local Codex authentication for LLM work
+ktx setup --llm-backend codex --llm-model gpt-5.3-codex --no-input
 
 # Script a Postgres connection that reads its URL from the environment
 ktx setup \
