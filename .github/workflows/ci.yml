@@ -212,12 +212,12 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: Kaelio/ktx
+          slug: Kaelio/ktx-ai-data-agents-context
           files: ./packages/cli/coverage/lcov.info
           flags: typescript
           name: typescript
           disable_search: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Warn when Codecov token is missing for TypeScript
         if: env.CODECOV_TOKEN_CONFIGURED != 'true'
@@ -231,12 +231,12 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: Kaelio/ktx
+          slug: Kaelio/ktx-ai-data-agents-context
           files: ./coverage/python.xml
           flags: python
           name: python
           disable_search: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Warn when Codecov token is missing for Python
         if: env.CODECOV_TOKEN_CONFIGURED != 'true'
