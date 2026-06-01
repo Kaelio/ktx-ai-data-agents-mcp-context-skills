@@ -2,13 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { buildCodexRuntimeConfig } from '../../../src/context/llm/codex-runtime-config.js';
 
 describe('buildCodexRuntimeConfig', () => {
-  it('builds deny-by-default config without MCP tools', () => {
+  it('builds generic config without SDK thread-option fields', () => {
     expect(buildCodexRuntimeConfig({ model: 'gpt-5.3-codex' })).toEqual({
       configOverrides: {
-        model: 'gpt-5.3-codex',
-        approval_policy: 'never',
-        sandbox_mode: 'read-only',
-        web_search: 'disabled',
         history: { persistence: 'none' },
       },
       env: {},
@@ -28,10 +24,6 @@ describe('buildCodexRuntimeConfig', () => {
       }),
     ).toEqual({
       configOverrides: {
-        model: 'gpt-5.3-codex',
-        approval_policy: 'never',
-        sandbox_mode: 'read-only',
-        web_search: 'disabled',
         history: { persistence: 'none' },
         mcp_servers: {
           ktx: {

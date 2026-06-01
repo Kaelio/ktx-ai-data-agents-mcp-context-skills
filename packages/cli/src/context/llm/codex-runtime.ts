@@ -79,6 +79,10 @@ async function mcpForTools(input: {
   });
 }
 
+function runtimeToolNames(toolSet: KtxRuntimeToolSet | undefined): string[] {
+  return Object.values(toolSet ?? {}).map((descriptor) => descriptor.name);
+}
+
 export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
   private readonly runner: CodexSdkRunner;
   private readonly logger: KtxLogger;
@@ -105,7 +109,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
                 url: mcp.url,
                 bearerTokenEnvVar: mcp.bearerTokenEnvVar,
                 bearerToken: mcp.bearerToken,
-                toolNames: Object.keys(input.tools ?? {}),
+                toolNames: runtimeToolNames(input.tools),
               },
             }
           : {}),
@@ -146,7 +150,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
                 url: mcp.url,
                 bearerTokenEnvVar: mcp.bearerTokenEnvVar,
                 bearerToken: mcp.bearerToken,
-                toolNames: Object.keys(input.tools ?? {}),
+                toolNames: runtimeToolNames(input.tools),
               },
             }
           : {}),
@@ -187,7 +191,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
                 url: mcp.url,
                 bearerTokenEnvVar: mcp.bearerTokenEnvVar,
                 bearerToken: mcp.bearerToken,
-                toolNames: Object.keys(params.toolSet),
+                toolNames: runtimeToolNames(params.toolSet),
               },
             }
           : {}),
