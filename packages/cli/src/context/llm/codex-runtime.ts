@@ -46,9 +46,20 @@ function metrics(summary: CodexExecEventSummary, startedAt: number): { totalMs: 
   return { totalMs: Date.now() - startedAt, usage: summary.usage };
 }
 
-function assertSuccessfulText(summary: CodexExecEventSummary): string {
+function summaryError(summary: CodexExecEventSummary): Error | undefined {
   if (summary.error) {
-    throw summary.error;
+    return summary.error;
+  }
+  if (summary.toolFailures.length > 0) {
+    return new Error(`Codex runtime tool call failed: ${summary.toolFailures.join('; ')}`);
+  }
+  return undefined;
+}
+
+function assertSuccessfulText(summary: CodexExecEventSummary): string {
+  const error = summaryError(summary);
+  if (error) {
+    throw error;
   }
   if (!summary.finalText.trim()) {
     throw new Error('Codex completed without an agent message');
@@ -215,9 +226,11 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           );
         }
       }
+      const error = summaryError(summary);
+      const stopReason = error ? 'error' : summary.stopReason;
       return {
-        stopReason: summary.stopReason,
-        ...(summary.stopReason === 'error' && summary.error ? { error: summary.error } : {}),
+        stopReason,
+        ...(stopReason === 'error' && error ? { error } : {}),
         metrics: {
           totalMs: Date.now() - startedAt,
           usage: summary.usage,
