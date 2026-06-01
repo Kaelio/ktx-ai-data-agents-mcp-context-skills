@@ -70,7 +70,7 @@ import { createEvictionListTool } from './tools/eviction-list.tool.js';
 import { createReadRawSpanTool } from './tools/read-raw-span.tool.js';
 import { createStageDiffTool } from './tools/stage-diff.tool.js';
 import { createStageListTool } from './tools/stage-list.tool.js';
-import { type ToolCallLogEntry, wrapToolsWithLogger } from './tools/tool-call-logger.js';
+import { flushToolCallLogs, type ToolCallLogEntry, wrapToolsWithLogger } from './tools/tool-call-logger.js';
 import {
   createMutableToolTranscriptSummary,
   recordToolTranscriptEntry,
@@ -258,6 +258,9 @@ export class IngestBundleRunner {
       return;
     }
     try {
+      // Tool transcripts are appended fire-and-forget; flush them so per-work-unit
+      // toolMs (and the derived model-vs-tool split) is complete before we read.
+      await flushToolCallLogs();
       const storage = this.deps.storage as typeof this.deps.storage & {
         resolveTracePath?: (jobId: string) => string;
       };

@@ -81,8 +81,13 @@ export function wrapToolsWithLogger<T extends KtxRuntimeToolSet>(
   return wrapped as T;
 }
 
+// Fire-and-forget appends are intentional (the agent hot path must never block
+// or fail on logging), but readers like the ingest profiler need to know when
+// the writes have settled. Track in-flight appends so a consumer can flush.
+const pendingWrites = new Set<Promise<void>>();
+
 function appendEntry(path: string, entry: ToolCallLogEntry): void {
-  void (async () => {
+  const write = (async () => {
     try {
       await mkdir(dirname(path), { recursive: true });
       await appendFile(path, `${safeStringify(entry)}\n`, 'utf-8');
@@ -90,6 +95,37 @@ function appendEntry(path: string, entry: ToolCallLogEntry): void {
       // best-effort
     }
   })();
+  pendingWrites.add(write);
+  void write.finally(() => pendingWrites.delete(write));
+}
+
+/**
+ * Await all in-flight tool-call log writes (best-effort, bounded by `timeoutMs`
+ * so it can never hang a caller). Lets readers such as the ingest profiler see
+ * complete transcripts despite the fire-and-forget append design.
+ */
+export async function flushToolCallLogs(timeoutMs = 5000): Promise<void> {
+  const pending = [...pendingWrites];
+  if (pending.length === 0) {
+    return;
+  }
+  const settled = Promise.allSettled(pending).then(() => undefined);
+  if (timeoutMs <= 0) {
+    await settled;
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+    timer.unref?.();
+  });
+  try {
+    await Promise.race([settled, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 function safeStringify(v: unknown): string {
