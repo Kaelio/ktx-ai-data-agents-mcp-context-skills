@@ -17,6 +17,24 @@ function runner(items: unknown[]) {
   };
 }
 
+function budgetRunner() {
+  let observedSignal: AbortSignal | undefined;
+  return {
+    observedSignal: () => observedSignal,
+    runStreamed: vi.fn(async (input: { signal?: AbortSignal }) => {
+      observedSignal = input.signal;
+      return events([
+        { type: 'turn.started' },
+        { type: 'item.started', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'first', status: 'in_progress' } },
+        { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'first', status: 'completed' } },
+        { type: 'item.started', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'second', status: 'in_progress' } },
+        { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'second', status: 'completed' } },
+        { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } },
+      ]);
+    }),
+  };
+}
+
 describe('CodexKtxLlmRuntime', () => {
   it('generates text with the role-selected model and metrics', async () => {
     const onMetrics = vi.fn();
@@ -205,6 +223,40 @@ describe('CodexKtxLlmRuntime', () => {
       stepCount: 1,
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
     });
+  });
+
+  it('returns budget and aborts the Codex stream when local MCP step budget is reached', async () => {
+    const fakeRunner = budgetRunner();
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+    });
+    const onStepFinish = vi.fn();
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      stepBudget: 1,
+      telemetryTags: {},
+      onStepFinish,
+      toolSet: {
+        first: {
+          name: 'first',
+          description: 'First tool',
+          inputSchema: z.object({}),
+          execute: vi.fn(),
+        },
+      },
+    });
+
+    expect(result.stopReason).toBe('budget');
+    expect(result.error).toBeUndefined();
+    expect(result.metrics).toMatchObject({ stepCount: 1 });
+    expect(onStepFinish).toHaveBeenCalledTimes(1);
+    expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 1 });
+    expect(fakeRunner.observedSignal()?.aborted).toBe(true);
   });
 
   it('probes Codex authentication through a minimal non-interactive turn', async () => {

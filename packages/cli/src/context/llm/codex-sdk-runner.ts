@@ -1,4 +1,4 @@
-import { Codex, type CodexOptions, type ThreadOptions } from '@openai/codex-sdk';
+import { Codex, type CodexOptions, type ThreadOptions, type TurnOptions } from '@openai/codex-sdk';
 
 export interface CodexSdkRunnerInput {
   projectDir: string;
@@ -7,6 +7,7 @@ export interface CodexSdkRunnerInput {
   configOverrides?: Record<string, unknown>;
   env?: Record<string, string>;
   outputSchema?: Record<string, unknown>;
+  signal?: AbortSignal;
 }
 
 export interface CodexSdkRunner {
@@ -14,7 +15,7 @@ export interface CodexSdkRunner {
 }
 
 type CodexThread = {
-  runStreamed(input: string, turnOptions?: { outputSchema?: Record<string, unknown> }): Promise<{ events: AsyncIterable<unknown> }>;
+  runStreamed(input: string, turnOptions?: TurnOptions): Promise<{ events: AsyncIterable<unknown> }>;
 };
 
 type CodexClient = {
@@ -82,9 +83,13 @@ export class CodexSdkCliRunner implements CodexSdkRunner {
       webSearchMode: 'disabled',
       approvalPolicy: 'never',
     });
+    const turnOptions: TurnOptions = {
+      ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
+      ...(input.signal ? { signal: input.signal } : {}),
+    };
     const streamed = await thread.runStreamed(
       input.prompt,
-      input.outputSchema ? { outputSchema: input.outputSchema } : undefined,
+      Object.keys(turnOptions).length > 0 ? turnOptions : undefined,
     );
     return streamed.events;
   }

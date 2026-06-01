@@ -43,6 +43,7 @@ describe('CodexSdkCliRunner', () => {
       required: ['answer'],
       additionalProperties: false,
     };
+    const controller = new AbortController();
 
     try {
       const events = await runner.runStreamed({
@@ -54,6 +55,7 @@ describe('CodexSdkCliRunner', () => {
         },
         env: { KTX_CODEX_RUNTIME_MCP_TOKEN: 'run-token' },
         outputSchema,
+        signal: controller.signal,
       });
 
       expect(sdkMock.Codex).toHaveBeenCalledWith({
@@ -77,7 +79,10 @@ describe('CodexSdkCliRunner', () => {
         webSearchMode: 'disabled',
         approvalPolicy: 'never',
       });
-      expect(sdkMock.runStreamed).toHaveBeenCalledWith('Return JSON.', { outputSchema });
+      expect(sdkMock.runStreamed).toHaveBeenCalledWith('Return JSON.', {
+        outputSchema,
+        signal: controller.signal,
+      });
       await expect(collectAsync(events)).resolves.toEqual([
         { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 2 } },
       ]);
