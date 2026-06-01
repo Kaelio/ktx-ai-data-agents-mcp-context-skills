@@ -381,7 +381,8 @@ rather than silently skipping it.
 - **MUST**: Disable monospace ligatures on every surface that uses the
   `var(--font-mono)` family (Geist Mono). Geist Mono fuses `--` into an
   em-dash glyph that visually eats the adjacent space, so prompts like
-  `npx skills add Kaelio/ktx --skill ktx` render as `Kaelio/ktx--skill ktx`.
+  `npx skills add Kaelio/ktx-ai-data-agents-context --skill ktx` render as
+  `Kaelio/ktx-ai-data-agents-context--skill ktx`.
 - **MUST**: When adding a new container that renders user-visible monospace
   text outside `<code>` / `<pre>` (e.g. a styled `<div className="font-mono">`
   for a copyable prompt), verify the global ligature-off rule in

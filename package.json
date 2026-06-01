@@ -76,10 +76,10 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kaelio/ktx.git"
+    "url": "git+https://github.com/Kaelio/ktx-ai-data-agents-context.git"
   },
   "bugs": {
-    "url": "https://github.com/Kaelio/ktx/issues"
+    "url": "https://github.com/Kaelio/ktx-ai-data-agents-context/issues"
   },
-  "homepage": "https://github.com/Kaelio/ktx#readme"
+  "homepage": "https://github.com/Kaelio/ktx-ai-data-agents-context#readme"
 }

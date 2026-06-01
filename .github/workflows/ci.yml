@@ -212,7 +212,7 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: Kaelio/ktx
+          slug: Kaelio/ktx-ai-data-agents-context
           files: ./packages/cli/coverage/lcov.info
           flags: typescript
           name: typescript
@@ -231,7 +231,7 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: Kaelio/ktx
+          slug: Kaelio/ktx-ai-data-agents-context
           files: ./coverage/python.xml
           flags: python
           name: python

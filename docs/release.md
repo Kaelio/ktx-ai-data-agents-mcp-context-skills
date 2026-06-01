@@ -26,7 +26,7 @@ The workflow rejects releases from any branch other than `main`.
 Before you publish, confirm these requirements:
 
 - npm Trusted Publishing is configured for `@kaelio/ktx`.
-- The trusted publisher points at the `Kaelio/ktx` repository and the
+- The trusted publisher points at the `Kaelio/ktx-ai-data-agents-context` repository and the
   `.github/workflows/release.yml` workflow.
 - The workflow keeps `id-token: write` permission so npm can verify the
   GitHub Actions run through OpenID Connect.

@@ -52,7 +52,7 @@ ktx provides semantic-layer files, warehouse scans, wiki pages, provenance, and 
 
 ## Agent Entry Points
 
-- Installable setup skill: run \`npx skills add Kaelio/ktx --skill ktx\` from
+- Installable setup skill: run \`npx skills add Kaelio/ktx-ai-data-agents-context --skill ktx\` from
   the project you want to configure.
 ${link("/docs/ai-resources/agent-quickstart", "Agent Quickstart", "Task-first route for coding assistants using ktx")}
 ${link("/docs/ai-resources/markdown-access", "Markdown Access", "Fetch ktx docs as llms.txt, llms-full.txt, or per-page Markdown")}

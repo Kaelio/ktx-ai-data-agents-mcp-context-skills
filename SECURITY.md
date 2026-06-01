@@ -5,7 +5,7 @@
 If you believe you've found a security vulnerability in KTX, please report it
 **privately** through GitHub Security Advisories:
 
-[Report a vulnerability](https://github.com/Kaelio/ktx/security/advisories/new)
+[Report a vulnerability](https://github.com/Kaelio/ktx-ai-data-agents-context/security/advisories/new)
 
 If you cannot use GitHub Security Advisories, email `support@kaelio.com`
 instead. Please do **not** open a public issue, post in the KTX Slack, or

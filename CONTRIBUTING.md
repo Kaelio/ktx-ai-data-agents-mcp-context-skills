@@ -8,8 +8,8 @@ layout, and verification commands, see the
 ## How to contribute
 
 1. Browse open issues labeled
-   [`good first issue`](https://github.com/Kaelio/ktx/labels/good%20first%20issue)
-   or [`help wanted`](https://github.com/Kaelio/ktx/labels/help%20wanted).
+   [`good first issue`](https://github.com/Kaelio/ktx-ai-data-agents-context/labels/good%20first%20issue)
+   or [`help wanted`](https://github.com/Kaelio/ktx-ai-data-agents-context/labels/help%20wanted).
 2. Comment on the issue to claim it. A maintainer will confirm scope and
    assign it to you.
 3. For changes not covered by an existing issue, open one first so we can
@@ -82,7 +82,7 @@ page for the full guide. The short version:
 - **Feature requests**: use the
   [Feature request](.github/ISSUE_TEMPLATE/feature_request.yml) template.
 - **Security**: report privately via
-  [GitHub Security Advisories](https://github.com/Kaelio/ktx/security/advisories/new),
+  [GitHub Security Advisories](https://github.com/Kaelio/ktx-ai-data-agents-context/security/advisories/new),
   not as a public issue.
 
 ## Code of conduct
