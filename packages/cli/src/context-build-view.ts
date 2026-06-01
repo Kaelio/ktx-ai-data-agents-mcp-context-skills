@@ -1,8 +1,6 @@
-import type { KtxProgressPort, KtxProgressUpdateOptions } from './context/scan/types.js';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestProgressUpdate } from './ingest.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
-import { publicDatabaseIngestMessage, publicQueryHistoryMessage } from './public-ingest-copy.js';
 import type {
   KtxPublicIngestArgs,
   KtxPublicIngestDeps,
@@ -10,7 +8,8 @@ import type {
   KtxPublicIngestProject,
   KtxPublicIngestTargetResult,
 } from './public-ingest.js';
-import { buildPublicIngestPlan, executePublicIngestTarget } from './public-ingest.js';
+import { buildPublicIngestPlan, executePublicIngestTarget, publicProgressMessage } from './public-ingest.js';
+import { createAggregateProgressPort } from './progress-port-adapter.js';
 import { formatDuration } from './demo-metrics.js';
 import { profileMark } from './startup-profile.js';
 
@@ -810,46 +809,12 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
   };
 }
 
-function publicProgressMessage(message: string, target: KtxPublicIngestPlanTarget): string {
-  let current = message;
-  if (target.operation === 'database-ingest') {
-    current = publicDatabaseIngestMessage(current);
-  }
-  if (target.steps.includes('query-history')) {
-    current = publicQueryHistoryMessage(current, target.connectionId);
-  }
-  return current;
-}
-
 function formatProgressDetail(
   update: Pick<KtxIngestProgressUpdate, 'percent' | 'message'>,
   target: KtxPublicIngestPlanTarget,
 ): string {
   const percent = Math.max(0, Math.min(100, Math.round(update.percent)));
   return `[${percent}%] ${publicProgressMessage(update.message, target)}`;
-}
-
-function createContextBuildProgressPort(
-  onProgress: (update: KtxIngestProgressUpdate) => void,
-  state: { progress: number } = { progress: 0 },
-  start = 0,
-  weight = 1,
-): KtxProgressPort {
-  return {
-    async update(value: number, message?: string, options?: KtxProgressUpdateOptions): Promise<void> {
-      const absoluteValue = start + Math.max(0, Math.min(1, value)) * weight;
-      state.progress = Math.max(state.progress, Math.min(1, absoluteValue));
-      if (!message) return;
-      onProgress({
-        percent: Math.max(0, Math.min(100, Math.round(state.progress * 100))),
-        message,
-        ...(options?.transient !== undefined ? { transient: options.transient } : {}),
-      });
-    },
-    startPhase(phaseWeight: number): KtxProgressPort {
-      return createContextBuildProgressPort(onProgress, state, state.progress, weight * phaseWeight);
-    },
-  };
 }
 
 export async function runContextBuild(
@@ -1022,7 +987,7 @@ export async function runContextBuild(
       };
 
       const progressDeps: KtxPublicIngestDeps = {
-        scanProgress: createContextBuildProgressPort(updateSchemaPhase),
+        scanProgress: createAggregateProgressPort(updateSchemaPhase),
         ingestProgress: updateIngestPhase,
         runtimeIo: io,
         onPhaseStart,

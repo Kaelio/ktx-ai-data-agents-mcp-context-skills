@@ -535,6 +535,7 @@ describe('verification snippets', () => {
     assert.doesNotMatch(source, /'--enrich'/);
     assert.match(source, /ktx ingest enrichment guard verified/);
     assert.match(source, /enrichment is not configured/);
+    assert.match(source, /requireStderr\('ktx ingest enrichment guard'/);
     assert.match(source, /enrichment:/);
     assert.match(source, /mode: deterministic/);
     assert.doesNotMatch(source, /run\('pnpm', \['exec', 'ktx', 'ingest', 'run'/);

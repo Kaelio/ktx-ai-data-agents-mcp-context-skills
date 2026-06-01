@@ -217,7 +217,7 @@ jobs:
           flags: typescript
           name: typescript
           disable_search: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Warn when Codecov token is missing for TypeScript
         if: env.CODECOV_TOKEN_CONFIGURED != 'true'
@@ -236,7 +236,7 @@ jobs:
           flags: python
           name: python
           disable_search: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Warn when Codecov token is missing for Python
         if: env.CODECOV_TOKEN_CONFIGURED != 'true'
