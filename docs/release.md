@@ -35,6 +35,15 @@ Before you publish, confirm these requirements:
 - The repository has a stable baseline tag when you need semantic-release to
   publish the first stable version as `0.1.0`.
 
+If you rename the GitHub repository, the semantic-release run adapts on its
+own: `scripts/semantic-release-config.cjs` derives `repositoryUrl` from the
+runner's `GITHUB_REPOSITORY`, so `@semantic-release/github` always matches the
+current clone URL. The one thing that does **not** auto-update is the npm
+Trusted Publishing config — re-point it at the new repository name (plus
+`release.yml`) on npm, or `npm publish --provenance` will fail OIDC
+verification. The `repository` field in `package.json` is npm-display metadata
+only and can stay whatever public name you prefer.
+
 semantic-release doesn't support choosing an arbitrary first `0.x` stable
 release. If KTX has no stable tag yet and you need the first stable release to
 be `0.1.0`, create and push the baseline tag once before running the live

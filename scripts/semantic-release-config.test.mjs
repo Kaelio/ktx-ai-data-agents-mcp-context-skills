@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { createReleaseConfig, releaseBranches, releaseKind, releaseTag } = require('./semantic-release-config.cjs');
+const { createReleaseConfig, releaseBranches, releaseKind, releaseTag, repositoryUrl } = require('./semantic-release-config.cjs');
 
 function prepareExecOptions(config) {
   return config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].prepareCmd)[1];
@@ -139,6 +139,38 @@ describe('semantic-release config', () => {
       (plugin) => Array.isArray(plugin) && plugin[0] === '@semantic-release/exec' && plugin[1].analyzeCommitsCmd,
     );
     assert.match(analyzeExec[1].analyzeCommitsCmd, /FORCE_RELEASE === 'true' \? 'patch' : ''/);
+  });
+
+  it('pins repositoryUrl to the runner repository so a GitHub rename never re-breaks the release', () => {
+    // @semantic-release/github exact-matches repositoryUrl against the live
+    // clone_url, so the release must track the *current* repo name, not the
+    // static package.json value.
+    assert.equal(
+      repositoryUrl({ GITHUB_REPOSITORY: 'Kaelio/ktx-ai-data-agents-context' }),
+      'https://github.com/Kaelio/ktx-ai-data-agents-context.git',
+    );
+    assert.equal(
+      repositoryUrl({ GITHUB_REPOSITORY: 'Kaelio/ktx' }),
+      'https://github.com/Kaelio/ktx.git',
+      'a later rename back to Kaelio/ktx must resolve without any code change',
+    );
+    assert.equal(
+      repositoryUrl({ GITHUB_REPOSITORY: 'Kaelio/ktx', GITHUB_SERVER_URL: 'https://ghe.example.com' }),
+      'https://ghe.example.com/Kaelio/ktx.git',
+    );
+
+    const config = createReleaseConfig({
+      KTX_RELEASE_KIND: 'stable',
+      GITHUB_REF_NAME: 'main',
+      GITHUB_REPOSITORY: 'Kaelio/ktx-ai-data-agents-context',
+    });
+    assert.equal(config.repositoryUrl, 'https://github.com/Kaelio/ktx-ai-data-agents-context.git');
+  });
+
+  it('omits repositoryUrl outside CI so semantic-release falls back to package.json', () => {
+    assert.equal(repositoryUrl({}), undefined);
+    const config = createReleaseConfig({ KTX_RELEASE_KIND: 'stable', GITHUB_REF_NAME: 'main' });
+    assert.equal('repositoryUrl' in config, false);
   });
 
   it('does not configure any commit type to create an automatic major release', () => {
