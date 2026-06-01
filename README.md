@@ -34,6 +34,12 @@ business knowledge it builds and maintains for you.
 > No extra usage billing from **ktx**.
 
 <p align="center">
+  <a href="https://youtu.be/5V4TuzYVlrA">
+    <img src="assets/launch-video-thumb.png" alt="Watch the ktx launch video (1:56)" width="820" />
+  </a>
+</p>
+
+<p align="center">
   <img src="docs-site/public/images/ingestion-flow.png" alt="Ingestion: ktx ingests databases, BI tools, modeling code, and docs through its context engine (source connectors, context builder, reconciliation, validation) into wiki Markdown and semantic-layer YAML" width="900" />
 </p>
 
