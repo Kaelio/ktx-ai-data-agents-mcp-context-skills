@@ -14,6 +14,7 @@
     "fumadocs-core": "16.8.10",
     "fumadocs-mdx": "15.0.7",
     "fumadocs-ui": "16.8.10",
+    "html-to-image": "1.11.11",
     "next": "^16",
     "react": "19.2.6",
     "react-dom": "19.2.6"

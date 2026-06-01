@@ -34,8 +34,13 @@ business knowledge it builds and maintains for you.
 > No extra usage billing from **ktx**.
 
 <p align="center">
-  <img src="docs-site/public/images/ingestion-flow-transparent.svg" alt="ktx ingestion flow from source systems through validation to wiki and semantic-layer outputs" width="900" />
+  <img src="docs-site/public/images/ingestion-flow.png" alt="Ingestion: ktx ingests databases, BI tools, modeling code, and docs through its context engine (source connectors, context builder, reconciliation, validation) into wiki Markdown and semantic-layer YAML" width="900" />
 </p>
+
+<p align="center">
+  <img src="docs-site/public/images/mcp-runtime-flow.png" alt="Serving: an agent queries ktx through MCP, which searches the wiki and semantic layer, returns approved metrics, and compiles them into read-only SQL run against the warehouse" width="900" />
+</p>
+
 
 ## Why ktx
 
