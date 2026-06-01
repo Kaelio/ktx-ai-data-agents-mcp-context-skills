@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { resolveLocalKtxLlmConfig } from './context/llm/local-config.js';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import { formatCodexIsolationWarning } from './context/llm/codex-isolation.js';
 import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
 import { resolveKtxConfigReference } from './context/core/config-reference.js';
 import { type KtxProjectConfig, type KtxProjectLlmConfig, serializeKtxProjectConfig } from './context/project/config.js';
@@ -1110,6 +1111,7 @@ export async function runKtxSetupAnthropicModelStep(
         io.stderr.write(`${health.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
       }
+      io.stderr.write(`${formatCodexIsolationWarning()}\n`);
       await persistLlmConfig(args.projectDir, { backend: 'codex' }, model.model);
       io.stdout.write(`│  LLM ready: yes (codex, ${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };

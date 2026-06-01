@@ -196,7 +196,15 @@ ktx setup \
 
 # Configure **ktx** to use local Codex authentication for LLM work
 ktx setup --llm-backend codex --llm-model gpt-5.3-codex --no-input
+```
 
+When you choose `--llm-backend codex`, setup prints a warning if the public
+Codex SDK and CLI surface cannot prove full Claude-Code-style isolation. The
+backend restricts **ktx** runtime MCP tools to each run, but Codex may still
+load user Codex config and built-in command execution or read-only file
+capabilities.
+
+```bash
 # Script a Postgres connection that reads its URL from the environment
 ktx setup \
   --project-dir ./analytics \

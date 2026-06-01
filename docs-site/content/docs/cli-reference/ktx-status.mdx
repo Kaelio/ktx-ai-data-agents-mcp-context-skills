@@ -61,6 +61,12 @@ For `llm.provider.backend: codex`, `ktx status` runs a minimal non-interactive
 Codex request. If the probe fails, authenticate Codex locally with the Codex CLI
 and verify the Codex CLI installation.
 
+When `llm.provider.backend: codex` is configured, `ktx status` also prints a
+warning when the installed public Codex SDK and CLI surface cannot prove full
+Claude-Code-style isolation. The warning does not block authenticated Codex
+usage, but it marks the project status as partial so you can make an explicit
+runtime-isolation decision.
+
 A `Local data` section summarises what the project has accumulated locally:
 ingest run counts, last completed timestamp per connection, knowledge page
 counts by scope, semantic-layer source and dictionary value counts, and the

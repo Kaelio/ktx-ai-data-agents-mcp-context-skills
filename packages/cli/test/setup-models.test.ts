@@ -240,6 +240,8 @@ describe('setup Anthropic model step', () => {
       models: { default: 'gpt-5.3-codex' },
     });
     expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.3-codex' }));
+    expect(io.stderr()).toContain('Codex backend isolation is limited');
+    expect(io.stderr()).toContain('may still load user Codex config');
   });
 
   it('prompts for the Claude Code model during interactive setup', async () => {

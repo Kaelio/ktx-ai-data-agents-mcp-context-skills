@@ -46,8 +46,13 @@ ktx setup --llm-backend claude-code --no-input
 ktx setup --llm-backend codex --llm-model gpt-5.3-codex --no-input
 ```
 
-With `claude-code` or `codex`, **ktx** agent loops can invoke only the **ktx**
-MCP tools for the current run.
+With `claude-code`, **ktx** agent loops can invoke only the **ktx** MCP tools
+for the current run. With `codex`, **ktx** restricts the temporary runtime MCP
+server to the current run's tool set, disables Codex web search, requests a
+read-only sandbox, and sets `approval_policy=never`. The public Codex SDK and
+CLI surface may still load user Codex config and built-in command execution or
+read-only file capabilities, so use `claude-code` for stricter runtime tool
+isolation.
 
 ## Query history
 

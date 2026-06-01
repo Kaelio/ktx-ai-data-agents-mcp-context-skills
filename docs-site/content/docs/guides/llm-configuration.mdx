@@ -73,9 +73,16 @@ codex` installs instructions and MCP access for an end-user Codex session.
 enrichment, memory, and other LLM-backed work through Codex.
 
 During runtime loops, **ktx** starts a temporary loopback MCP server for the
-current run, exposes only the tools passed to that run, auto-approves those
-allowlisted runtime tools, asks Codex to use a read-only sandbox with other
-approvals disabled, and disables Codex web search.
+current run, exposes only the tools passed to that run, asks Codex to use a
+read-only sandbox, sets `approval_policy=never`, auto-approves only those
+run-scoped MCP tools, and disables Codex web search.
+
+Codex backend isolation is currently limited by the public Codex SDK and CLI
+surface. Codex may still load user Codex config and built-in command execution
+or read-only file capabilities. Use `llm.provider.backend: claude-code` when
+you need stricter Claude-Code-style runtime tool isolation, or remove host
+Codex MCP and tool config before running untrusted prompts through the `codex`
+backend.
 
 ## Prompt caching
 
