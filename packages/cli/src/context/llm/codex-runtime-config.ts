@@ -27,6 +27,7 @@ export function buildCodexRuntimeConfig(input: BuildCodexRuntimeConfigInput): Co
         url: input.mcp.url,
         bearer_token_env_var: input.mcp.bearerTokenEnvVar,
         enabled_tools: input.mcp.toolNames,
+        default_tools_approval_mode: 'approve',
         required: true,
       },
     };

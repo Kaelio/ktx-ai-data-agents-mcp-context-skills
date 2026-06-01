@@ -30,6 +30,7 @@ describe('buildCodexRuntimeConfig', () => {
             url: 'http://127.0.0.1:4567/mcp',
             bearer_token_env_var: 'KTX_CODEX_RUNTIME_MCP_TOKEN',
             enabled_tools: ['sl_read_source', 'wiki_search'],
+            default_tools_approval_mode: 'approve',
             required: true,
           },
         },
