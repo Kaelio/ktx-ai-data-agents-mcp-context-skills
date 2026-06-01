@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { resolveLocalKtxLlmConfig } from './context/llm/local-config.js';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
+import { resolveLocalKtxLlmConfig } from './context/llm/local-config.js';
 import { resolveKtxConfigReference } from './context/core/config-reference.js';
 import { type KtxProjectConfig, type KtxProjectLlmConfig, serializeKtxProjectConfig } from './context/project/config.js';
 import { loadKtxProject } from './context/project/project.js';
@@ -56,7 +57,7 @@ export interface AnthropicModelChoice {
   recommended: boolean;
 }
 
-export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code';
+export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code' | 'codex';
 
 /** @internal */
 export interface KtxSetupModelPromptAdapter {
@@ -81,6 +82,10 @@ export interface KtxSetupModelDeps {
     projectDir: string;
     model: string;
     env?: NodeJS.ProcessEnv;
+  }) => Promise<{ ok: true } | { ok: false; message: string }>;
+  codexAuthProbe?: (input: {
+    projectDir: string;
+    model: string;
   }) => Promise<{ ok: true } | { ok: false; message: string }>;
   readGcloudProject?: () => Promise<string | undefined>;
   listGcloudProjects?: () => Promise<GcloudProjectChoice[]>;
@@ -108,6 +113,11 @@ const CLAUDE_CODE_MODELS: AnthropicModelChoice[] = [
   { id: 'sonnet', label: 'Claude Sonnet', recommended: true },
   { id: 'opus', label: 'Claude Opus', recommended: false },
   { id: 'haiku', label: 'Claude Haiku', recommended: false },
+];
+
+const CODEX_MODELS: AnthropicModelChoice[] = [
+  { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', recommended: true },
+  { id: 'gpt-5.4', label: 'GPT-5.4', recommended: false },
 ];
 
 const HIDDEN_ANTHROPIC_MODEL_PATTERNS = [
@@ -272,7 +282,12 @@ export function isKtxSetupLlmConfigReady(config: KtxProjectLlmConfig): boolean {
     return typeof resolved.vertex?.location === 'string' && resolved.vertex.location.trim().length > 0;
   }
 
-  return resolved.backend === 'anthropic' || resolved.backend === 'gateway' || resolved.backend === 'claude-code';
+  return (
+    resolved.backend === 'anthropic' ||
+    resolved.backend === 'gateway' ||
+    resolved.backend === 'claude-code' ||
+    resolved.backend === 'codex'
+  );
 }
 
 function hasUsableConfiguredLlm(config: KtxProjectConfig): boolean {
@@ -284,12 +299,21 @@ function buildProjectLlmConfig(
   provider:
     | { backend: 'anthropic'; credentialRef: string }
     | { backend: 'vertex'; vertex: { project?: string; location: string } }
-    | { backend: 'claude-code' },
+    | { backend: 'claude-code' }
+    | { backend: 'codex' },
   model: string,
 ): KtxProjectLlmConfig {
   if (provider.backend === 'claude-code') {
     return {
       provider: { backend: 'claude-code' },
+      models: { ...existing.models, default: model },
+      promptCaching: existing.promptCaching,
+    };
+  }
+
+  if (provider.backend === 'codex') {
+    return {
+      provider: { backend: 'codex' },
       models: { ...existing.models, default: model },
       promptCaching: existing.promptCaching,
     };
@@ -515,6 +539,7 @@ async function chooseBackend(
     message: 'Which LLM provider should KTX use?',
     options: [
       { value: 'claude-code', label: 'Claude subscription (Pro/Max)' },
+      { value: 'codex', label: 'Codex subscription' },
       { value: 'anthropic', label: 'Anthropic API key' },
       { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
       { value: 'back', label: 'Back' },
@@ -525,7 +550,7 @@ async function chooseBackend(
   }
   return {
     status: 'ready',
-    backend: choice === 'vertex' || choice === 'claude-code' ? choice : 'anthropic',
+    backend: choice === 'vertex' || choice === 'claude-code' || choice === 'codex' ? choice : 'anthropic',
     prompted: true,
   };
 }
@@ -884,12 +909,51 @@ async function chooseClaudeCodeModel(args: KtxSetupModelArgs, deps: KtxSetupMode
   return { status: 'ready', model: choice };
 }
 
+async function chooseCodexModel(args: KtxSetupModelArgs, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
+  const providedModel = requestedModel(args);
+  if (providedModel) {
+    return { status: 'ready', model: providedModel };
+  }
+  if (args.inputMode === 'disabled') {
+    return { status: 'ready', model: 'gpt-5.3-codex' };
+  }
+
+  const prompts = deps.prompts ?? createPromptAdapter();
+  const choice = await prompts.select({
+    message: `Which Codex model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
+    options: [
+      ...CODEX_MODELS.map((model) => ({
+        value: model.id,
+        label: model.label,
+        ...(model.recommended ? { hint: 'recommended' } : {}),
+      })),
+      { value: 'manual', label: 'Enter a Codex model ID manually' },
+      { value: 'back', label: 'Back' },
+    ],
+  });
+  if (choice === 'back') {
+    return { status: 'back' };
+  }
+  if (choice === 'manual') {
+    const manual = await prompts.text({
+      message: withTextInputNavigation('Codex model ID'),
+      placeholder: CODEX_MODELS.find((model) => model.recommended)?.id ?? CODEX_MODELS[0]?.id,
+    });
+    if (manual === undefined) {
+      return { status: 'back' };
+    }
+    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
+  }
+  return { status: 'ready', model: choice };
+}
+
 async function persistLlmConfig(
   projectDir: string,
   provider:
     | { backend: 'anthropic'; credentialRef: string }
     | { backend: 'vertex'; vertex: { project?: string; location: string } }
-    | { backend: 'claude-code' },
+    | { backend: 'claude-code' }
+    | { backend: 'codex' },
   model: string,
 ): Promise<void> {
   const project = await loadKtxProject({ projectDir });
@@ -1028,6 +1092,29 @@ export async function runKtxSetupAnthropicModelStep(
       }
       await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, model.model);
       io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
+      return { status: 'ready', projectDir: args.projectDir };
+    }
+
+    if (backendChoice.backend === 'codex') {
+      const model = await chooseCodexModel(backendArgs, deps);
+      if (model.status === 'back' && backendChoice.prompted) {
+        attemptArgs = buildInteractiveRetryArgs(args);
+        continue;
+      }
+      if (model.status === 'invalid-credential') {
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      if (model.status !== 'ready') {
+        return { status: model.status, projectDir: args.projectDir };
+      }
+      const probe = deps.codexAuthProbe ?? runCodexAuthProbe;
+      const health = await probe({ projectDir: args.projectDir, model: model.model });
+      if (!health.ok) {
+        io.stderr.write(`${health.message}\n`);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      await persistLlmConfig(args.projectDir, { backend: 'codex' }, model.model);
+      io.stdout.write(`│  LLM ready: yes (codex, ${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 

@@ -29,7 +29,7 @@ function embeddingBackend(value: string): 'openai' | 'sentence-transformers' {
 }
 
 function llmBackend(value: string): KtxSetupLlmBackend {
-  if (value === 'anthropic' || value === 'vertex' || value === 'claude-code') {
+  if (value === 'anthropic' || value === 'vertex' || value === 'claude-code' || value === 'codex') {
     return value;
   }
   throw new InvalidArgumentError(`invalid choice '${value}'`);
