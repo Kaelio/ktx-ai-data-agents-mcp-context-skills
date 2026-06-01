@@ -35,7 +35,10 @@ function usageFrom(value: unknown): LlmTokenUsage {
   }
   const inputTokens = numberValue(usage.input_tokens ?? usage.inputTokens);
   const outputTokens = numberValue(usage.output_tokens ?? usage.outputTokens);
-  const totalTokens = numberValue(usage.total_tokens ?? usage.totalTokens);
+  const explicitTotalTokens = numberValue(usage.total_tokens ?? usage.totalTokens);
+  const totalTokens =
+    explicitTotalTokens ??
+    (inputTokens !== undefined && outputTokens !== undefined ? inputTokens + outputTokens : undefined);
   return {
     ...(inputTokens !== undefined ? { inputTokens } : {}),
     ...(outputTokens !== undefined ? { outputTokens } : {}),
@@ -126,7 +129,7 @@ export function summarizeCodexExecEvents(
     }
 
     if (eventType === 'item.completed' && itemType === 'mcp_tool_call' && item.error !== undefined) {
-      const name = text(item.name) ?? text(item.tool_name) ?? 'unknown';
+      const name = text(item.name) ?? text(item.tool) ?? text(item.tool_name) ?? 'unknown';
       toolFailures.push(`${name}: ${errorMessageFrom(item.error)}`);
     }
   }

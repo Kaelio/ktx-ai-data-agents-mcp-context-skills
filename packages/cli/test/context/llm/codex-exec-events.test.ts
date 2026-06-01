@@ -5,13 +5,21 @@ import {
 } from '../../../src/context/llm/codex-exec-events.js';
 
 describe('Codex exec event parsing', () => {
-  it('captures final agent text, usage, steps, and natural completion', () => {
+  it('captures final agent text, SDK usage, steps, and natural completion', () => {
     const summary = summarizeCodexExecEvents(
       [
-        { type: 'thread.started', thread: { id: 'thr_1' } },
+        { type: 'thread.started', thread_id: 'thr_1' },
         { type: 'turn.started' },
         { type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: 'hello from codex' } },
-        { type: 'turn.completed', usage: { input_tokens: 12, output_tokens: 5, total_tokens: 17 } },
+        {
+          type: 'turn.completed',
+          usage: {
+            input_tokens: 12,
+            cached_input_tokens: 4,
+            output_tokens: 5,
+            reasoning_output_tokens: 2,
+          },
+        },
       ],
       { startedAt: 100, now: () => 125 },
     );
@@ -37,7 +45,7 @@ describe('Codex exec event parsing', () => {
     expect(summary.error?.message).toContain('Codex could not connect to required MCP server');
   });
 
-  it('maps max-turns terminal reasons into budget stop reason', () => {
+  it('maps max-turns terminal reasons into budget stop reason when Codex emits one', () => {
     const summary = summarizeCodexExecEvents([
       { type: 'turn.started' },
       { type: 'turn.completed', reason: 'max_turns', usage: { input_tokens: 1, output_tokens: 1 } },
@@ -46,11 +54,17 @@ describe('Codex exec event parsing', () => {
     expect(summary.stopReason).toBe('budget');
   });
 
-  it('counts MCP tool calls and failed MCP tool calls', () => {
+  it('counts SDK-shaped MCP tool calls and failed MCP tool calls', () => {
     const summary = summarizeCodexExecEvents([
       { type: 'turn.started' },
-      { type: 'item.started', item: { id: 'call_1', type: 'mcp_tool_call', name: 'search' } },
-      { type: 'item.completed', item: { id: 'call_1', type: 'mcp_tool_call', name: 'search', error: 'denied' } },
+      {
+        type: 'item.started',
+        item: { id: 'call_1', type: 'mcp_tool_call', server: 'ktx', tool: 'search', arguments: { query: 'revenue' }, status: 'in_progress' },
+      },
+      {
+        type: 'item.completed',
+        item: { id: 'call_1', type: 'mcp_tool_call', server: 'ktx', tool: 'search', arguments: { query: 'revenue' }, status: 'failed', error: { message: 'denied' } },
+      },
       { type: 'turn.completed' },
     ]);
 
