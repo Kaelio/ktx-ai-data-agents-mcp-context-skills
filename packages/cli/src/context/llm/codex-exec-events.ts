@@ -60,6 +60,7 @@ function errorMessageFrom(value: unknown): string {
   return message ?? text(value) ?? 'Codex turn failed';
 }
 
+/** @internal */
 export function parseCodexExecEventLine(line: string): unknown {
   try {
     return JSON.parse(line) as unknown;

@@ -3,7 +3,7 @@ import type { LanguageModel, TelemetrySettings, ToolCallRepairFunction, ToolSet 
 export const KTX_MODEL_ROLES = ['default', 'triage', 'candidateExtraction', 'curator', 'reconcile', 'repair'] as const;
 
 export type KtxModelRole = (typeof KTX_MODEL_ROLES)[number];
-type KtxLlmBackend = 'anthropic' | 'vertex' | 'gateway' | 'claude-code';
+type KtxLlmBackend = 'anthropic' | 'vertex' | 'gateway' | 'claude-code' | 'codex';
 export type KtxPromptCacheTtl = '5m' | '1h';
 
 type KtxJsonValue =

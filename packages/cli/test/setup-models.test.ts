@@ -66,6 +66,7 @@ function makePromptAdapter(options: {
         nextProviderChoice === 'anthropic' ||
         nextProviderChoice === 'vertex' ||
         nextProviderChoice === 'claude-code' ||
+        nextProviderChoice === 'codex' ||
         nextProviderChoice === 'back'
       ) {
         return selectValues.shift() ?? nextProviderChoice;
@@ -183,6 +184,7 @@ describe('setup Anthropic model step', () => {
         message: expect.stringContaining('Which LLM provider should KTX use?'),
         options: [
           { value: 'claude-code', label: 'Claude subscription (Pro/Max)' },
+          { value: 'codex', label: 'Codex subscription' },
           { value: 'anthropic', label: 'Anthropic API key' },
           { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
           { value: 'back', label: 'Back' },
@@ -213,6 +215,31 @@ describe('setup Anthropic model step', () => {
       models: { default: 'sonnet' },
     });
     expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
+  });
+
+  it('configures Codex backend and validates local auth', async () => {
+    const io = makeIo();
+    const codexAuthProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'codex',
+        llmModel: 'gpt-5.3-codex',
+        skipLlm: false,
+      },
+      io.io,
+      { codexAuthProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm).toMatchObject({
+      provider: { backend: 'codex' },
+      models: { default: 'gpt-5.3-codex' },
+    });
+    expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.3-codex' }));
   });
 
   it('prompts for the Claude Code model during interactive setup', async () => {

@@ -1,6 +1,7 @@
 import { stat as statAsync, readdir as readdirAsync } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
 import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
@@ -92,6 +93,11 @@ type ClaudeCodeAuthProbe = (input: {
   projectDir: string;
   model: string;
   env?: NodeJS.ProcessEnv;
+}) => Promise<{ ok: true } | { ok: false; message: string }>;
+
+type CodexAuthProbe = (input: {
+  projectDir: string;
+  model: string;
 }) => Promise<{ ok: true } | { ok: false; message: string }>;
 
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
@@ -194,6 +200,7 @@ async function buildLlmStatus(
     projectDir: string;
     env: NodeJS.ProcessEnv;
     claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
+    codexAuthProbe?: CodexAuthProbe;
     fast?: boolean;
     useSpinner?: boolean;
   },
@@ -278,6 +285,36 @@ async function buildLlmStatus(
       status: 'fail',
       detail: auth.message,
       fix: 'Authenticate Claude Code locally with the Claude Code CLI, then rerun `ktx status`.',
+    };
+  }
+  if (backend === 'codex') {
+    const modelName = model ?? 'gpt-5.3-codex';
+    if (options.fast === true) {
+      return {
+        backend,
+        model: modelName,
+        status: 'skipped',
+        detail: 'auth probe skipped (--fast)',
+      };
+    }
+    const probe = options.codexAuthProbe ?? runCodexAuthProbe;
+    const auth = await withSpinner(options.useSpinner === true, 'Probing Codex authentication', () =>
+      probe({ projectDir: options.projectDir, model: modelName }),
+    );
+    if (auth.ok) {
+      return {
+        backend,
+        model: modelName,
+        status: 'ok',
+        detail: 'local Codex session authenticated',
+      };
+    }
+    return {
+      backend,
+      model: modelName,
+      status: 'fail',
+      detail: auth.message,
+      fix: 'Authenticate Codex locally with the Codex CLI, verify the Codex CLI is installed, then rerun `ktx status`.',
     };
   }
   return { backend, model, status: 'warn', detail: 'unknown LLM backend' };
@@ -634,6 +671,7 @@ export interface BuildProjectStatusOptions {
   env?: NodeJS.ProcessEnv;
   queryHistoryReadinessProbe?: HistoricSqlReadinessProbe;
   claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
+  codexAuthProbe?: CodexAuthProbe;
   configIssues?: KtxConfigIssue[];
   fast?: boolean;
   useSpinner?: boolean;
@@ -882,6 +920,7 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
     projectDir: project.projectDir,
     env,
     claudeCodeAuthProbe: options.claudeCodeAuthProbe,
+    codexAuthProbe: options.codexAuthProbe,
     fast: options.fast,
     useSpinner: options.useSpinner,
   });

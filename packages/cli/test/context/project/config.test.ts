@@ -231,6 +231,31 @@ llm:
     });
   });
 
+  it('parses Codex as a first-class LLM backend', () => {
+    const config = parseKtxProjectConfig(`
+llm:
+  provider:
+    backend: codex
+  models:
+    default: gpt-5.3-codex
+    triage: gpt-5.3-codex
+    candidateExtraction: gpt-5.3-codex
+    curator: gpt-5.3-codex
+    reconcile: gpt-5.3-codex
+    repair: gpt-5.3-codex
+`);
+
+    expect(config.llm.provider.backend).toBe('codex');
+    expect(config.llm.models).toEqual({
+      default: 'gpt-5.3-codex',
+      triage: 'gpt-5.3-codex',
+      candidateExtraction: 'gpt-5.3-codex',
+      curator: 'gpt-5.3-codex',
+      reconcile: 'gpt-5.3-codex',
+      repair: 'gpt-5.3-codex',
+    });
+  });
+
   it('parses gateway LLM, OpenAI scan embeddings, and sentence-transformers ingest embeddings', () => {
     const config = parseKtxProjectConfig(`
 llm:
@@ -530,7 +555,7 @@ describe('generateKtxProjectConfigJsonSchema', () => {
     const llm = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).llm;
     const provider = llm?.properties?.provider as { properties?: Record<string, unknown> };
     const backend = provider?.properties?.backend as { enum?: readonly string[] };
-    expect(backend?.enum).toEqual(['none', 'anthropic', 'vertex', 'gateway', 'claude-code']);
+    expect(backend?.enum).toEqual(['none', 'anthropic', 'vertex', 'gateway', 'claude-code', 'codex']);
 
     const storage = (schema.properties as Record<string, { properties?: Record<string, unknown> }>).storage;
     const state = storage?.properties?.state as { enum?: readonly string[] };

@@ -44,6 +44,17 @@ function withClaudeCodeLlm(config: KtxProjectConfig): KtxProjectConfig {
   };
 }
 
+function withCodexLlm(config: KtxProjectConfig): KtxProjectConfig {
+  return {
+    ...config,
+    llm: {
+      ...config.llm,
+      provider: { backend: 'codex' },
+      models: { ...config.llm.models, default: 'gpt-5.3-codex' },
+    },
+  };
+}
+
 function baseProjectConfig(): KtxProjectConfig {
   return withClaudeCodeLlm(buildDefaultKtxProjectConfig());
 }
@@ -388,6 +399,38 @@ describe('buildProjectStatus --fast', () => {
     const rendered = renderProjectStatus(status, { verbose: false, useColor: false });
     expect(rendered).toContain('auth probe skipped (--fast)');
     expect(rendered).toContain('pg_stat_statements probe skipped (--fast)');
+  });
+});
+
+describe('buildProjectStatus codex', () => {
+  it('reports authenticated local Codex session', async () => {
+    const project = projectWithConfig(withCodexLlm(buildDefaultKtxProjectConfig()));
+    const status = await buildProjectStatus(project, {
+      codexAuthProbe: async () => ({ ok: true as const }),
+    });
+
+    expect(status.llm).toMatchObject({
+      backend: 'codex',
+      model: 'gpt-5.3-codex',
+      status: 'ok',
+      detail: 'local Codex session authenticated',
+    });
+  });
+
+  it('skips Codex auth probe with --fast', async () => {
+    let probeCalls = 0;
+    const project = projectWithConfig(withCodexLlm(buildDefaultKtxProjectConfig()));
+    const status = await buildProjectStatus(project, {
+      fast: true,
+      codexAuthProbe: async () => {
+        probeCalls += 1;
+        return { ok: true };
+      },
+    });
+
+    expect(probeCalls).toBe(0);
+    expect(status.llm.status).toBe('skipped');
+    expect(status.llm.detail).toMatch(/--fast/);
   });
 });
 

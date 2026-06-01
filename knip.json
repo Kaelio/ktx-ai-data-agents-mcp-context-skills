@@ -37,6 +37,9 @@
     "@semantic-release/release-notes-generator",
     "conventional-changelog-conventionalcommits"
   ],
+  "ignore": [
+    ".context/**"
+  ],
   "ignoreBinaries": [
     "uv",
     "lsof"

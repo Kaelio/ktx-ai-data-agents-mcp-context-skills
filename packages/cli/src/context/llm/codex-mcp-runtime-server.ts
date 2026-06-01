@@ -6,6 +6,7 @@ import { runKtxMcpHttpServer, type KtxMcpHttpServerHandle } from '../../mcp-http
 import type { KtxRuntimeToolSet } from './runtime-port.js';
 import { normalizeKtxRuntimeToolOutput } from './runtime-tools.js';
 
+/** @internal */
 export interface CreateCodexRuntimeMcpServerInput {
   server?: KtxMcpServerLike;
   toolSet: KtxRuntimeToolSet;
@@ -26,6 +27,7 @@ export interface StartCodexRuntimeMcpServerInput {
   runServer?: RunServer;
 }
 
+/** @internal */
 export function createCodexRuntimeMcpServer(input: CreateCodexRuntimeMcpServerInput): KtxMcpServerLike {
   const server =
     input.server ??
