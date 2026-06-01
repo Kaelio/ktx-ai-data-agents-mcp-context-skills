@@ -947,11 +947,13 @@ export async function executePublicIngestTarget(
             ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
           },
       };
-      const capturedIngestIo = deps.ingestProgress
-        ? isCapturedPublicIngestIo(io)
-          ? io
-          : null
-        : createCapturedPublicIngestIo();
+      // Query history runs after the schema scan has already written its report
+      // into the shared target io, so it needs a phase-local capture. Reusing
+      // `io` here would let leftover scan text (e.g. "Mode: enriched") surface as
+      // the query-history failure detail. Only skip capture when progress is
+      // active and the caller manages its own buffer (io is not a capture).
+      const capturedIngestIo =
+        deps.ingestProgress && !isCapturedPublicIngestIo(io) ? null : createCapturedPublicIngestIo();
       const ingestIo = capturedIngestIo ?? io;
       const ingestDeps = {
         ...(deps.ingestProgress ? { progress: deps.ingestProgress } : {}),

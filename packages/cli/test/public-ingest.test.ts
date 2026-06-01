@@ -1120,6 +1120,45 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('historic-sql');
   });
 
+  it('reports the query-history failure without leaking earlier scan report output', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres' },
+    });
+    const runScan = vi.fn(async (_args, scanIo) => {
+      scanIo.stdout.write('Run: scan-run-1\n');
+      scanIo.stdout.write('Mode: enriched\n');
+      scanIo.stdout.write('Dry run: no\n');
+      scanIo.stdout.write('KTX scan completed\n');
+      return 0;
+    });
+    const runIngest = vi.fn(async (_args, ingestIo) => {
+      ingestIo.stderr.write('Stopped query history before persisting any results\n');
+      return 1;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Skipped query history:');
+    expect(io.stdout()).toContain('Stopped query history before persisting any results');
+    expect(io.stdout()).not.toContain('Dry run: no');
+    expect(io.stdout()).not.toContain('Mode: enriched');
+  });
+
   it('prints the runtime artifact build hint for missing query-history runtime assets', async () => {
     const io = makeIo();
     const project = deepReadyProject({
