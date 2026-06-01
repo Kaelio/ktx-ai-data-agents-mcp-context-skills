@@ -18,6 +18,14 @@ vi.mock('@openai/codex-sdk', () => ({ Codex: sdkMock.Codex }));
 
 import { CodexSdkCliRunner } from '../../../src/context/llm/codex-sdk-runner.js';
 
+async function collectAsyncIterable(iterable: AsyncIterable<unknown>): Promise<unknown[]> {
+  const collected: unknown[] = [];
+  for await (const item of iterable) {
+    collected.push(item);
+  }
+  return collected;
+}
+
 describe('CodexSdkCliRunner', () => {
   it('constructs Codex with per-run config and streams thread events', async () => {
     const runner = new CodexSdkCliRunner();
@@ -57,7 +65,7 @@ describe('CodexSdkCliRunner', () => {
         skipGitRepoCheck: true,
       });
       expect(sdkMock.runStreamed).toHaveBeenCalledWith('Return JSON.', { outputSchema });
-      await expect(Array.fromAsync(events)).resolves.toEqual([
+      await expect(collectAsyncIterable(events)).resolves.toEqual([
         { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } },
       ]);
     } finally {
