@@ -12,18 +12,14 @@ export interface BuildCodexRuntimeConfigInput {
 
 export interface CodexRuntimeConfig {
   configOverrides: Record<string, unknown>;
-  env: NodeJS.ProcessEnv;
+  env: Record<string, string>;
 }
 
 export function buildCodexRuntimeConfig(input: BuildCodexRuntimeConfigInput): CodexRuntimeConfig {
   const configOverrides: Record<string, unknown> = {
-    model: input.model,
-    approval_policy: 'never',
-    sandbox_mode: 'read-only',
-    web_search: 'disabled',
     history: { persistence: 'none' },
   };
-  const env: NodeJS.ProcessEnv = {};
+  const env: Record<string, string> = {};
 
   if (input.mcp) {
     configOverrides.mcp_servers = {

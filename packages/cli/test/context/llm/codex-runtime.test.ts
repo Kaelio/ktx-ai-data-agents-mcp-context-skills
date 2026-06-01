@@ -119,7 +119,7 @@ describe('CodexKtxLlmRuntime', () => {
       telemetryTags: {},
       onStepFinish,
       toolSet: {
-        wiki_search: {
+        aliased_wiki_tool: {
           name: 'wiki_search',
           description: 'Search wiki',
           inputSchema: z.object({ query: z.string() }),
