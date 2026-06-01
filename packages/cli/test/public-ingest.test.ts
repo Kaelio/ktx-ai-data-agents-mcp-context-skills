@@ -8,6 +8,7 @@ import {
   buildPublicIngestPlan,
   type KtxPublicIngestDeps,
   type KtxPublicIngestProject,
+  publicProgressMessage,
   runKtxPublicIngest,
 } from '../src/public-ingest.js';
 import type { ManagedPythonCommandRuntime } from '../src/managed-python-command.js';
@@ -343,6 +344,29 @@ describe('buildPublicIngestPlan', () => {
       connectionId: 'warehouse',
       detectRelationships: false,
     });
+  });
+});
+
+describe('publicProgressMessage', () => {
+  it('rewrites internal scan and historic-sql phrasing for public ingest progress', () => {
+    const databaseProject = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true, dialect: 'postgres' } } },
+    });
+    const databaseTarget = buildPublicIngestPlan(databaseProject, {
+      projectDir: '/tmp/project',
+      all: false,
+      targetConnectionId: 'warehouse',
+      queryHistory: 'default',
+    }).targets[0];
+
+    expect(databaseTarget).toBeDefined();
+    expect(publicProgressMessage('Inspecting database schema', databaseTarget)).toBe('Reading database schema');
+    expect(publicProgressMessage('Enriching schema metadata', databaseTarget)).toBe(
+      'Building enriched schema context',
+    );
+    expect(publicProgressMessage('Fetching source files for warehouse/historic-sql', databaseTarget)).toBe(
+      'Fetching query history for warehouse',
+    );
   });
 });
 

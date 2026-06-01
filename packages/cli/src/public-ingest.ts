@@ -11,7 +11,11 @@ import {
   type ManagedPythonCommandRuntime,
 } from './managed-python-command.js';
 import type { KtxRuntimeFeature } from './managed-python-runtime.js';
-import { publicIngestOutputLine } from './public-ingest-copy.js';
+import {
+  publicDatabaseIngestMessage,
+  publicIngestOutputLine,
+  publicQueryHistoryMessage,
+} from './public-ingest-copy.js';
 import { resolvePublicIngestRuntimeRequirements } from './runtime-requirements.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
@@ -128,6 +132,17 @@ const sourceAdapterByDriver = new Map<string, string>([
   ['dbt', 'dbt'],
   ['lookml', 'lookml'],
 ]);
+
+export function publicProgressMessage(message: string, target: KtxPublicIngestPlanTarget): string {
+  let current = message;
+  if (target.operation === 'database-ingest') {
+    current = publicDatabaseIngestMessage(current);
+  }
+  if (target.steps.includes('query-history')) {
+    current = publicQueryHistoryMessage(current, target.connectionId);
+  }
+  return current;
+}
 
 const queryHistoryDialectByDriver = new Map<string, HistoricSqlDialect>([
   ['postgres', 'postgres'],
