@@ -1,11 +1,11 @@
-import { Codex } from '@openai/codex-sdk';
+import { Codex, type CodexOptions, type ThreadOptions } from '@openai/codex-sdk';
 
 export interface CodexSdkRunnerInput {
   projectDir: string;
   model: string;
   prompt: string;
   configOverrides?: Record<string, unknown>;
-  env?: NodeJS.ProcessEnv;
+  env?: Record<string, string>;
   outputSchema?: Record<string, unknown>;
 }
 
@@ -18,57 +18,74 @@ type CodexThread = {
 };
 
 type CodexClient = {
-  startThread(options: { workingDirectory: string; skipGitRepoCheck: true }): CodexThread;
+  startThread(options: ThreadOptions): CodexThread;
 };
 
-type CodexConstructor = new (options?: { config?: Record<string, unknown> }) => CodexClient;
+type CodexConstructor = new (options?: CodexOptions) => CodexClient;
 
-function applyRunnerEnv(env: NodeJS.ProcessEnv | undefined): () => void {
-  if (!env) {
-    return () => undefined;
-  }
-  const previous = new Map<string, string | undefined>();
-  for (const [key, value] of Object.entries(env)) {
-    previous.set(key, process.env[key]);
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
+export interface CodexSdkCliRunnerOptions {
+  envBase?: NodeJS.ProcessEnv;
+  codexPathOverride?: string;
+}
+
+const CODEX_ENV_ALLOWLIST = new Set([
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'XDG_CONFIG_HOME',
+  'CODEX_HOME',
+  'CODEX_API_KEY',
+  'OPENAI_API_KEY',
+  'PATH',
+  'Path',
+  'SYSTEMROOT',
+  'COMSPEC',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
+  'NODE_EXTRA_CA_CERTS',
+  'HTTPS_PROXY',
+  'HTTP_PROXY',
+  'ALL_PROXY',
+  'NO_PROXY',
+]);
+
+function buildCodexSdkEnv(baseEnv: NodeJS.ProcessEnv, overrides: Record<string, string> | undefined): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const key of CODEX_ENV_ALLOWLIST) {
+    const value = baseEnv[key];
+    if (typeof value === 'string') {
+      env[key] = value;
     }
   }
-  return () => {
-    for (const [key, value] of previous) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-  };
+  return { ...env, ...(overrides ?? {}) };
 }
 
 export class CodexSdkCliRunner implements CodexSdkRunner {
+  constructor(private readonly options: CodexSdkCliRunnerOptions = {}) {}
+
   async runStreamed(input: CodexSdkRunnerInput): Promise<AsyncIterable<unknown>> {
-    const restoreEnv = applyRunnerEnv(input.env);
-    try {
-      const CodexClass = Codex as CodexConstructor;
-      const codex = new CodexClass({
-        config: {
-          ...(input.configOverrides ?? {}),
-          model: input.model,
-        },
-      });
-      const thread = codex.startThread({
-        workingDirectory: input.projectDir,
-        skipGitRepoCheck: true,
-      });
-      const streamed = await thread.runStreamed(
-        input.prompt,
-        input.outputSchema ? { outputSchema: input.outputSchema } : undefined,
-      );
-      return streamed.events;
-    } finally {
-      restoreEnv();
-    }
+    const CodexClass = Codex as CodexConstructor;
+    const codex = new CodexClass({
+      ...(input.configOverrides ? { config: input.configOverrides as CodexOptions['config'] } : {}),
+      env: buildCodexSdkEnv(this.options.envBase ?? process.env, input.env),
+      ...(this.options.codexPathOverride ? { codexPathOverride: this.options.codexPathOverride } : {}),
+    });
+    const thread = codex.startThread({
+      workingDirectory: input.projectDir,
+      skipGitRepoCheck: true,
+      model: input.model,
+      sandboxMode: 'read-only',
+      webSearchMode: 'disabled',
+      approvalPolicy: 'never',
+    });
+    const streamed = await thread.runStreamed(
+      input.prompt,
+      input.outputSchema ? { outputSchema: input.outputSchema } : undefined,
+    );
+    return streamed.events;
   }
 }

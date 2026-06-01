@@ -2,35 +2,41 @@ import { describe, expect, it, vi } from 'vitest';
 
 const sdkMock = vi.hoisted(() => {
   const events = (async function* () {
-    yield { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } };
+    yield { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 2 } };
   })();
-  const observedEnv: Array<string | undefined> = [];
   const runStreamed = vi.fn(async () => ({ events }));
   const startThread = vi.fn(() => ({ runStreamed }));
   const Codex = vi.fn(function Codex(this: { startThread: typeof startThread }, options?: unknown) {
-    observedEnv.push(process.env.KTX_CODEX_RUNTIME_MCP_TOKEN);
     Object.assign(this, { options, startThread });
   });
-  return { Codex, startThread, runStreamed, observedEnv };
+  return { Codex, startThread, runStreamed };
 });
 
 vi.mock('@openai/codex-sdk', () => ({ Codex: sdkMock.Codex }));
 
 import { CodexSdkCliRunner } from '../../../src/context/llm/codex-sdk-runner.js';
 
-async function collectAsyncIterable(iterable: AsyncIterable<unknown>): Promise<unknown[]> {
-  const collected: unknown[] = [];
-  for await (const item of iterable) {
+async function collectAsync<T>(items: AsyncIterable<T>): Promise<T[]> {
+  const collected: T[] = [];
+  for await (const item of items) {
     collected.push(item);
   }
   return collected;
 }
 
 describe('CodexSdkCliRunner', () => {
-  it('constructs Codex with per-run config and streams thread events', async () => {
-    const runner = new CodexSdkCliRunner();
+  it('passes isolated env through the SDK and runtime controls through thread options', async () => {
+    const runner = new CodexSdkCliRunner({
+      envBase: {
+        HOME: '/home/ktx-user',
+        PATH: '/usr/local/bin:/usr/bin',
+        CODEX_HOME: '/home/ktx-user/.codex',
+        HTTPS_PROXY: 'http://proxy.example',
+        KTX_UNRELATED_SECRET: 'must-not-copy', // pragma: allowlist secret
+      },
+    });
     const previousToken = process.env.KTX_CODEX_RUNTIME_MCP_TOKEN;
-    delete process.env.KTX_CODEX_RUNTIME_MCP_TOKEN;
+    process.env.KTX_CODEX_RUNTIME_MCP_TOKEN = 'outer-token';
     const outputSchema = {
       type: 'object',
       properties: { answer: { type: 'string' } },
@@ -44,29 +50,36 @@ describe('CodexSdkCliRunner', () => {
         model: 'gpt-5.3-codex',
         prompt: 'Return JSON.',
         configOverrides: {
-          approval_policy: 'never',
-          sandbox_mode: 'read-only',
+          history: { persistence: 'none' },
         },
-        env: { KTX_CODEX_RUNTIME_MCP_TOKEN: 'token' },
+        env: { KTX_CODEX_RUNTIME_MCP_TOKEN: 'run-token' },
         outputSchema,
       });
 
       expect(sdkMock.Codex).toHaveBeenCalledWith({
         config: {
-          approval_policy: 'never',
-          sandbox_mode: 'read-only',
-          model: 'gpt-5.3-codex',
+          history: { persistence: 'none' },
+        },
+        env: {
+          HOME: '/home/ktx-user',
+          PATH: '/usr/local/bin:/usr/bin',
+          CODEX_HOME: '/home/ktx-user/.codex',
+          HTTPS_PROXY: 'http://proxy.example',
+          KTX_CODEX_RUNTIME_MCP_TOKEN: 'run-token',
         },
       });
-      expect(sdkMock.observedEnv).toEqual(['token']);
-      expect(process.env.KTX_CODEX_RUNTIME_MCP_TOKEN).toBeUndefined();
+      expect(process.env.KTX_CODEX_RUNTIME_MCP_TOKEN).toBe('outer-token');
       expect(sdkMock.startThread).toHaveBeenCalledWith({
         workingDirectory: '/tmp/ktx-project',
         skipGitRepoCheck: true,
+        model: 'gpt-5.3-codex',
+        sandboxMode: 'read-only',
+        webSearchMode: 'disabled',
+        approvalPolicy: 'never',
       });
       expect(sdkMock.runStreamed).toHaveBeenCalledWith('Return JSON.', { outputSchema });
-      await expect(collectAsyncIterable(events)).resolves.toEqual([
-        { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } },
+      await expect(collectAsync(events)).resolves.toEqual([
+        { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 2 } },
       ]);
     } finally {
       if (previousToken === undefined) {
