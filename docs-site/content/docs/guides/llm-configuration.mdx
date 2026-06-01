@@ -72,6 +72,11 @@ codex` installs instructions and MCP access for an end-user Codex session.
 `ktx setup --llm-backend codex` makes **ktx** itself execute ingest, scan
 enrichment, memory, and other LLM-backed work through Codex.
 
+During runtime loops, **ktx** starts a temporary loopback MCP server for the
+current run, exposes only the tools passed to that run, auto-approves those
+allowlisted runtime tools, asks Codex to use a read-only sandbox with other
+approvals disabled, and disables Codex web search.
+
 ## Prompt caching
 
 `llm.promptCaching` has partial parity on `claude-code`. Status and doctor warn
