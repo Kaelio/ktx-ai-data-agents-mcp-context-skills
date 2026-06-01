@@ -337,10 +337,13 @@ describe('runKtxIngest', () => {
 
     expect(runIo.stdout()).toBe('');
     expect(runIo.stderr()).toContain(
-      'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, or claude-code, or an injected agentRunner.',
+      'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, claude-code, or codex, or an injected agentRunner.',
     );
-    expect(runIo.stderr()).toContain('Configure a local Claude Code session or API-backed LLM, then rerun ingest:');
+    expect(runIo.stderr()).toContain('Configure a local Claude Code/Codex session or API-backed LLM, then rerun ingest:');
     expect(runIo.stderr()).toContain(`ktx setup --project-dir ${projectDir} --llm-backend claude-code --no-input`);
+    expect(runIo.stderr()).toContain(
+      `ktx setup --project-dir ${projectDir} --llm-backend codex --llm-model gpt-5.3-codex --no-input`,
+    );
     expect(runIo.stderr()).toContain(
       `ktx setup --project-dir ${projectDir} --llm-backend anthropic --anthropic-api-key-env ANTHROPIC_API_KEY --llm-model claude-sonnet-4-6 --no-input`,
     );
