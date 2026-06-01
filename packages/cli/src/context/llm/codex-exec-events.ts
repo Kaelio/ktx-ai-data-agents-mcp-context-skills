@@ -81,7 +81,8 @@ export function summarizeCodexExecEvents(
   let finalText = '';
   let stopReason: RunLoopStopReason = 'natural';
   let usage: LlmTokenUsage = {};
-  let stepCount = 0;
+  let turnCount = 0;
+  let completedToolStepCount = 0;
   const stepBoundariesMs: number[] = [];
   let toolCallCount = 0;
   const toolFailures: string[] = [];
@@ -95,13 +96,38 @@ export function summarizeCodexExecEvents(
     }
 
     if (eventType === 'turn.started') {
-      stepCount += 1;
+      turnCount += 1;
+      continue;
+    }
+
+    const item = record(eventRecord.item);
+    const itemType = text(item?.type);
+
+    if (eventType === 'item.started' && itemType === 'mcp_tool_call') {
+      toolCallCount += 1;
+      continue;
+    }
+
+    if (eventType === 'item.completed' && itemType === 'mcp_tool_call') {
+      completedToolStepCount += 1;
+      stepBoundariesMs.push(now() - startedAt);
+      if (item?.error !== undefined || item?.status === 'failed') {
+        const name = text(item.name) ?? text(item.tool) ?? text(item.tool_name) ?? 'unknown';
+        toolFailures.push(`${name}: ${errorMessageFrom(item.error)}`);
+      }
+      continue;
+    }
+
+    if (eventType === 'item.completed' && itemType === 'agent_message') {
+      finalText = text(item?.text) ?? finalText;
       continue;
     }
 
     if (eventType === 'turn.completed') {
       usage = usageFrom(eventRecord.usage);
-      stepBoundariesMs.push(now() - startedAt);
+      if (completedToolStepCount === 0) {
+        stepBoundariesMs.push(now() - startedAt);
+      }
       stopReason = stopReasonFrom(eventRecord.reason ?? eventRecord.stop_reason ?? eventRecord.terminal_reason);
       continue;
     }
@@ -111,34 +137,13 @@ export function summarizeCodexExecEvents(
       error = new Error(errorMessageFrom(eventRecord.error ?? eventRecord.message));
       continue;
     }
-
-    const item = record(eventRecord.item);
-    const itemType = text(item?.type);
-    if (!item || !itemType) {
-      continue;
-    }
-
-    if (eventType === 'item.completed' && itemType === 'agent_message') {
-      finalText = text(item.text) ?? finalText;
-      continue;
-    }
-
-    if (eventType === 'item.started' && itemType === 'mcp_tool_call') {
-      toolCallCount += 1;
-      continue;
-    }
-
-    if (eventType === 'item.completed' && itemType === 'mcp_tool_call' && item.error !== undefined) {
-      const name = text(item.name) ?? text(item.tool) ?? text(item.tool_name) ?? 'unknown';
-      toolFailures.push(`${name}: ${errorMessageFrom(item.error)}`);
-    }
   }
 
   return {
     finalText,
     stopReason,
     usage,
-    stepCount,
+    stepCount: completedToolStepCount > 0 ? completedToolStepCount : turnCount,
     stepBoundariesMs,
     toolCallCount,
     toolFailures,

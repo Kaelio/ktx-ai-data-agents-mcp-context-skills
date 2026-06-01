@@ -169,6 +169,44 @@ describe('CodexKtxLlmRuntime', () => {
     expect(result.error?.message).toBe('boom');
   });
 
+  it('surfaces failed MCP tool calls as agent-loop errors', async () => {
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: runner([
+        { type: 'turn.started' },
+        { type: 'item.started', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'search', status: 'in_progress' } },
+        {
+          type: 'item.completed',
+          item: {
+            type: 'mcp_tool_call',
+            server: 'ktx',
+            tool: 'search',
+            status: 'failed',
+            error: { message: 'denied' },
+          },
+        },
+        { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } },
+      ]),
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      stepBudget: 5,
+      telemetryTags: {},
+      toolSet: {},
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(result.error?.message).toBe('Codex runtime tool call failed: search: denied');
+    expect(result.metrics).toMatchObject({
+      stepCount: 1,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    });
+  });
+
   it('probes Codex authentication through a minimal non-interactive turn', async () => {
     const fakeRunner = runner([
       { type: 'turn.started' },

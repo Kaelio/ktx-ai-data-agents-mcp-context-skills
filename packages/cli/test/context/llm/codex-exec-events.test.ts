@@ -5,7 +5,7 @@ import {
 } from '../../../src/context/llm/codex-exec-events.js';
 
 describe('Codex exec event parsing', () => {
-  it('captures final agent text, SDK usage, steps, and natural completion', () => {
+  it('uses the completed turn as one step when no MCP tools run', () => {
     const summary = summarizeCodexExecEvents(
       [
         { type: 'thread.started', thread_id: 'thr_1' },
@@ -35,6 +35,52 @@ describe('Codex exec event parsing', () => {
     });
   });
 
+  it('uses completed MCP tool calls as loop steps', () => {
+    const offsets = [115, 140, 175];
+    const summary = summarizeCodexExecEvents(
+      [
+        { type: 'turn.started' },
+        {
+          type: 'item.started',
+          item: { id: 'call_1', type: 'mcp_tool_call', server: 'ktx', tool: 'search', arguments: {}, status: 'in_progress' },
+        },
+        {
+          type: 'item.completed',
+          item: { id: 'call_1', type: 'mcp_tool_call', server: 'ktx', tool: 'search', arguments: {}, status: 'completed' },
+        },
+        {
+          type: 'item.started',
+          item: { id: 'call_2', type: 'mcp_tool_call', server: 'ktx', tool: 'lookup', arguments: {}, status: 'in_progress' },
+        },
+        {
+          type: 'item.completed',
+          item: {
+            id: 'call_2',
+            type: 'mcp_tool_call',
+            server: 'ktx',
+            tool: 'lookup',
+            arguments: {},
+            status: 'failed',
+            error: { message: 'denied' },
+          },
+        },
+        { type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: 'done' } },
+        { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1, cached_input_tokens: 0, reasoning_output_tokens: 0 } },
+      ],
+      { startedAt: 100, now: () => offsets.shift() ?? 175 },
+    );
+
+    expect(summary).toEqual({
+      finalText: 'done',
+      stopReason: 'natural',
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      stepCount: 2,
+      stepBoundariesMs: [15, 40],
+      toolCallCount: 2,
+      toolFailures: ['lookup: denied'],
+    });
+  });
+
   it('maps turn failures into error stop reason', () => {
     const summary = summarizeCodexExecEvents([
       { type: 'turn.started' },
@@ -52,24 +98,6 @@ describe('Codex exec event parsing', () => {
     ]);
 
     expect(summary.stopReason).toBe('budget');
-  });
-
-  it('counts SDK-shaped MCP tool calls and failed MCP tool calls', () => {
-    const summary = summarizeCodexExecEvents([
-      { type: 'turn.started' },
-      {
-        type: 'item.started',
-        item: { id: 'call_1', type: 'mcp_tool_call', server: 'ktx', tool: 'search', arguments: { query: 'revenue' }, status: 'in_progress' },
-      },
-      {
-        type: 'item.completed',
-        item: { id: 'call_1', type: 'mcp_tool_call', server: 'ktx', tool: 'search', arguments: { query: 'revenue' }, status: 'failed', error: { message: 'denied' } },
-      },
-      { type: 'turn.completed' },
-    ]);
-
-    expect(summary.toolCallCount).toBe(1);
-    expect(summary.toolFailures).toEqual(['search: denied']);
   });
 
   it('throws a clear error for malformed JSONL lines', () => {
