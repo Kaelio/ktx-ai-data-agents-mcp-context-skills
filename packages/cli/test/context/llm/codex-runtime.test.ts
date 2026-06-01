@@ -259,6 +259,83 @@ describe('CodexKtxLlmRuntime', () => {
     expect(fakeRunner.observedSignal()?.aborted).toBe(true);
   });
 
+  it('counts built-in command_execution steps against the budget and aborts the stream', async () => {
+    let observedSignal: AbortSignal | undefined;
+    const fakeRunner = {
+      observedSignal: () => observedSignal,
+      runStreamed: vi.fn(async (input: { signal?: AbortSignal }) => {
+        observedSignal = input.signal;
+        return events([
+          { type: 'turn.started' },
+          { type: 'item.started', item: { type: 'command_execution', command: 'ls', status: 'in_progress' } },
+          { type: 'item.completed', item: { type: 'command_execution', command: 'ls', status: 'completed', exit_code: 0 } },
+          { type: 'item.started', item: { type: 'command_execution', command: 'cat a', status: 'in_progress' } },
+          { type: 'item.completed', item: { type: 'command_execution', command: 'cat a', status: 'completed', exit_code: 0 } },
+          { type: 'item.completed', item: { type: 'command_execution', command: 'cat b', status: 'completed', exit_code: 0 } },
+          { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } },
+        ]);
+      }),
+    };
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+    });
+    const onStepFinish = vi.fn();
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      stepBudget: 2,
+      telemetryTags: {},
+      onStepFinish,
+      toolSet: {},
+    });
+
+    expect(result.stopReason).toBe('budget');
+    expect(result.error).toBeUndefined();
+    expect(result.metrics).toMatchObject({ stepCount: 2 });
+    expect(onStepFinish).toHaveBeenCalledTimes(2);
+    expect(onStepFinish).toHaveBeenLastCalledWith({ stepIndex: 2, stepBudget: 2 });
+    expect(fakeRunner.observedSignal()?.aborted).toBe(true);
+  });
+
+  it('fires onStepFinish live as each step completes, before the stream drains', async () => {
+    const order: string[] = [];
+    async function* liveEvents() {
+      yield { type: 'turn.started' };
+      yield { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'a', status: 'completed' } };
+      order.push('yielded-after-step-1');
+      yield { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'b', status: 'completed' } };
+      order.push('yielded-after-step-2');
+      yield { type: 'item.completed', item: { type: 'agent_message', text: 'done' } };
+      yield { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } };
+    }
+    const fakeRunner = { runStreamed: vi.fn(async () => liveEvents()) };
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      stepBudget: 10,
+      telemetryTags: {},
+      onStepFinish: ({ stepIndex }) => {
+        order.push(`step-${stepIndex}`);
+      },
+      toolSet: {},
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(result.metrics).toMatchObject({ stepCount: 2 });
+    expect(order).toEqual(['step-1', 'yielded-after-step-1', 'step-2', 'yielded-after-step-2']);
+  });
+
   it('probes Codex authentication through a minimal non-interactive turn', async () => {
     const fakeRunner = runner([
       { type: 'turn.started' },

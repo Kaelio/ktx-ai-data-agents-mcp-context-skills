@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../core/config.js';
-import { summarizeCodexExecEvents, type CodexExecEventSummary } from './codex-exec-events.js';
+import { isCompletedAgentStep, summarizeCodexExecEvents, type CodexExecEventSummary } from './codex-exec-events.js';
 import {
   startCodexRuntimeMcpServer,
   type CodexRuntimeMcpServerHandle,
@@ -37,6 +37,7 @@ function promptWithSystem(system: string | undefined, prompt: string): string {
 interface CollectCodexEventsOptions {
   stepBudget?: number;
   abortController?: AbortController;
+  onStep?: (stepIndex: number) => void | Promise<void>;
 }
 
 interface CollectCodexEventsResult {
@@ -48,29 +49,45 @@ function eventRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 }
 
-function isCompletedMcpToolCall(event: unknown): boolean {
-  const record = eventRecord(event);
-  const item = eventRecord(record?.item);
-  return record?.type === 'item.completed' && item?.type === 'mcp_tool_call';
+function isTurnCompleted(event: unknown): boolean {
+  return eventRecord(event)?.type === 'turn.completed';
 }
 
+/**
+ * Drains the Codex stream once, emitting a step as each agent action completes
+ * so callers see live progress and the step budget is enforced mid-run. Every
+ * completed agent-action item counts (see {@link isCompletedAgentStep}), so
+ * built-in `command_execution` steps decrement the budget the same as
+ * `mcp_tool_call`s. A turn that produced no actions still counts as one step,
+ * matching the metrics summary and the AI SDK backend.
+ */
 async function collectEvents(
   events: AsyncIterable<unknown>,
   options: CollectCodexEventsOptions = {},
 ): Promise<CollectCodexEventsResult> {
   const collected: unknown[] = [];
-  let completedToolSteps = 0;
+  let completedSteps = 0;
+  let sawActionStep = false;
   let budgetExceeded = false;
 
   for await (const event of events) {
     collected.push(event);
-    if (options.stepBudget !== undefined && isCompletedMcpToolCall(event)) {
-      completedToolSteps += 1;
-      if (completedToolSteps >= options.stepBudget) {
-        budgetExceeded = true;
-        options.abortController?.abort();
-        break;
-      }
+
+    const isActionStep = isCompletedAgentStep(event);
+    if (isActionStep) {
+      sawActionStep = true;
+    } else if (sawActionStep || !isTurnCompleted(event)) {
+      // Only fall back to counting a bare turn as a step when the turn produced
+      // no agent actions; a completed turn is terminal, so it never aborts.
+      continue;
+    }
+
+    completedSteps += 1;
+    await options.onStep?.(completedSteps);
+    if (isActionStep && options.stepBudget !== undefined && completedSteps >= options.stepBudget) {
+      budgetExceeded = true;
+      options.abortController?.abort();
+      break;
     }
   }
 
@@ -243,6 +260,15 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           : {}),
       });
       const abortController = new AbortController();
+      const onStep = async (stepIndex: number): Promise<void> => {
+        try {
+          await params.onStepFinish?.({ stepIndex, stepBudget: params.stepBudget });
+        } catch (error) {
+          this.logger.warn(
+            `[codex-runner] onStepFinish callback threw; ignoring: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      };
       const collected = await collectEvents(
         await this.runner.runStreamed({
           projectDir: this.deps.projectDir,
@@ -252,18 +278,9 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           env: config.env,
           signal: abortController.signal,
         }),
-        { stepBudget: params.stepBudget, abortController },
+        { stepBudget: params.stepBudget, abortController, onStep },
       );
       const summary = summarizeCodexExecEvents(collected.events, { startedAt });
-      for (let index = 1; index <= summary.stepCount; index += 1) {
-        try {
-          await params.onStepFinish?.({ stepIndex: index, stepBudget: params.stepBudget });
-        } catch (error) {
-          this.logger.warn(
-            `[codex-runner] onStepFinish callback threw; ignoring: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
       const error = summaryError(summary);
       const stopReason = collected.budgetExceeded ? 'budget' : error ? 'error' : summary.stopReason;
       return {

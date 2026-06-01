@@ -20,6 +20,24 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 }
 
+/**
+ * Codex thread items that represent a discrete agent action consuming one loop
+ * step. The step budget caps the total number of these regardless of which
+ * capability the agent reaches for, so built-in `command_execution` (and any
+ * file/web action the public Codex surface still exposes) count alongside our
+ * own `mcp_tool_call` items rather than only the MCP ones.
+ */
+const AGENT_STEP_ITEM_TYPES = new Set(['command_execution', 'mcp_tool_call', 'file_change', 'web_search']);
+
+export function isCompletedAgentStep(event: unknown): boolean {
+  const eventRecord = record(event);
+  if (eventRecord?.type !== 'item.completed') {
+    return false;
+  }
+  const itemType = record(eventRecord.item)?.type;
+  return typeof itemType === 'string' && AGENT_STEP_ITEM_TYPES.has(itemType);
+}
+
 function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
@@ -82,7 +100,7 @@ export function summarizeCodexExecEvents(
   let stopReason: RunLoopStopReason = 'natural';
   let usage: LlmTokenUsage = {};
   let turnCount = 0;
-  let completedToolStepCount = 0;
+  let completedStepCount = 0;
   const stepBoundariesMs: number[] = [];
   let toolCallCount = 0;
   const toolFailures: string[] = [];
@@ -108,12 +126,14 @@ export function summarizeCodexExecEvents(
       continue;
     }
 
-    if (eventType === 'item.completed' && itemType === 'mcp_tool_call') {
-      completedToolStepCount += 1;
+    if (isCompletedAgentStep(event)) {
+      completedStepCount += 1;
       stepBoundariesMs.push(now() - startedAt);
-      if (item?.error !== undefined || item?.status === 'failed') {
-        const name = text(item.name) ?? text(item.tool) ?? text(item.tool_name) ?? 'unknown';
-        toolFailures.push(`${name}: ${errorMessageFrom(item.error)}`);
+      // Only MCP tool calls fail the loop: a non-zero `command_execution` exit
+      // is normal agent exploration, not a runtime error.
+      if (itemType === 'mcp_tool_call' && (item?.error !== undefined || item?.status === 'failed')) {
+        const name = text(item?.name) ?? text(item?.tool) ?? text(item?.tool_name) ?? 'unknown';
+        toolFailures.push(`${name}: ${errorMessageFrom(item?.error)}`);
       }
       continue;
     }
@@ -125,7 +145,7 @@ export function summarizeCodexExecEvents(
 
     if (eventType === 'turn.completed') {
       usage = usageFrom(eventRecord.usage);
-      if (completedToolStepCount === 0) {
+      if (completedStepCount === 0) {
         stepBoundariesMs.push(now() - startedAt);
       }
       stopReason = stopReasonFrom(eventRecord.reason ?? eventRecord.stop_reason ?? eventRecord.terminal_reason);
@@ -143,7 +163,7 @@ export function summarizeCodexExecEvents(
     finalText,
     stopReason,
     usage,
-    stepCount: completedToolStepCount > 0 ? completedToolStepCount : turnCount,
+    stepCount: completedStepCount > 0 ? completedStepCount : turnCount,
     stepBoundariesMs,
     toolCallCount,
     toolFailures,

@@ -81,6 +81,26 @@ describe('Codex exec event parsing', () => {
     });
   });
 
+  it('counts built-in command executions as loop steps without failing the loop', () => {
+    const offsets = [110, 130];
+    const summary = summarizeCodexExecEvents(
+      [
+        { type: 'turn.started' },
+        { type: 'item.completed', item: { id: 'c1', type: 'command_execution', command: 'ls', status: 'completed', exit_code: 0 } },
+        { type: 'item.completed', item: { id: 'c2', type: 'command_execution', command: 'cat missing', status: 'failed', exit_code: 1 } },
+        { type: 'item.completed', item: { id: 'm1', type: 'agent_message', text: 'done' } },
+        { type: 'turn.completed', usage: { input_tokens: 2, output_tokens: 1 } },
+      ],
+      { startedAt: 100, now: () => offsets.shift() ?? 130 },
+    );
+
+    expect(summary.stepCount).toBe(2);
+    expect(summary.stepBoundariesMs).toEqual([10, 30]);
+    // A non-zero command exit is normal agent exploration, not a runtime tool failure.
+    expect(summary.toolFailures).toEqual([]);
+    expect(summary.toolCallCount).toBe(0);
+  });
+
   it('maps turn failures into error stop reason', () => {
     const summary = summarizeCodexExecEvents([
       { type: 'turn.started' },
