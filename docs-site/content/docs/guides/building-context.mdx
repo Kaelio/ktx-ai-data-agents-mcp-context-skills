@@ -39,8 +39,15 @@ ktx ingest --all
 Enriched ingest needs a configured model and embeddings. Run `ktx setup` first;
 connections without that configuration fail before any work starts.
 
-With `claude-code`, **ktx** agent loops can invoke only the **ktx** MCP tools for the
-current run.
+Local-auth backends keep provider credentials out of `ktx.yaml`:
+
+```bash
+ktx setup --llm-backend claude-code --no-input
+ktx setup --llm-backend codex --llm-model gpt-5.3-codex --no-input
+```
+
+With `claude-code` or `codex`, **ktx** agent loops can invoke only the **ktx**
+MCP tools for the current run.
 
 ## Query history
 

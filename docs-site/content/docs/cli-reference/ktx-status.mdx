@@ -21,7 +21,7 @@ ktx status [options]
 | `--json` | Print JSON output | `false` |
 | `-v`, `--verbose` | Show every check, including passing ones | `false` |
 | `--validate` | Only validate the `ktx.yaml` schema; skip readiness checks | `false` |
-| `--fast` | Skip checks that require external communication (query-history readiness probes and Claude Code auth probe) | `false` |
+| `--fast` | Skip checks that require external communication (query-history readiness probes, Claude Code auth probe, and Codex auth probe) | `false` |
 | `--no-input` | Disable interactive terminal input | - |
 
 ## Examples
@@ -39,7 +39,7 @@ ktx status --verbose
 # Validate ktx.yaml without running readiness checks
 ktx status --validate
 
-# Skip slow probes (query-history readiness, Claude Code auth)
+# Skip slow probes (query-history readiness, Claude Code auth, Codex auth)
 ktx status --fast
 
 # Check a project from another directory
@@ -56,6 +56,10 @@ Claude Code session is usable. If auth fails, run the Claude Code CLI login
 flow, then rerun `ktx status`. Use `--fast` to skip this probe (useful in CI
 or offline contexts); skipped checks render as `-` and carry
 `"status": "skipped"` in JSON output.
+
+For `llm.provider.backend: codex`, `ktx status` runs a minimal non-interactive
+Codex request. If the probe fails, authenticate Codex locally with the Codex CLI
+and verify the Codex CLI installation.
 
 A `Local data` section summarises what the project has accumulated locally:
 ingest run counts, last completed timestamp per connection, knowledge page
