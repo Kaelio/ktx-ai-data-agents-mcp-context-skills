@@ -721,6 +721,131 @@ describe('runKtxPublicIngest', () => {
     expect(io.stderr()).toBe('');
   });
 
+  it('streams plain non-json progress to stderr while keeping final results on stdout', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true, dialect: 'postgres' } } },
+      docs: { driver: 'notion' },
+    });
+    const runScan = vi.fn<NonNullable<KtxPublicIngestDeps['runScan']>>(async (_args, scanIo, deps) => {
+      scanIo.stdout.write('KTX scan completed\n');
+      scanIo.stdout.write('Report: raw-sources/warehouse/live-database/sync-1/scan-report.json\n');
+      await deps?.progress?.update(0.12, 'Inspecting database schema');
+      const enrichmentProgress = deps?.progress?.startPhase(0.5);
+      await enrichmentProgress?.update(0.75, 'Enriching schema metadata', { transient: true });
+      await deps?.progress?.update(1, 'Writing schema artifacts');
+      return 0;
+    });
+    const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async (ingestArgs, ingestIo, deps) => {
+      ingestIo.stdout.write(`Adapter: ${ingestArgs.adapter}\n`);
+      ingestIo.stdout.write('Report: report-progress-1\n');
+      if (ingestArgs.adapter === 'historic-sql') {
+        deps?.progress?.({ percent: 15, message: 'Fetching source files for warehouse/historic-sql' });
+        deps?.progress?.({ percent: 90, message: 'Saved memory: 1 wiki, 1 SL' });
+        return 0;
+      }
+      deps?.progress?.({ percent: 55, message: 'Processing 3/8 tasks' });
+      deps?.progress?.({ percent: 90, message: 'Saved memory: 6 wiki, 2 SL' });
+      return 0;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          all: true,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'default',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    expect(io.stdout()).toContain('Ingest finished');
+    expect(io.stdout()).toContain('warehouse');
+    expect(io.stdout()).toContain('docs');
+    expect(io.stdout()).not.toContain('KTX scan completed');
+    expect(io.stdout()).not.toContain('Report:');
+    expect(io.stdout()).not.toContain('Adapter:');
+    expect(io.stderr()).toContain('[1/2] warehouse · database schema\n');
+    expect(io.stderr()).toContain('  [12%] Reading database schema\n');
+    expect(io.stderr()).toContain('  [50%] Building enriched schema context\n');
+    expect(io.stderr()).toContain('[1/2] warehouse · query history\n');
+    expect(io.stderr()).toContain('  [15%] Fetching query history for warehouse\n');
+    expect(io.stderr()).toContain('[2/2] docs · source ingest\n');
+    expect(io.stderr()).toContain('  [55%] Processing 3/8 tasks\n');
+    expect(io.stderr()).not.toContain('\r');
+  });
+
+  it('does not emit plain progress for json public ingest output', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({
+      warehouse: { driver: 'postgres' },
+    });
+    const runScan = vi.fn<NonNullable<KtxPublicIngestDeps['runScan']>>(async (_args, _scanIo, deps) => {
+      expect(deps?.progress).toBeUndefined();
+      return 0;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: true,
+          inputMode: 'disabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan },
+      ),
+    ).resolves.toBe(0);
+
+    expect(JSON.parse(io.stdout())).toMatchObject({
+      plan: { projectDir: '/tmp/project' },
+      results: [{ connectionId: 'warehouse', driver: 'postgres' }],
+    });
+    expect(io.stderr()).toBe('');
+  });
+
+  it('keeps captured failure details when plain progress ports are active', async () => {
+    const io = makeIo();
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
+    const runScan = vi.fn<NonNullable<KtxPublicIngestDeps['runScan']>>(async (_args, scanIo, deps) => {
+      await deps?.progress?.update(0.42, 'Enriching schema metadata');
+      scanIo.stdout.write('KTX scan enrichment failed after structural scan completed: embedding service timed out\n');
+      return 1;
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('warehouse · database schema\n');
+    expect(io.stderr()).toContain('  [42%] Building enriched schema context\n');
+    expect(io.stderr()).toContain('  failed\n');
+    expect(io.stdout()).toContain(
+      'warehouse failed: Database enrichment failed after schema context completed: embedding service timed out.',
+    );
+    expect(io.stdout()).not.toContain('KTX scan enrichment failed');
+    expect(io.stdout()).not.toContain('structural scan');
+  });
+
   it('delegates interactive TTY public ingest to the foreground context-build view', async () => {
     const io = makeIo({ isTTY: true, interactive: true });
     const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
