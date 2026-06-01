@@ -130,8 +130,11 @@ export function summarizeCodexExecEvents(
       completedStepCount += 1;
       stepBoundariesMs.push(now() - startedAt);
       // Only MCP tool calls fail the loop: a non-zero `command_execution` exit
-      // is normal agent exploration, not a runtime error.
-      if (itemType === 'mcp_tool_call' && (item?.error !== undefined || item?.status === 'failed')) {
+      // is normal agent exploration, not a runtime error. `status` is the
+      // authoritative signal (the SDK always sets it); the SDK also serializes
+      // `error: null` on successful calls, so an explicit-null `error` must NOT
+      // be read as a failure — only a populated error object counts.
+      if (itemType === 'mcp_tool_call' && (item?.status === 'failed' || (item?.error !== undefined && item?.error !== null))) {
         const name = text(item?.name) ?? text(item?.tool) ?? text(item?.tool_name) ?? 'unknown';
         toolFailures.push(`${name}: ${errorMessageFrom(item?.error)}`);
       }

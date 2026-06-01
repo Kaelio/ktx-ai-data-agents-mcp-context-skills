@@ -81,6 +81,45 @@ describe('Codex exec event parsing', () => {
     });
   });
 
+  it('does not treat a completed MCP tool call as failed when Codex sends error: null', () => {
+    // Captured verbatim from a real @openai/codex-sdk run: successful tool calls
+    // carry `error: null` and `result` alongside `status: "completed"`.
+    const summary = summarizeCodexExecEvents([
+      { type: 'turn.started' },
+      {
+        type: 'item.started',
+        item: {
+          id: 'item_1',
+          type: 'mcp_tool_call',
+          server: 'ktx',
+          tool: 'echo_value',
+          arguments: { value: 'ktx_codex_tool_ok' },
+          result: null,
+          error: null,
+          status: 'in_progress',
+        },
+      },
+      {
+        type: 'item.completed',
+        item: {
+          id: 'item_1',
+          type: 'mcp_tool_call',
+          server: 'ktx',
+          tool: 'echo_value',
+          arguments: { value: 'ktx_codex_tool_ok' },
+          result: { content: [{ type: 'text', text: 'echo:ktx_codex_tool_ok' }], structured_content: null },
+          error: null,
+          status: 'completed',
+        },
+      },
+      { type: 'item.completed', item: { id: 'm1', type: 'agent_message', text: 'done' } },
+      { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } },
+    ]);
+
+    expect(summary.toolFailures).toEqual([]);
+    expect(summary.toolCallCount).toBe(1);
+  });
+
   it('counts built-in command executions as loop steps without failing the loop', () => {
     const offsets = [110, 130];
     const summary = summarizeCodexExecEvents(
