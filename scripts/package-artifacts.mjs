@@ -518,7 +518,10 @@ function requireExitCodeWithProjectStderr(label, result, projectDir, expectedCod
     expectedCode,
     label + ' failed with code ' + result.code + '\\nstdout:\\n' + result.stdout + '\\nstderr:\\n' + result.stderr,
   );
-  assert.equal(result.stderr, 'Project: ' + projectDir + '\\n', label + ' wrote unexpected stderr');
+  assert.ok(
+    result.stderr.startsWith('Project: ' + projectDir + '\\n'),
+    label + ' did not lead stderr with the project notice\\nstderr:\\n' + result.stderr,
+  );
 }
 
 function requireSuccessWithStderr(label, result, stderrPattern) {
@@ -532,6 +535,10 @@ function requireSuccessWithStderr(label, result, stderrPattern) {
 
 function requireOutput(label, result, text) {
   assert.match(result.stdout, text, label + ' output did not match ' + text);
+}
+
+function requireStderr(label, result, stderrPattern) {
+  assert.match(result.stderr, stderrPattern, label + ' stderr did not match ' + stderrPattern);
 }
 
 function escapeRegExp(value) {
@@ -857,6 +864,7 @@ try {
     ),
   );
   requireExitCodeWithProjectStderr('ktx ingest enrichment guard', databaseIngest, projectDir, 1);
+  requireStderr('ktx ingest enrichment guard', databaseIngest, /^ {2}failed /m);
   requireOutput('ktx ingest enrichment guard', databaseIngest, /Ingest finished with partial failures/);
   requireOutput('ktx ingest enrichment guard', databaseIngest, /enrichment is not configured/);
   process.stdout.write('ktx ingest enrichment guard verified\\n');
