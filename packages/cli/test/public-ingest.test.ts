@@ -395,11 +395,13 @@ describe('runKtxPublicIngest', () => {
       1,
       expect.objectContaining({ connectionId: 'first', mode: 'enriched', detectRelationships: true }),
       expect.anything(),
+      expect.objectContaining({ progress: expect.any(Object) }),
     );
     expect(runScan).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ connectionId: 'second', mode: 'enriched', detectRelationships: true }),
       expect.anything(),
+      expect.objectContaining({ progress: expect.any(Object) }),
     );
   });
 
@@ -679,7 +681,10 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('Report: report-docs-1');
     expect(io.stdout()).not.toContain('Adapter:');
     expect(io.stdout()).not.toContain('notion\n');
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('docs · source ingest\n');
+    expect(io.stderr()).toContain('  done\n');
+    expect(io.stderr()).not.toContain('Report: report-docs-1');
+    expect(io.stderr()).not.toContain('Adapter:');
   });
 
   it('suppresses historic-sql report output during direct public query-history ingest', async () => {
@@ -718,7 +723,12 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).not.toContain('Report: report-query-history-1');
     expect(io.stdout()).not.toContain('Adapter:');
     expect(io.stdout()).not.toContain('historic-sql');
-    expect(io.stderr()).toBe('');
+    expect(io.stderr()).toContain('warehouse · database schema\n');
+    expect(io.stderr()).toContain('warehouse · query history\n');
+    expect(io.stderr()).toContain('  done\n');
+    expect(io.stderr()).not.toContain('Report: report-query-history-1');
+    expect(io.stderr()).not.toContain('Adapter:');
+    expect(io.stderr()).not.toContain('historic-sql');
   });
 
   it('streams plain non-json progress to stderr while keeping final results on stdout', async () => {
@@ -844,6 +854,32 @@ describe('runKtxPublicIngest', () => {
     );
     expect(io.stdout()).not.toContain('KTX scan enrichment failed');
     expect(io.stdout()).not.toContain('structural scan');
+  });
+
+  it('prints a failed plain phase when preflight fails before phase start', async () => {
+    const io = makeIo();
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => project) },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('warehouse · database schema\n');
+    expect(io.stderr()).toContain('  failed · warehouse cannot be ingested: enrichment is not configured');
+    expect(io.stdout()).toContain('warehouse failed: warehouse cannot be ingested: enrichment is not configured');
   });
 
   it('delegates interactive TTY public ingest to the foreground context-build view', async () => {
@@ -1021,6 +1057,7 @@ describe('runKtxPublicIngest', () => {
         inputMode: 'disabled',
       }),
       expect.anything(),
+      expect.objectContaining({ progress: expect.any(Function) }),
     );
     expect(runScan).toHaveBeenCalledWith(
       {
@@ -1032,6 +1069,7 @@ describe('runKtxPublicIngest', () => {
         dryRun: false,
       },
       expect.anything(),
+      expect.objectContaining({ progress: expect.any(Object) }),
     );
     expect(io.stdout()).toContain('Ingest finished with partial failures');
     expect(io.stdout()).toContain('warehouse failed at database-schema.');
@@ -1138,6 +1176,7 @@ describe('runKtxPublicIngest', () => {
     expect(runIngest).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'run', connectionId: 'docs', adapter: 'notion' }),
       expect.anything(),
+      expect.objectContaining({ progress: expect.any(Function) }),
     );
     expect(io.stdout()).toContain('warehouse cannot be ingested: enrichment is not configured');
   });
@@ -1176,6 +1215,7 @@ describe('runKtxPublicIngest', () => {
         dryRun: false,
       },
       expect.objectContaining({ capturedOutput: expect.any(Function) }),
+      expect.objectContaining({ progress: expect.any(Object) }),
     );
   });
 
@@ -1248,6 +1288,7 @@ describe('runKtxPublicIngest', () => {
         sourceDir: '/repo/dbt',
       }),
       expect.objectContaining({ capturedOutput: expect.any(Function) }),
+      expect.objectContaining({ progress: expect.any(Function) }),
     );
   });
 
@@ -1284,6 +1325,7 @@ describe('runKtxPublicIngest', () => {
         allowImplicitAdapter: true,
       }),
       expect.objectContaining({ capturedOutput: expect.any(Function) }),
+      expect.objectContaining({ progress: expect.any(Function) }),
     );
   });
 

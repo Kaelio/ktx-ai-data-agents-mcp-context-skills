@@ -880,7 +880,7 @@ export async function executePublicIngestTarget(
           ? {
               ...step,
               status: 'failed',
-              detail: target.preflightFailure,
+              detail: `${target.connectionId} failed: ${target.preflightFailure}`,
             }
           : step,
       ),
@@ -1099,7 +1099,7 @@ export async function runKtxPublicIngest(
       ingestProgress: progress.ingestProgress,
       onPhaseStart: progress.onPhaseStart,
       onPhaseEnd: progress.onPhaseEnd,
-      runtimeIo: io,
+      runtimeIo: deps.runtimeIo ?? io,
     };
     const result = await executePublicIngestTarget(target, args, capture, targetDeps);
     results.push(result);
