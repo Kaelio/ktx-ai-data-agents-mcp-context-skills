@@ -419,6 +419,9 @@ describe('CodexKtxLlmRuntime', () => {
       expect(result.message).toContain('not available');
       expect(result.message).toContain('gpt-5.3-codex');
       expect(result.message).toContain('not supported when using Codex with a ChatGPT account');
+      // A model-access failure must steer the user at the model config, not auth.
+      expect(result.fix).toContain('llm.models.default');
+      expect(result.fix).not.toContain('Authenticate Codex');
     }
   });
 
@@ -438,6 +441,20 @@ describe('CodexKtxLlmRuntime', () => {
     if (!result.ok) {
       expect(result.message).toContain('authentication is not usable');
       expect(result.message).toContain('Not logged in');
+      expect(result.fix).toContain('Authenticate Codex');
+    }
+  });
+
+  it('rejects an unsupported model id before probing, steering at llm.models.default', async () => {
+    const result = await runCodexAuthProbe({
+      projectDir: '/tmp/project',
+      model: 'not-a-real-model',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('Unsupported Codex model');
+      expect(result.fix).toContain('llm.models.default');
     }
   });
 });

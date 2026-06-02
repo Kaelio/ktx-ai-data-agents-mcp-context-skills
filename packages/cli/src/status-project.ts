@@ -6,7 +6,6 @@ import {
   CODEX_ISOLATION_WARNING_FIX,
 } from './context/llm/codex-isolation.js';
 import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
-import { DEFAULT_CODEX_MODEL } from './context/llm/codex-models.js';
 import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
@@ -103,7 +102,7 @@ type ClaudeCodeAuthProbe = (input: {
 type CodexAuthProbe = (input: {
   projectDir: string;
   model: string;
-}) => Promise<{ ok: true } | { ok: false; message: string }>;
+}) => Promise<{ ok: true } | { ok: false; message: string; fix: string }>;
 
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
@@ -222,6 +221,18 @@ async function buildLlmStatus(
       fix: 'Run: ktx setup (choose an LLM provider)',
     };
   }
+  // The runtime (resolveModelSlots) hard-requires llm.models.default for every
+  // non-none backend; without it ingest/scan/memory throw. Report that here so
+  // status never marks a project ready that the runtime would refuse to run.
+  if (!model || model.trim().length === 0) {
+    return {
+      backend,
+      model,
+      status: 'fail',
+      detail: `llm.models.default is required for backend "${backend}"`,
+      fix: 'Set llm.models.default in ktx.yaml, then rerun `ktx status` (or rerun `ktx setup`).',
+    };
+  }
   if (backend === 'anthropic') {
     const ref = config.provider.anthropic?.api_key;
     const resolved = resolveRef(ref, env);
@@ -263,7 +274,7 @@ async function buildLlmStatus(
     };
   }
   if (backend === 'claude-code') {
-    const modelName = model ?? 'sonnet';
+    const modelName = model;
     if (options.fast === true) {
       return {
         backend,
@@ -293,7 +304,7 @@ async function buildLlmStatus(
     };
   }
   if (backend === 'codex') {
-    const modelName = model ?? DEFAULT_CODEX_MODEL;
+    const modelName = model;
     if (options.fast === true) {
       return {
         backend,
@@ -319,7 +330,7 @@ async function buildLlmStatus(
       model: modelName,
       status: 'fail',
       detail: auth.message,
-      fix: 'Authenticate Codex locally with the Codex CLI, verify the Codex CLI is installed, then rerun `ktx status`.',
+      fix: auth.fix,
     };
   }
   return { backend, model, status: 'warn', detail: 'unknown LLM backend' };

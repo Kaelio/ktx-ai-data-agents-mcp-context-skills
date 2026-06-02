@@ -30,8 +30,9 @@ warehouse accurately - from approved metric definitions, joinable columns, and
 business knowledge it builds and maintains for you.
 
 > [!NOTE]
-> Run **ktx** with your own LLM API keys or a **Claude Pro/Max** subscription.
-> No extra usage billing from **ktx**.
+> Run **ktx** with your own LLM API keys or a local agent sign-in — a
+> **Claude Pro/Max** subscription through Claude Code, or your local Codex
+> authentication. No extra usage billing from **ktx**.
 
 <p align="center">
   <a href="https://youtu.be/5V4TuzYVlrA">
@@ -175,8 +176,9 @@ then the current directory. Pass `--project-dir <path>` when scripting.
   No. **ktx** runs locally. The only data leaving your machine is what you
   send to the LLM provider you configured.
 - **Which LLM backends are supported?**
-  Anthropic API, Google Vertex AI, AI Gateway, and the local Claude Code
-  session through the Claude Agent SDK. See
+  Anthropic API, Google Vertex AI, AI Gateway, the local Claude Code session
+  through the Claude Agent SDK, and your local Codex authentication through the
+  Codex SDK. See
   [LLM configuration](https://docs.kaelio.com/ktx/docs/guides/llm-configuration).
 - **How is ktx different from a dbt or MetricFlow semantic layer?**
   **ktx** *ingests* those layers and combines them with raw-table

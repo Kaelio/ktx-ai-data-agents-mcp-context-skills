@@ -325,23 +325,35 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
 const MODEL_UNAVAILABLE_MARKERS =
   /\bnot supported\b|\bnot available\b|\bdoes not exist\b|invalid_request_error|\bunknown model\b|\bunsupported model\b/i;
 
-function describeCodexProbeFailure(model: string, message: string): string {
+function describeCodexProbeFailure(model: string, message: string): { message: string; fix: string } {
   if (MODEL_UNAVAILABLE_MARKERS.test(message)) {
-    return `Codex is authenticated, but the configured model "${model}" is not available for this Codex account. Run \`codex\` to see the models your account supports, then set llm.models.default in ktx.yaml (or rerun \`ktx setup\`). Details: ${message}`;
+    const fix = `Run \`codex\` to see the models your account supports, then set llm.models.default in ktx.yaml (or rerun \`ktx setup\`).`;
+    return {
+      message: `Codex is authenticated, but the configured model "${model}" is not available for this Codex account. ${fix} Details: ${message}`,
+      fix,
+    };
   }
-  return `Codex authentication is not usable. Authenticate Codex locally with the Codex CLI, verify the Codex CLI is installed, then rerun setup or the command. Details: ${message}`;
+  const fix = `Authenticate Codex locally with the Codex CLI, verify the Codex CLI is installed, then rerun setup or \`ktx status\`.`;
+  return {
+    message: `Codex authentication is not usable. ${fix} Details: ${message}`,
+    fix,
+  };
 }
 
 export async function runCodexAuthProbe(input: {
   projectDir: string;
   model: string;
   runner?: CodexSdkRunner;
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+}): Promise<{ ok: true } | { ok: false; message: string; fix: string }> {
   let model: string;
   try {
     model = resolveCodexModel(input.model);
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+      fix: 'Set llm.models.default in ktx.yaml to a supported codex model (codex, default, or a gpt-* / codex-* id), or rerun `ktx setup`.',
+    };
   }
 
   const runtime = new CodexKtxLlmRuntime({
@@ -354,6 +366,6 @@ export async function runCodexAuthProbe(input: {
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: describeCodexProbeFailure(model, message) };
+    return { ok: false, ...describeCodexProbeFailure(model, message) };
   }
 }
