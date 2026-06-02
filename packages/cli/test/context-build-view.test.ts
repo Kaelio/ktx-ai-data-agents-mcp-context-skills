@@ -984,6 +984,7 @@ describe('runContextBuild', () => {
         scanProgress: expect.anything(),
         ingestProgress: expect.any(Function),
       }),
+      project,
     );
   });
 
@@ -1015,6 +1016,7 @@ describe('runContextBuild', () => {
       expect.objectContaining({
         runtimeIo: io.io,
       }),
+      project,
     );
   });
 

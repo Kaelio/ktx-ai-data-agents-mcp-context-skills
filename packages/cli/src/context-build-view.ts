@@ -997,7 +997,7 @@ export async function runContextBuild(
       let result: KtxPublicIngestTargetResult | null = null;
       let thrownError: unknown = null;
       try {
-        result = await execTarget(targetState.target, runArgs, capture.io, progressDeps);
+        result = await execTarget(targetState.target, runArgs, capture.io, progressDeps, project);
       } catch (error) {
         thrownError = error;
       }
