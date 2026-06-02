@@ -332,6 +332,30 @@ describe('setup context build state', () => {
     });
   });
 
+  it('captures the raw errorDetail on the result when the context build throws', async () => {
+    await writeReadyProject(tempDir);
+    const io = makeIo();
+    const runContextBuildMock = vi.fn<NonNullable<KtxSetupContextDeps['runContextBuild']>>(async () => {
+      throw new Error('managed runtime exited with code 1');
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        {
+          runIdFactory: () => 'setup-context-local-throw',
+          now: () => new Date('2026-05-09T10:00:00.000Z'),
+          runContextBuild: runContextBuildMock,
+        },
+      ),
+    ).resolves.toEqual({
+      status: 'failed',
+      projectDir: tempDir,
+      errorDetail: 'managed runtime exited with code 1',
+    });
+  });
+
   it('marks context complete without prompting when initial source ingest already made agent context', async () => {
     await writeReadyProject(tempDir);
     await mkdir(join(tempDir, 'semantic-layer', 'dbt-main'), { recursive: true });

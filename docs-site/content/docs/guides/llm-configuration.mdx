@@ -16,6 +16,7 @@ Set `llm.provider.backend` to one of these values:
 - `gateway`: Use AI Gateway-compatible Anthropic model ids.
 - `claude-code`: Use your local Claude Code session through the Claude Agent
   SDK. **ktx** strips provider-routing environment variables from child processes.
+- `codex`: Use your local Codex authentication through the Codex SDK.
 
 ## Claude Code
 
@@ -46,6 +47,42 @@ model IDs are also accepted.
 `claude-code` exposes only **ktx** MCP tools for the current agent loop. SDK init
 metadata may still list host slash commands, skills, and subagents; **ktx** does not
 grant execution access to them.
+
+## Codex backend
+
+Use `codex` when you want **ktx** to run LLM-backed workflows through your
+local Codex authentication instead of a direct provider API key.
+
+```yaml
+llm:
+  provider:
+    backend: codex
+  models:
+    default: gpt-5.5
+```
+
+Configure it non-interactively:
+
+```bash
+ktx setup --llm-backend codex --llm-model gpt-5.5 --no-input
+```
+
+This is separate from Codex agent-client setup. `ktx setup --agents --target
+codex` installs instructions and MCP access for an end-user Codex session.
+`ktx setup --llm-backend codex` makes **ktx** itself execute ingest, scan
+enrichment, memory, and other LLM-backed work through Codex.
+
+During runtime loops, **ktx** starts a temporary loopback MCP server for the
+current run, exposes only the tools passed to that run, asks Codex to use a
+read-only sandbox, sets `approval_policy=never`, auto-approves only those
+run-scoped MCP tools, and disables Codex web search.
+
+Codex backend isolation is currently limited by the public Codex SDK and CLI
+surface. Codex may still load user Codex config and built-in command execution
+or read-only file capabilities. Use `llm.provider.backend: claude-code` when
+you need stricter Claude-Code-style runtime tool isolation, or remove host
+Codex MCP and tool config before running untrusted prompts through the `codex`
+backend.
 
 ## Prompt caching
 

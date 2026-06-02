@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isKtxPreAgentSetupReady, isKtxSetupReady, runKtxSetupReadyChangeMenu } from '../src/setup-ready-menu.js';
+import {
+  classifyKtxSetupCompletion,
+  runKtxSetupReadyChangeMenu,
+  runKtxSetupReadyMenu,
+} from '../src/setup-ready-menu.js';
 import type { KtxSetupStatus } from '../src/setup.js';
 
 const readyStatus: KtxSetupStatus = {
@@ -13,32 +17,58 @@ const readyStatus: KtxSetupStatus = {
   agents: [{ target: 'codex', scope: 'project', ready: true }],
 };
 
-describe('setup ready menu', () => {
-  it('recognizes a ready setup only when required sections are ready', () => {
-    expect(isKtxSetupReady(readyStatus)).toBe(true);
-    expect(isKtxSetupReady({ ...readyStatus, embeddings: { ready: false } })).toBe(false);
-    expect(isKtxSetupReady({ ...readyStatus, runtime: { required: true, ready: false, features: ['core'] } })).toBe(false);
-    expect(isKtxSetupReady({ ...readyStatus, context: { ready: false, status: 'not_started' } })).toBe(false);
-    expect(isKtxSetupReady({ ...readyStatus, agents: [] })).toBe(false);
+describe('classifyKtxSetupCompletion', () => {
+  it('reports ready only when config, context, and agents are all ready', () => {
+    expect(classifyKtxSetupCompletion(readyStatus)).toBe('ready');
   });
 
-  it('recognizes pre-agent readiness without requiring agents', () => {
-    expect(isKtxPreAgentSetupReady(readyStatus)).toBe(true);
-    expect(isKtxPreAgentSetupReady({ ...readyStatus, agents: [] })).toBe(true);
-    expect(isKtxPreAgentSetupReady({ ...readyStatus, embeddings: { ready: false } })).toBe(false);
-    expect(isKtxPreAgentSetupReady({ ...readyStatus, runtime: { required: true, ready: false, features: ['core'] } })).toBe(
-      false,
-    );
-    expect(isKtxPreAgentSetupReady({ ...readyStatus, context: { ready: false, status: 'not_started' } })).toBe(false);
+  it('reports needs-agents when config and context are ready but no agent is installed', () => {
+    expect(classifyKtxSetupCompletion({ ...readyStatus, agents: [] })).toBe('needs-agents');
   });
 
-  it('maps ready-project menu choices to setup sections', async () => {
-    const prompts = { select: vi.fn(async () => 'agents'), cancel: vi.fn() };
+  it('reports needs-context when config is ready but context is not built', () => {
+    expect(
+      classifyKtxSetupCompletion({ ...readyStatus, context: { ready: false, status: 'not_started' } }),
+    ).toBe('needs-context');
+  });
 
-    await expect(runKtxSetupReadyChangeMenu(readyStatus, { prompts })).resolves.toEqual({ action: 'agents' });
+  it('reports incomplete when a required config section is not ready', () => {
+    expect(classifyKtxSetupCompletion({ ...readyStatus, embeddings: { ready: false } })).toBe('incomplete');
+    expect(
+      classifyKtxSetupCompletion({ ...readyStatus, runtime: { required: true, ready: false, features: ['core'] } }),
+    ).toBe('incomplete');
+  });
 
+  it('reports incomplete when no context targets are configured', () => {
+    expect(classifyKtxSetupCompletion({ ...readyStatus, databases: [], sources: [] })).toBe('incomplete');
+  });
+});
+
+describe('runKtxSetupReadyMenu', () => {
+  it('exits when the user is done', async () => {
+    const prompts = { select: vi.fn(async () => 'done'), cancel: vi.fn() };
+
+    await expect(runKtxSetupReadyMenu(readyStatus, { prompts })).resolves.toEqual({ action: 'exit' });
+
+    expect(prompts.select).toHaveBeenCalledTimes(1);
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'KTX is already set up for /tmp/revenue. What would you like to change?',
+      message: 'Anything else?',
+      options: [
+        { value: 'done', label: "Done — I'll start using ktx" },
+        { value: 'change', label: 'Change a setting' },
+      ],
+    });
+  });
+
+  it('opens the section menu when the user chooses to change a setting', async () => {
+    const select = vi.fn().mockResolvedValueOnce('change').mockResolvedValueOnce('models');
+    const prompts = { select, cancel: vi.fn() };
+
+    await expect(runKtxSetupReadyMenu(readyStatus, { prompts })).resolves.toEqual({ action: 'models' });
+
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(select).toHaveBeenLastCalledWith({
+      message: 'What would you like to change?',
       options: [
         { value: 'models', label: 'Models' },
         { value: 'embeddings', label: 'Embeddings' },
@@ -49,5 +79,41 @@ describe('setup ready menu', () => {
         { value: 'exit', label: 'Exit' },
       ],
     });
+  });
+});
+
+describe('runKtxSetupReadyChangeMenu', () => {
+  it('maps ready-project menu choices to setup sections', async () => {
+    const prompts = { select: vi.fn(async () => 'agents'), cancel: vi.fn() };
+
+    await expect(runKtxSetupReadyChangeMenu(readyStatus, { prompts })).resolves.toEqual({ action: 'agents' });
+
+    expect(prompts.select).toHaveBeenCalledWith({
+      message: 'What would you like to change?',
+      options: [
+        { value: 'models', label: 'Models' },
+        { value: 'embeddings', label: 'Embeddings' },
+        { value: 'databases', label: 'Databases' },
+        { value: 'sources', label: 'Context sources' },
+        { value: 'context', label: 'Rebuild KTX context' },
+        { value: 'agents', label: 'Agent integration' },
+        { value: 'exit', label: 'Exit' },
+      ],
+    });
+  });
+
+  it('includes the runtime option only when the runtime is required', async () => {
+    const prompts = { select: vi.fn(async () => 'runtime'), cancel: vi.fn() };
+
+    await runKtxSetupReadyChangeMenu(
+      { ...readyStatus, runtime: { required: true, ready: true, features: ['core'] } },
+      { prompts },
+    );
+
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.arrayContaining([{ value: 'runtime', label: 'Runtime' }]),
+      }),
+    );
   });
 });

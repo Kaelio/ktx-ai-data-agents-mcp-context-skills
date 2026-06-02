@@ -34,4 +34,23 @@ describe('telemetry command hook', () => {
     resetCommandSpan();
     expect(completeCommandSpan({ completedAt: 200, outcome: 'ok' })).toBeUndefined();
   });
+
+  it('captures errorClass and raw errorDetail on a failed command', () => {
+    resetCommandSpan();
+    beginCommandSpan({
+      commandPath: ['ktx', 'ingest'],
+      flagsPresent: {},
+      hasProject: true,
+      attachProjectGroup: false,
+      startedAt: 0,
+    });
+
+    class KtxConnectionError extends Error {}
+    const error = new KtxConnectionError('connect ECONNREFUSED 127.0.0.1:5432');
+
+    const completed = completeCommandSpan({ completedAt: 10, outcome: 'error', error });
+    expect(completed?.outcome).toBe('error');
+    expect(completed?.errorClass).toBe('KtxConnectionError');
+    expect(completed?.errorDetail).toBe('connect ECONNREFUSED 127.0.0.1:5432');
+  });
 });

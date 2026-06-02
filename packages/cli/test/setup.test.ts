@@ -2205,8 +2205,11 @@ describe('setup status', () => {
       join(tempDir, 'ktx.yaml'),
       [
         'setup:',
-        '  database_connection_ids: []',
-        'connections: {}',
+        '  database_connection_ids: [warehouse]',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
         'llm:',
         '  provider:',
         '    backend: anthropic',
@@ -2222,7 +2225,7 @@ describe('setup status', () => {
       'utf-8',
     );
     await writeKtxSetupState(tempDir, {
-      completed_steps: ['project', 'llm', 'embeddings', 'sources', 'runtime', 'context', 'agents'],
+      completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources', 'runtime', 'context', 'agents'],
     });
     await writeFile(
       join(tempDir, '.ktx/agents/install-manifest.json'),
@@ -2275,7 +2278,12 @@ describe('setup status', () => {
           },
           io.io,
           {
-            readyMenuDeps: { prompts: { select: vi.fn(async () => 'agents'), cancel: vi.fn() } },
+            readyMenuDeps: {
+              prompts: {
+                select: vi.fn().mockResolvedValueOnce('change').mockResolvedValueOnce('agents'),
+                cancel: vi.fn(),
+              },
+            },
             model: async (args) => {
               expect(args.skipLlm).toBe(true);
               return { status: 'skipped', projectDir: tempDir };
@@ -2325,8 +2333,11 @@ describe('setup status', () => {
       join(tempDir, 'ktx.yaml'),
       [
         'setup:',
-        '  database_connection_ids: []',
-        'connections: {}',
+        '  database_connection_ids: [warehouse]',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
         'llm:',
         '  provider:',
         '    backend: anthropic',
@@ -2342,7 +2353,7 @@ describe('setup status', () => {
       'utf-8',
     );
     await writeKtxSetupState(tempDir, {
-      completed_steps: ['project', 'llm', 'embeddings', 'sources', 'context'],
+      completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources', 'context'],
     });
     await writeKtxSetupContextState(tempDir, {
       runId: 'setup-context-local-ready',
@@ -2413,6 +2424,171 @@ describe('setup status', () => {
 
     expect(readyMenuSelect).not.toHaveBeenCalled();
     expect(calls).toEqual(['agents']);
+  });
+
+  it('routes a returning user to the context build when config is ready but context is not built', async () => {
+    const calls: string[] = [];
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'setup:',
+        '  database_connection_ids: [warehouse]',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        'ingest:',
+        '  embeddings:',
+        '    backend: openai',
+        '    model: text-embedding-3-small',
+        '    dimensions: 1536',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, {
+      completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources', 'runtime'],
+    });
+
+    const readyMenuSelect = vi.fn();
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: false,
+          skipDatabases: false,
+          skipSources: false,
+          skipAgents: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          readyMenuDeps: { prompts: { select: readyMenuSelect, cancel: vi.fn() } },
+          model: async (args) => {
+            expect(args.skipLlm).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          embeddings: async (args) => {
+            expect(args.skipEmbeddings).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          databases: async (args) => {
+            expect(args.skipDatabases).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          sources: async (args) => {
+            expect(args.skipSources).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          runtime: async () => {
+            calls.push('runtime');
+            return runtimeReady(tempDir);
+          },
+          context: async (args) => {
+            calls.push('context');
+            expect(args.forcePrompt).toBe(true);
+            return { status: 'skipped', projectDir: tempDir };
+          },
+          agents: async () => {
+            calls.push('agents');
+            return { status: 'ready', projectDir: tempDir, installs: [] };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    // Config is done, so the change-everything menu is not shown; setup routes straight
+    // to the build prompt and never re-walks config or installs agents.
+    expect(readyMenuSelect).not.toHaveBeenCalled();
+    expect(calls).toContain('context');
+    expect(calls).not.toContain('agents');
+    const output = io.stdout();
+    expect(output).toContain('Setup is complete. The only step left is to build context');
+    expect(output).toContain('ktx ingest');
+  });
+
+  it('reaches the completion screen instead of a bare shell when the context build is skipped', async () => {
+    const calls: string[] = [];
+    const io = makeIo();
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'setup:',
+        '  database_connection_ids: [warehouse]',
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-6',
+        'ingest:',
+        '  embeddings:',
+        '    backend: openai',
+        '    model: text-embedding-3-small',
+        '    dimensions: 1536',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    await writeKtxSetupState(tempDir, {
+      completed_steps: ['project', 'llm', 'embeddings', 'databases', 'sources', 'runtime'],
+    });
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          skipAgents: false,
+          databaseSchemas: [],
+        },
+        io.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => ({ status: 'skipped', projectDir: tempDir }),
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => runtimeReady(tempDir),
+          context: async () => ({ status: 'skipped', projectDir: tempDir }),
+          agents: async () => {
+            calls.push('agents');
+            return { status: 'ready', projectDir: tempDir, installs: [] };
+          },
+        },
+      ),
+    ).resolves.toBe(0);
+
+    // A skipped build must not install agents nor drop to a bare shell; the end screen
+    // states readiness and points at `ktx ingest`.
+    expect(calls).not.toContain('agents');
+    const output = io.stdout();
+    expect(output).toContain('Setup is complete. The only step left is to build context');
+    expect(output).toContain('ktx ingest');
   });
 
   it('runs only project resolution and agent setup in --agents mode', async () => {

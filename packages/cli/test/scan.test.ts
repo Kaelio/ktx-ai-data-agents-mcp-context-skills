@@ -423,6 +423,37 @@ describe('runKtxScan', () => {
     expect(io.stderr()).not.toContain(tempDir);
   });
 
+  it('records the raw errorDetail in scan_completed telemetry when the scan throws', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    await initKtxProject({ projectDir: tempDir });
+    const runLocalScan = vi.fn(async (): Promise<LocalScanRunResult> => {
+      const error = new Error('introspection timed out');
+      (error as { code?: unknown }).code = 'ETIMEDOUT';
+      throw error;
+    });
+    const io = makeIo({ isTTY: true });
+
+    const code = await runKtxScan(
+      {
+        command: 'run',
+        projectDir: tempDir,
+        connectionId: 'warehouse',
+        mode: 'structural',
+        detectRelationships: false,
+        dryRun: false,
+        databaseIntrospectionUrl: 'http://127.0.0.1:8765',
+      },
+      io.io,
+      { runLocalScan, createLocalIngestAdapters: noLocalIngestAdapters },
+    );
+
+    expect(code).toBe(1);
+    expect(io.stderr()).toContain('"event":"scan_completed"');
+    expect(io.stderr()).toContain('"outcome":"error"');
+    expect(io.stderr()).toContain('"errorDetail":"ETIMEDOUT: introspection timed out"');
+  });
+
   it('passes KTX daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
     await initKtxProject({ projectDir: tempDir });
     const createLocalIngestAdapters = vi.fn(() => []);

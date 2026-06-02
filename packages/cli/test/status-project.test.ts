@@ -44,6 +44,17 @@ function withClaudeCodeLlm(config: KtxProjectConfig): KtxProjectConfig {
   };
 }
 
+function withCodexLlm(config: KtxProjectConfig): KtxProjectConfig {
+  return {
+    ...config,
+    llm: {
+      ...config.llm,
+      provider: { backend: 'codex' },
+      models: { ...config.llm.models, default: 'gpt-5.5' },
+    },
+  };
+}
+
 function baseProjectConfig(): KtxProjectConfig {
   return withClaudeCodeLlm(buildDefaultKtxProjectConfig());
 }
@@ -388,6 +399,126 @@ describe('buildProjectStatus --fast', () => {
     const rendered = renderProjectStatus(status, { verbose: false, useColor: false });
     expect(rendered).toContain('auth probe skipped (--fast)');
     expect(rendered).toContain('pg_stat_statements probe skipped (--fast)');
+  });
+});
+
+describe('buildProjectStatus codex', () => {
+  it('reports authenticated local Codex session', async () => {
+    const project = projectWithConfig(withCodexLlm(buildDefaultKtxProjectConfig()));
+    const status = await buildProjectStatus(project, {
+      codexAuthProbe: async () => ({ ok: true as const }),
+    });
+
+    expect(status.llm).toMatchObject({
+      backend: 'codex',
+      model: 'gpt-5.5',
+      status: 'ok',
+      detail: 'local Codex session authenticated',
+    });
+    expect(status.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('Codex backend isolation is limited'),
+          fix: expect.stringContaining('claude-code'),
+        }),
+      ]),
+    );
+    const rendered = renderProjectStatus(status, { verbose: false, useColor: false });
+    expect(rendered).toContain('Codex backend isolation is limited');
+  });
+
+  it('skips Codex auth probe with --fast', async () => {
+    let probeCalls = 0;
+    const project = projectWithConfig(withCodexLlm(buildDefaultKtxProjectConfig()));
+    const status = await buildProjectStatus(project, {
+      fast: true,
+      codexAuthProbe: async () => {
+        probeCalls += 1;
+        return { ok: true };
+      },
+    });
+
+    expect(probeCalls).toBe(0);
+    expect(status.llm.status).toBe('skipped');
+    expect(status.llm.detail).toMatch(/--fast/);
+  });
+
+  it('surfaces the probe fix for a model-access failure instead of an auth fix', async () => {
+    const project = projectWithConfig(withCodexLlm(buildDefaultKtxProjectConfig()));
+    const status = await buildProjectStatus(project, {
+      codexAuthProbe: async () => ({
+        ok: false,
+        message: 'Codex is authenticated, but the configured model "gpt-5.5" is not available...',
+        fix: 'Run `codex` to see the models your account supports, then set llm.models.default in ktx.yaml (or rerun `ktx setup`).',
+      }),
+    });
+
+    expect(status.llm.status).toBe('fail');
+    expect(status.llm.fix).toContain('llm.models.default');
+    expect(status.llm.fix).not.toContain('Authenticate Codex');
+  });
+});
+
+describe('buildProjectStatus llm models.default requirement', () => {
+  function withBackendNoModel(
+    backend: KtxProjectConfig['llm']['provider']['backend'],
+  ): KtxProjectConfig {
+    const config = buildDefaultKtxProjectConfig();
+    return {
+      ...config,
+      llm: { ...config.llm, provider: { backend }, models: {} },
+    };
+  }
+
+  it('fails codex without llm.models.default and never probes', async () => {
+    let probeCalls = 0;
+    const project = projectWithConfig(withBackendNoModel('codex'));
+    const status = await buildProjectStatus(project, {
+      codexAuthProbe: async () => {
+        probeCalls += 1;
+        return { ok: true };
+      },
+    });
+
+    expect(probeCalls).toBe(0);
+    expect(status.llm.status).toBe('fail');
+    expect(status.llm.detail).toContain('llm.models.default');
+    expect(status.verdict).toBe('blocked');
+  });
+
+  it('fails claude-code without llm.models.default and never probes', async () => {
+    let probeCalls = 0;
+    const project = projectWithConfig(withBackendNoModel('claude-code'));
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: async () => {
+        probeCalls += 1;
+        return { ok: true };
+      },
+    });
+
+    expect(probeCalls).toBe(0);
+    expect(status.llm.status).toBe('fail');
+    expect(status.llm.detail).toContain('llm.models.default');
+    expect(status.verdict).toBe('blocked');
+  });
+
+  it('fails anthropic without llm.models.default even when the key is set', async () => {
+    const config = withBackendNoModel('anthropic');
+    const project = projectWithConfig({
+      ...config,
+      llm: {
+        ...config.llm,
+        provider: { backend: 'anthropic', anthropic: { api_key: 'env:ANTHROPIC_API_KEY' } }, // pragma: allowlist secret
+        models: {},
+      },
+    });
+    const status = await buildProjectStatus(project, {
+      env: { ANTHROPIC_API_KEY: 'sk-test' }, // pragma: allowlist secret
+    });
+
+    expect(status.llm.status).toBe('fail');
+    expect(status.llm.detail).toContain('llm.models.default');
+    expect(status.verdict).toBe('blocked');
   });
 });
 

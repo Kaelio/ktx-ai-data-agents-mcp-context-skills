@@ -312,4 +312,13 @@ describe('createKtxLlmProvider', () => {
       }),
     ).toThrow('claude-code is not an AI SDK LanguageModel backend');
   });
+
+  it('rejects codex as an AI SDK LanguageModel backend', () => {
+    expect(() =>
+      createKtxLlmProvider({
+        backend: 'codex',
+        modelSlots: { default: 'gpt-5.3-codex' },
+      }),
+    ).toThrow('codex is not an AI SDK LanguageModel backend');
+  });
 });

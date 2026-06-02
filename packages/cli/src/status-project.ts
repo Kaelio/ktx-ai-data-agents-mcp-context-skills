@@ -1,6 +1,11 @@
 import { stat as statAsync, readdir as readdirAsync } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
+import {
+  CODEX_ISOLATION_WARNING,
+  CODEX_ISOLATION_WARNING_FIX,
+} from './context/llm/codex-isolation.js';
+import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
 import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
@@ -93,6 +98,11 @@ type ClaudeCodeAuthProbe = (input: {
   model: string;
   env?: NodeJS.ProcessEnv;
 }) => Promise<{ ok: true } | { ok: false; message: string }>;
+
+type CodexAuthProbe = (input: {
+  projectDir: string;
+  model: string;
+}) => Promise<{ ok: true } | { ok: false; message: string; fix: string }>;
 
 const PROJECT_READY_COMMANDS = KTX_NEXT_STEP_DIRECT_COMMANDS.map((step) => step.command);
 
@@ -194,6 +204,7 @@ async function buildLlmStatus(
     projectDir: string;
     env: NodeJS.ProcessEnv;
     claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
+    codexAuthProbe?: CodexAuthProbe;
     fast?: boolean;
     useSpinner?: boolean;
   },
@@ -208,6 +219,18 @@ async function buildLlmStatus(
       status: 'fail',
       detail: 'no LLM configured; research agent will not run',
       fix: 'Run: ktx setup (choose an LLM provider)',
+    };
+  }
+  // The runtime (resolveModelSlots) hard-requires llm.models.default for every
+  // non-none backend; without it ingest/scan/memory throw. Report that here so
+  // status never marks a project ready that the runtime would refuse to run.
+  if (!model || model.trim().length === 0) {
+    return {
+      backend,
+      model,
+      status: 'fail',
+      detail: `llm.models.default is required for backend "${backend}"`,
+      fix: 'Set llm.models.default in ktx.yaml, then rerun `ktx status` (or rerun `ktx setup`).',
     };
   }
   if (backend === 'anthropic') {
@@ -251,7 +274,7 @@ async function buildLlmStatus(
     };
   }
   if (backend === 'claude-code') {
-    const modelName = model ?? 'sonnet';
+    const modelName = model;
     if (options.fast === true) {
       return {
         backend,
@@ -278,6 +301,36 @@ async function buildLlmStatus(
       status: 'fail',
       detail: auth.message,
       fix: 'Authenticate Claude Code locally with the Claude Code CLI, then rerun `ktx status`.',
+    };
+  }
+  if (backend === 'codex') {
+    const modelName = model;
+    if (options.fast === true) {
+      return {
+        backend,
+        model: modelName,
+        status: 'skipped',
+        detail: 'auth probe skipped (--fast)',
+      };
+    }
+    const probe = options.codexAuthProbe ?? runCodexAuthProbe;
+    const auth = await withSpinner(options.useSpinner === true, 'Probing Codex authentication', () =>
+      probe({ projectDir: options.projectDir, model: modelName }),
+    );
+    if (auth.ok) {
+      return {
+        backend,
+        model: modelName,
+        status: 'ok',
+        detail: 'local Codex session authenticated',
+      };
+    }
+    return {
+      backend,
+      model: modelName,
+      status: 'fail',
+      detail: auth.message,
+      fix: auth.fix,
     };
   }
   return { backend, model, status: 'warn', detail: 'unknown LLM backend' };
@@ -572,6 +625,13 @@ function buildWarnings(
     });
   }
 
+  if (llm.backend === 'codex') {
+    warnings.push({
+      message: CODEX_ISOLATION_WARNING,
+      fix: CODEX_ISOLATION_WARNING_FIX,
+    });
+  }
+
   return warnings;
 }
 
@@ -634,6 +694,7 @@ export interface BuildProjectStatusOptions {
   env?: NodeJS.ProcessEnv;
   queryHistoryReadinessProbe?: HistoricSqlReadinessProbe;
   claudeCodeAuthProbe?: ClaudeCodeAuthProbe;
+  codexAuthProbe?: CodexAuthProbe;
   configIssues?: KtxConfigIssue[];
   fast?: boolean;
   useSpinner?: boolean;
@@ -882,6 +943,7 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
     projectDir: project.projectDir,
     env,
     claudeCodeAuthProbe: options.claudeCodeAuthProbe,
+    codexAuthProbe: options.codexAuthProbe,
     fast: options.fast,
     useSpinner: options.useSpinner,
   });

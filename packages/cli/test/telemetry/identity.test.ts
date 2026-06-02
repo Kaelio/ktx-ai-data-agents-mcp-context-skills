@@ -11,18 +11,15 @@ import {
   type TelemetryIdentityEnv,
 } from '../../src/telemetry/identity.js';
 
-function makeIo(stdoutIsTTY = true) {
+function makeIo() {
   let stderr = '';
   return {
-    io: {
-      stdout: { isTTY: stdoutIsTTY, write: () => {} },
-      stderr: {
-        write: (chunk: string) => {
-          stderr += chunk;
-        },
+    stderr: {
+      write: (chunk: string) => {
+        stderr += chunk;
       },
     },
-    stderr: () => stderr,
+    read: () => stderr,
   };
 }
 
@@ -39,14 +36,13 @@ describe('telemetry identity', () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
-  it('creates the telemetry file and one-line notice on first interactive enabled load', async () => {
-    const testIo = makeIo(true);
+  it('creates the telemetry file and one-line notice on first enabled load', async () => {
+    const testIo = makeIo();
 
     const identity = await loadTelemetryIdentity({
       homeDir,
       env,
-      stdoutIsTTY: true,
-      stderr: testIo.io.stderr,
+      stderr: testIo.stderr,
       now: () => new Date('2026-05-22T14:33:02.000Z'),
     });
 
@@ -54,7 +50,7 @@ describe('telemetry identity', () => {
     expect(identity.installId).toMatch(/^[0-9a-f-]{36}$/);
     expect(identity.createdFile).toBe(true);
     expect(identity.noticeShown).toBe(true);
-    expect(testIo.stderr()).toBe(`[2m${TELEMETRY_NOTICE}[22m\n`);
+    expect(testIo.read()).toBe(`\x1b[2m${TELEMETRY_NOTICE}\x1b[22m\n`);
 
     const stored = JSON.parse(await readFile(join(homeDir, '.ktx', 'telemetry.json'), 'utf-8')) as {
       enabled: boolean;
@@ -64,26 +60,46 @@ describe('telemetry identity', () => {
     expect(stored.noticeShownVersion).toBe(1);
   });
 
+  it('mints an identity on a headless first run (no TTY required)', async () => {
+    // A fresh install whose first invocation is headless (IDE-launched
+    // `ktx mcp stdio`, a scripted run) must still be counted. The one-time
+    // notice goes to stderr, which is safe even under the MCP stdio protocol.
+    const testIo = makeIo();
+
+    const identity = await loadTelemetryIdentity({
+      homeDir,
+      env,
+      stderr: testIo.stderr,
+      now: () => new Date('2026-05-22T14:33:02.000Z'),
+    });
+
+    expect(identity).toMatchObject({ enabled: true, createdFile: true, noticeShown: true });
+    expect(identity.installId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(testIo.read()).toBe(`\x1b[2m${TELEMETRY_NOTICE}\x1b[22m\n`);
+    const stored = JSON.parse(await readFile(join(homeDir, '.ktx', 'telemetry.json'), 'utf-8')) as {
+      enabled: boolean;
+    };
+    expect(stored.enabled).toBe(true);
+  });
+
   it('emits the notice without ANSI when NO_COLOR is set', async () => {
-    const testIo = makeIo(true);
+    const testIo = makeIo();
 
     await loadTelemetryIdentity({
       homeDir,
       env: { NO_COLOR: '1' },
-      stdoutIsTTY: true,
-      stderr: testIo.io.stderr,
+      stderr: testIo.stderr,
       now: () => new Date('2026-05-22T14:33:02.000Z'),
     });
 
-    expect(testIo.stderr()).toBe(`${TELEMETRY_NOTICE}\n`);
+    expect(testIo.read()).toBe(`${TELEMETRY_NOTICE}\n`);
   });
 
   it('does not create a file when env disables telemetry', async () => {
     const identity = await loadTelemetryIdentity({
       homeDir,
       env: { KTX_TELEMETRY_DISABLED: '1' },
-      stdoutIsTTY: true,
-      stderr: makeIo(true).io.stderr,
+      stderr: makeIo().stderr,
       now: () => new Date('2026-05-22T14:33:02.000Z'),
     });
 
@@ -91,26 +107,16 @@ describe('telemetry identity', () => {
     await expect(readFile(join(homeDir, '.ktx', 'telemetry.json'), 'utf-8')).rejects.toThrow();
   });
 
-  it('does not create a file for CI or non-TTY command invocations', async () => {
+  it('does not create a file under CI', async () => {
     await expect(
       loadTelemetryIdentity({
         homeDir,
         env: { CI: '1' },
-        stdoutIsTTY: true,
-        stderr: makeIo(true).io.stderr,
+        stderr: makeIo().stderr,
         now: () => new Date('2026-05-22T14:33:02.000Z'),
       }),
     ).resolves.toMatchObject({ enabled: false, createdFile: false });
-
-    await expect(
-      loadTelemetryIdentity({
-        homeDir,
-        env: {},
-        stdoutIsTTY: false,
-        stderr: makeIo(false).io.stderr,
-        now: () => new Date('2026-05-22T14:33:02.000Z'),
-      }),
-    ).resolves.toMatchObject({ enabled: false, createdFile: false });
+    await expect(readFile(join(homeDir, '.ktx', 'telemetry.json'), 'utf-8')).rejects.toThrow();
   });
 
   it('honors persistent enabled false', async () => {
@@ -135,8 +141,7 @@ describe('telemetry identity', () => {
       loadTelemetryIdentity({
         homeDir,
         env,
-        stdoutIsTTY: true,
-        stderr: makeIo(true).io.stderr,
+        stderr: makeIo().stderr,
         now: () => new Date('2026-05-22T15:00:00.000Z'),
       }),
     ).resolves.toMatchObject({
@@ -146,7 +151,7 @@ describe('telemetry identity', () => {
     });
   });
 
-  it('enables a consented identity without a TTY (MCP servers run headless)', async () => {
+  it('honors a consented identity without re-showing the notice', async () => {
     await mkdir(join(homeDir, '.ktx'), { recursive: true });
     await writeFile(
       join(homeDir, '.ktx', 'telemetry.json'),
@@ -163,14 +168,13 @@ describe('telemetry identity', () => {
       ) + '\n',
       'utf-8',
     );
-    const testIo = makeIo(false);
+    const testIo = makeIo();
 
     await expect(
       loadTelemetryIdentity({
         homeDir,
         env,
-        stdoutIsTTY: false,
-        stderr: testIo.io.stderr,
+        stderr: testIo.stderr,
         now: () => new Date('2026-05-22T15:00:00.000Z'),
       }),
     ).resolves.toMatchObject({
@@ -179,12 +183,11 @@ describe('telemetry identity', () => {
       createdFile: false,
       noticeShown: false,
     });
-    // The one-time notice belongs to interactive surfaces only; a headless load
-    // must never write it (the MCP stdio protocol shares the process streams).
-    expect(testIo.stderr()).toBe('');
+    // An already-consented identity must not re-emit the one-time notice.
+    expect(testIo.read()).toBe('');
   });
 
-  it('keeps opt-outs suppressing a consented identity without a TTY', async () => {
+  it('keeps opt-outs suppressing a consented identity', async () => {
     await mkdir(join(homeDir, '.ktx'), { recursive: true });
     await writeFile(
       join(homeDir, '.ktx', 'telemetry.json'),
@@ -207,8 +210,7 @@ describe('telemetry identity', () => {
         loadTelemetryIdentity({
           homeDir,
           env: optOut,
-          stdoutIsTTY: false,
-          stderr: makeIo(false).io.stderr,
+          stderr: makeIo().stderr,
           now: () => new Date('2026-05-22T15:00:00.000Z'),
         }),
       ).resolves.toMatchObject({ enabled: false });
@@ -222,8 +224,7 @@ describe('telemetry identity', () => {
     const identity = await loadTelemetryIdentity({
       homeDir,
       env,
-      stdoutIsTTY: true,
-      stderr: makeIo(true).io.stderr,
+      stderr: makeIo().stderr,
       now: () => new Date('2026-05-22T14:33:02.000Z'),
     });
 

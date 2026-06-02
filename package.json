@@ -32,6 +32,7 @@
     "setup:dev": "node scripts/setup-dev.mjs",
     "release:published-smoke": "node scripts/published-package-smoke.mjs --require-config",
     "release:local-embeddings-smoke": "node scripts/local-embeddings-runtime-smoke.mjs --require-opt-in",
+    "release:codex-backend-smoke": "node scripts/codex-backend-live-smoke.mjs",
     "release:readiness": "node scripts/release-readiness.mjs",
     "release:update-version": "node scripts/update-public-release-version.mjs",
     "relationships:acquire-public-fixtures": "node scripts/acquire-public-benchmark-fixtures.mjs",

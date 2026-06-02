@@ -77,9 +77,10 @@ describe('createLocalBundleIngestRuntime', () => {
       }),
     ).toThrow(
       [
-        'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, or claude-code, or an injected agentRunner.',
-        'Configure a local Claude Code session or API-backed LLM, then rerun ingest:',
+        'ktx ingest requires llm.provider.backend: anthropic, vertex, gateway, claude-code, or codex, or an injected agentRunner.',
+        'Configure a local Claude Code/Codex session or API-backed LLM, then rerun ingest:',
         `  ktx setup --project-dir ${project.projectDir} --llm-backend claude-code --no-input`,
+        `  ktx setup --project-dir ${project.projectDir} --llm-backend codex --llm-model gpt-5.5 --no-input`,
         `  ktx setup --project-dir ${project.projectDir} --llm-backend anthropic --anthropic-api-key-env ANTHROPIC_API_KEY --llm-model claude-sonnet-4-6 --no-input`,
       ].join('\n'),
     );

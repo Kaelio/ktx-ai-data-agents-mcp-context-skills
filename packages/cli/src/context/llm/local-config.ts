@@ -5,6 +5,7 @@ import { resolveKtxConfigReference } from '../core/config-reference.js';
 import type { KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from '../project/config.js';
 import { AiSdkKtxLlmRuntime } from './ai-sdk-runtime.js';
 import { ClaudeCodeKtxLlmRuntime } from './claude-code-runtime.js';
+import { CodexKtxLlmRuntime } from './codex-runtime.js';
 import type { KtxLlmRuntimePort } from './runtime-port.js';
 
 interface LocalConfigDeps {
@@ -13,6 +14,7 @@ interface LocalConfigDeps {
   createKtxLlmProvider?: typeof createKtxLlmProvider;
   createKtxEmbeddingProvider?: typeof createKtxEmbeddingProvider;
   createClaudeCodeRuntime?: (deps: ConstructorParameters<typeof ClaudeCodeKtxLlmRuntime>[0]) => KtxLlmRuntimePort;
+  createCodexRuntime?: (deps: ConstructorParameters<typeof CodexKtxLlmRuntime>[0]) => KtxLlmRuntimePort;
   createAiSdkRuntime?: (deps: { llmProvider: KtxLlmProvider }) => KtxLlmRuntimePort;
 }
 
@@ -104,7 +106,7 @@ export function createLocalKtxLlmProviderFromConfig(
   deps: LocalConfigDeps = {},
 ): KtxLlmProvider | null {
   const resolved = resolveLocalKtxLlmConfig(config, deps.env ?? process.env);
-  if (!resolved || resolved.backend === 'claude-code') {
+  if (!resolved || resolved.backend === 'claude-code' || resolved.backend === 'codex') {
     return null;
   }
   return (deps.createKtxLlmProvider ?? createKtxLlmProvider)(resolved);
@@ -127,6 +129,16 @@ export function createLocalKtxLlmRuntimeFromConfig(
       projectDir,
       modelSlots: resolved.modelSlots,
       env: deps.env,
+    });
+  }
+  if (resolved.backend === 'codex') {
+    const projectDir = deps.projectDir;
+    if (!projectDir) {
+      throw new Error('projectDir is required when creating the codex LLM runtime');
+    }
+    return (deps.createCodexRuntime ?? ((runtimeDeps) => new CodexKtxLlmRuntime(runtimeDeps)))({
+      projectDir,
+      modelSlots: resolved.modelSlots,
     });
   }
   const llmProvider = (deps.createKtxLlmProvider ?? createKtxLlmProvider)(resolved);
