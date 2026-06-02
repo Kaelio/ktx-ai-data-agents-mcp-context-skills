@@ -6,6 +6,7 @@ import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/proj
 import { serializeKtxProjectConfig } from './context/project/config.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { errorMessage, writePrefixedLines } from './clack.js';
+import { formatErrorDetail } from './telemetry/scrubber.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import {
@@ -67,7 +68,7 @@ export type KtxSetupContextResult =
   | { status: 'skipped'; projectDir: string }
   | { status: 'back'; projectDir: string }
   | { status: 'missing-input'; projectDir: string }
-  | { status: 'failed'; projectDir: string };
+  | { status: 'failed'; projectDir: string; errorDetail?: string };
 
 export interface KtxSetupContextStepArgs {
   projectDir: string;
@@ -702,6 +703,6 @@ export async function runKtxSetupContextStep(
     return await runBuild(args, io, deps, project, targets);
   } catch (error) {
     writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
-    return { status: 'failed', projectDir: args.projectDir };
+    return { status: 'failed', projectDir: args.projectDir, errorDetail: formatErrorDetail(error) };
   }
 }

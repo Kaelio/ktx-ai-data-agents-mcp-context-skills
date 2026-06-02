@@ -431,6 +431,32 @@ describe('runKtxPublicIngest', () => {
     }
   });
 
+  it('records errorDetail in ingest_completed telemetry when a target fails', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-ingest-telemetry-fail-'));
+    try {
+      await initKtxProject({ projectDir });
+      const io = makeIo({ isTTY: true });
+      const project = deepReadyProject({
+        warehouse: { driver: 'sqlite', path: join(projectDir, 'warehouse.sqlite') },
+      });
+
+      const code = await runKtxPublicIngest(
+        { command: 'run', projectDir, targetConnectionId: 'warehouse', all: false, json: false, inputMode: 'disabled' },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan: vi.fn(async () => 1) },
+      );
+
+      expect(code).toBe(1);
+      expect(io.stderr()).toContain('"event":"ingest_completed"');
+      expect(io.stderr()).toContain('"outcome":"error"');
+      expect(io.stderr()).toContain('"errorDetail"');
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
   it('runs query history after schema ingest with current-run window override', async () => {
     const io = makeIo();
     const runtimeIo = makeIo({ isTTY: true });

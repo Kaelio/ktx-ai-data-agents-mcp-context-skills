@@ -22,6 +22,7 @@ import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitProjectStackSnapshot, emitTelemetryEvent } from './telemetry/index.js';
+import { formatErrorDetail } from './telemetry/scrubber.js';
 
 profileMark('module:public-ingest');
 
@@ -635,6 +636,9 @@ async function emitIngestCompleted(input: {
   io: KtxCliIo;
 }): Promise<void> {
   const failed = resultFailed(input.result);
+  const failureDetail = failed
+    ? formatErrorDetail(input.result.steps.find((step) => step.status === 'failed')?.detail)
+    : undefined;
   await emitTelemetryEvent({
     name: 'ingest_completed',
     projectDir: input.args.projectDir,
@@ -651,6 +655,7 @@ async function emitIngestCompleted(input: {
       rowsBucket: rowsBucket(),
       durationMs: Math.max(0, performance.now() - input.startedAt),
       outcome: failed ? 'error' : 'ok',
+      ...(failureDetail ? { errorDetail: failureDetail } : {}),
     },
   });
 }

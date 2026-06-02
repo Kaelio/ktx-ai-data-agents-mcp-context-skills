@@ -217,6 +217,7 @@ async function recordSetupStep(input: {
   startedAt: number;
   io: KtxCliIo;
   cliVersion?: string;
+  errorDetail?: string;
 }): Promise<void> {
   const { emitTelemetryEvent } = await import('./telemetry/index.js');
   await emitTelemetryEvent({
@@ -228,6 +229,7 @@ async function recordSetupStep(input: {
       step: input.step,
       outcome: setupTelemetryOutcome(input.status),
       durationMs: Math.max(0, performance.now() - input.startedAt),
+      ...(input.errorDetail ? { errorDetail: input.errorDetail } : {}),
     },
   });
 }
@@ -683,7 +685,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       if (!step) break;
 
       const stepStartedAt = performance.now();
-      let stepResult: { status: KtxSetupFlowStatus };
+      let stepResult: { status: KtxSetupFlowStatus; errorDetail?: string };
       if (step === 'models') {
         const modelRunner =
           deps.model ?? ((modelArgs, modelIo) => runKtxSetupAnthropicModelStep(modelArgs, modelIo, deps.modelDeps));
@@ -844,6 +846,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         startedAt: stepStartedAt,
         io,
         cliVersion: args.cliVersion,
+        ...(stepResult.errorDetail ? { errorDetail: stepResult.errorDetail } : {}),
       });
 
       if (stepResult.status === 'failed') {

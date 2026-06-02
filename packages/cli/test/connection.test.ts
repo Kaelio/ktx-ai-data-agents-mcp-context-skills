@@ -162,6 +162,27 @@ describe('runKtxConnection', () => {
     expect(io.stderr()).not.toContain(projectDir);
   });
 
+  it('records the raw errorDetail in connection_test telemetry when a native test fails', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'sqlite' },
+    });
+    const { connector } = nativeConnector('sqlite', { success: false, error: 'database file is unreadable' });
+    const io = makeIo();
+
+    const code = await runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
+      createScanConnector: vi.fn(async () => connector),
+    });
+
+    expect(code).toBe(1);
+    expect(io.stderr()).toContain('"event":"connection_test"');
+    expect(io.stderr()).toContain('"outcome":"error"');
+    expect(io.stderr()).toContain('"errorDetail":"database file is unreadable"');
+  });
+
   it('reports the connector error and still cleans up when native testConnection fails', async () => {
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });

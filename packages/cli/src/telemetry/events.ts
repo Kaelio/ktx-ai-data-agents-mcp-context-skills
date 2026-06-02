@@ -21,6 +21,7 @@ const commandSchema = telemetryCommonEnvelopeSchema
     durationMs: z.number().nonnegative(),
     outcome: z.enum(['ok', 'error', 'aborted']),
     errorClass: z.string().optional(),
+    errorDetail: z.string().max(1000).optional(),
     flagsPresent: z.record(z.string(), z.boolean()),
     hasProject: z.boolean(),
     projectGroupAttached: z.boolean(),
@@ -45,6 +46,7 @@ const setupStepSchema = telemetryCommonEnvelopeSchema
     ]),
     outcome: z.enum(['completed', 'skipped', 'abandoned']),
     durationMs: z.number().nonnegative(),
+    errorDetail: z.string().max(1000).optional(),
   })
   .strict();
 
@@ -61,6 +63,7 @@ const connectionTestSchema = telemetryCommonEnvelopeSchema
     isDemoConnection: z.boolean(),
     outcome: outcomeSchema,
     errorClass: z.string().optional(),
+    errorDetail: z.string().max(1000).optional(),
     durationMs: z.number().nonnegative(),
     serverVersion: z.string().optional(),
   })
@@ -90,6 +93,7 @@ const ingestCompletedSchema = telemetryCommonEnvelopeSchema
     durationMs: z.number().nonnegative(),
     outcome: outcomeSchema,
     errorClass: z.string().optional(),
+    errorDetail: z.string().max(1000).optional(),
   })
   .strict();
 
@@ -103,6 +107,7 @@ const scanCompletedSchema = telemetryCommonEnvelopeSchema
     durationMs: z.number().nonnegative(),
     outcome: outcomeSchema,
     errorClass: z.string().optional(),
+    errorDetail: z.string().max(1000).optional(),
   })
   .strict();
 
@@ -237,6 +242,7 @@ export const telemetryEventCatalog = [
       'durationMs',
       'outcome',
       'errorClass',
+      'errorDetail',
       'flagsPresent',
       'hasProject',
       'projectGroupAttached',
@@ -245,7 +251,7 @@ export const telemetryEventCatalog = [
   {
     name: 'setup_step',
     description: 'Emitted after an interactive setup step completes, skips, or aborts.',
-    fields: ['step', 'outcome', 'durationMs'],
+    fields: ['step', 'outcome', 'durationMs', 'errorDetail'],
   },
   {
     name: 'connection_added',
@@ -255,7 +261,7 @@ export const telemetryEventCatalog = [
   {
     name: 'connection_test',
     description: 'Emitted after ktx connection test completes.',
-    fields: ['driver', 'isDemoConnection', 'outcome', 'errorClass', 'durationMs', 'serverVersion'],
+    fields: ['driver', 'isDemoConnection', 'outcome', 'errorClass', 'errorDetail', 'durationMs', 'serverVersion'],
   },
   {
     name: 'project_stack_snapshot',
@@ -275,6 +281,7 @@ export const telemetryEventCatalog = [
       'durationMs',
       'outcome',
       'errorClass',
+      'errorDetail',
     ],
   },
   {
@@ -289,6 +296,7 @@ export const telemetryEventCatalog = [
       'durationMs',
       'outcome',
       'errorClass',
+      'errorDetail',
     ],
   },
   {

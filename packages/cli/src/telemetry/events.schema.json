@@ -26,6 +26,7 @@
         "durationMs",
         "outcome",
         "errorClass",
+        "errorDetail",
         "flagsPresent",
         "hasProject",
         "projectGroupAttached"
@@ -37,7 +38,8 @@
       "fields": [
         "step",
         "outcome",
-        "durationMs"
+        "durationMs",
+        "errorDetail"
       ]
     },
     {
@@ -56,6 +58,7 @@
         "isDemoConnection",
         "outcome",
         "errorClass",
+        "errorDetail",
         "durationMs",
         "serverVersion"
       ]
@@ -84,7 +87,8 @@
         "rowsBucket",
         "durationMs",
         "outcome",
-        "errorClass"
+        "errorClass",
+        "errorDetail"
       ]
     },
     {
@@ -98,7 +102,8 @@
         "declaredFkCount",
         "durationMs",
         "outcome",
-        "errorClass"
+        "errorClass",
+        "errorDetail"
       ]
     },
     {
@@ -296,6 +301,10 @@
         "errorClass": {
           "type": "string"
         },
+        "errorDetail": {
+          "type": "string",
+          "maxLength": 1000
+        },
         "flagsPresent": {
           "type": "object",
           "propertyNames": {
@@ -384,6 +393,10 @@
         "durationMs": {
           "type": "number",
           "minimum": 0
+        },
+        "errorDetail": {
+          "type": "string",
+          "maxLength": 1000
         }
       },
       "required": [
@@ -493,6 +506,10 @@
         },
         "errorClass": {
           "type": "string"
+        },
+        "errorDetail": {
+          "type": "string",
+          "maxLength": 1000
         },
         "durationMs": {
           "type": "number",
@@ -673,6 +690,10 @@
         },
         "errorClass": {
           "type": "string"
+        },
+        "errorDetail": {
+          "type": "string",
+          "maxLength": 1000
         }
       },
       "required": [
@@ -759,6 +780,10 @@
         },
         "errorClass": {
           "type": "string"
+        },
+        "errorDetail": {
+          "type": "string",
+          "maxLength": 1000
         }
       },
       "required": [
