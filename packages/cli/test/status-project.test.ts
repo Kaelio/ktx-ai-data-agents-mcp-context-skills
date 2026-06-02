@@ -50,7 +50,7 @@ function withCodexLlm(config: KtxProjectConfig): KtxProjectConfig {
     llm: {
       ...config.llm,
       provider: { backend: 'codex' },
-      models: { ...config.llm.models, default: 'gpt-5.3-codex' },
+      models: { ...config.llm.models, default: 'gpt-5.5' },
     },
   };
 }
@@ -411,7 +411,7 @@ describe('buildProjectStatus codex', () => {
 
     expect(status.llm).toMatchObject({
       backend: 'codex',
-      model: 'gpt-5.3-codex',
+      model: 'gpt-5.5',
       status: 'ok',
       detail: 'local Codex session authenticated',
     });

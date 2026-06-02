@@ -81,6 +81,25 @@ function errorMessageFrom(value: unknown): string {
   return message ?? text(value) ?? 'Codex turn failed';
 }
 
+/**
+ * Codex serializes API failures as a JSON envelope inside the event message
+ * (e.g. `{"type":"error","status":400,"error":{"message":"…"}}`). Surface the
+ * human-readable inner message so callers don't leak raw JSON; pass plain
+ * strings through unchanged.
+ */
+function unwrapCodexApiErrorMessage(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('{')) {
+    return raw;
+  }
+  try {
+    const parsed = record(JSON.parse(trimmed));
+    return text(record(parsed?.error)?.message) ?? text(parsed?.message) ?? raw;
+  } catch {
+    return raw;
+  }
+}
+
 /** @internal */
 export function parseCodexExecEventLine(line: string): unknown {
   try {
@@ -157,7 +176,7 @@ export function summarizeCodexExecEvents(
 
     if (eventType === 'turn.failed' || eventType === 'error') {
       stopReason = 'error';
-      error = new Error(errorMessageFrom(eventRecord.error ?? eventRecord.message));
+      error = new Error(unwrapCodexApiErrorMessage(errorMessageFrom(eventRecord.error ?? eventRecord.message)));
       continue;
     }
   }

@@ -66,8 +66,10 @@ valid with the Anthropic backend; Vertex flags are only valid with the Vertex
 backend. The `claude-code` and `codex` backends use local authentication instead
 of Anthropic API key or Vertex flags. For Claude Code, `--llm-model` accepts
 `sonnet`, `opus`, `haiku`, or a full Claude model ID. For Codex, `--llm-model`
-accepts `codex`, `default`, or a Codex-compatible model ID such as
-`gpt-5.3-codex`.
+accepts `codex`, `default`, or a model ID your Codex account exposes — run
+`codex` to see the models available to your login — such as `gpt-5.5`. Note
+that `*-codex` API-billing model IDs (for example `gpt-5.3-codex`) are not
+available to ChatGPT-subscription logins.
 
 ### Embeddings
 
@@ -195,7 +197,7 @@ ktx setup \
   --llm-model opus
 
 # Configure **ktx** to use local Codex authentication for LLM work
-ktx setup --llm-backend codex --llm-model gpt-5.3-codex --no-input
+ktx setup --llm-backend codex --llm-model gpt-5.5 --no-input
 ```
 
 When you choose `--llm-backend codex`, setup prints a warning if the public

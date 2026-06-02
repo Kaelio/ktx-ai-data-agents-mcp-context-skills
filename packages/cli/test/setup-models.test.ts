@@ -226,7 +226,7 @@ describe('setup Anthropic model step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         llmBackend: 'codex',
-        llmModel: 'gpt-5.3-codex',
+        llmModel: 'gpt-5.5',
         skipLlm: false,
       },
       io.io,
@@ -237,11 +237,63 @@ describe('setup Anthropic model step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.llm).toMatchObject({
       provider: { backend: 'codex' },
-      models: { default: 'gpt-5.3-codex' },
+      models: { default: 'gpt-5.5' },
     });
-    expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.3-codex' }));
-    expect(io.stderr()).toContain('Codex backend isolation is limited');
+    expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.5' }));
+    // The warning carries the clack gutter so it renders inside the setup frame.
+    expect(io.stderr()).toContain('│  Codex backend isolation is limited');
     expect(io.stderr()).toContain('may still load user Codex config');
+  });
+
+  it('defaults the Codex model to gpt-5.5 when none is provided non-interactively', async () => {
+    const io = makeIo();
+    const codexAuthProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        llmBackend: 'codex',
+        skipLlm: false,
+      },
+      io.io,
+      { codexAuthProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm).toMatchObject({
+      provider: { backend: 'codex' },
+      models: { default: 'gpt-5.5' },
+    });
+    expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.5' }));
+  });
+
+  it('offers the curated Codex models during interactive setup', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['codex', 'gpt-5.5'] });
+    const codexAuthProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
+      io.io,
+      { prompts, codexAuthProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Codex model should KTX use?'),
+        options: [
+          { value: 'gpt-5.5', label: 'GPT-5.5', hint: 'recommended' },
+          { value: 'gpt-5.4', label: 'GPT-5.4' },
+          { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
+          { value: 'manual', label: 'Enter a Codex model ID manually' },
+          { value: 'back', label: 'Back' },
+        ],
+      }),
+    );
+    expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-5.5' }));
   });
 
   it('prompts for the Claude Code model during interactive setup', async () => {

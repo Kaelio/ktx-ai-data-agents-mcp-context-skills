@@ -150,6 +150,29 @@ describe('Codex exec event parsing', () => {
     expect(summary.error?.message).toContain('Codex could not connect to required MCP server');
   });
 
+  it('unwraps the Codex API error envelope into its human-readable message', () => {
+    // Codex serializes API errors as a JSON envelope inside the event message.
+    const apiError = JSON.stringify({
+      type: 'error',
+      status: 400,
+      error: {
+        type: 'invalid_request_error',
+        message: "The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.",
+      },
+    });
+    const summary = summarizeCodexExecEvents([
+      { type: 'thread.started', thread_id: 'thr_1' },
+      { type: 'turn.started' },
+      { type: 'error', message: apiError },
+      { type: 'turn.failed', error: { message: apiError } },
+    ]);
+
+    expect(summary.stopReason).toBe('error');
+    expect(summary.error?.message).toBe(
+      "The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.",
+    );
+  });
+
   it('maps max-turns terminal reasons into budget stop reason when Codex emits one', () => {
     const summary = summarizeCodexExecEvents([
       { type: 'turn.started' },

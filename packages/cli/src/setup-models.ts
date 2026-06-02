@@ -5,6 +5,7 @@ import { resolveLocalKtxLlmConfig } from './context/llm/local-config.js';
 import { runClaudeCodeAuthProbe } from './context/llm/claude-code-runtime.js';
 import { formatCodexIsolationWarning } from './context/llm/codex-isolation.js';
 import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
+import { DEFAULT_CODEX_MODEL } from './context/llm/codex-models.js';
 import { resolveKtxConfigReference } from './context/core/config-reference.js';
 import { type KtxProjectConfig, type KtxProjectLlmConfig, serializeKtxProjectConfig } from './context/project/config.js';
 import { loadKtxProject } from './context/project/project.js';
@@ -113,9 +114,18 @@ const CLAUDE_CODE_MODELS: AnthropicModelChoice[] = [
   { id: 'haiku', label: 'Claude Haiku', recommended: false },
 ];
 
+// Curated Codex models from OpenAI's current lineup that work under both
+// ChatGPT-account (subscription) and API-key auth. Intentionally omitted:
+// the `*-codex` ids (e.g. gpt-5.3-codex, gpt-5.2-codex) are API-key-only and
+// fail on ChatGPT-account auth, and gpt-5.3-codex-spark is a ChatGPT-Pro-only
+// research preview. Codex resolves real availability per account at runtime
+// (its binary remote-fetches the model list), so this is a convenience
+// shortlist only — the manual-entry option accepts any id your account's
+// `codex` picker exposes, and the auth probe reports an unsupported choice.
 const CODEX_MODELS: AnthropicModelChoice[] = [
-  { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', recommended: true },
+  { id: 'gpt-5.5', label: 'GPT-5.5', recommended: true },
   { id: 'gpt-5.4', label: 'GPT-5.4', recommended: false },
+  { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini', recommended: false },
 ];
 
 const HIDDEN_ANTHROPIC_MODEL_PATTERNS = [
@@ -913,7 +923,7 @@ async function chooseCodexModel(args: KtxSetupModelArgs, deps: KtxSetupModelDeps
     return { status: 'ready', model: providedModel };
   }
   if (args.inputMode === 'disabled') {
-    return { status: 'ready', model: 'gpt-5.3-codex' };
+    return { status: 'ready', model: DEFAULT_CODEX_MODEL };
   }
 
   const prompts = deps.prompts ?? createPromptAdapter();
@@ -1111,7 +1121,9 @@ export async function runKtxSetupAnthropicModelStep(
         io.stderr.write(`${health.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
       }
-      io.stderr.write(`${formatCodexIsolationWarning()}\n`);
+      // Prefix the clack gutter so the warning sits inside the setup frame
+      // instead of breaking out of it; kept on stderr for scripted runs.
+      io.stderr.write(`│  ${formatCodexIsolationWarning()}\n`);
       await persistLlmConfig(args.projectDir, { backend: 'codex' }, model.model);
       io.stdout.write(`│  LLM ready: yes (codex, ${model.model})\n`);
       return { status: 'ready', projectDir: args.projectDir };

@@ -17,6 +17,29 @@ function runner(items: unknown[]) {
   };
 }
 
+/** Yields the given events, then throws — mirroring the SDK throwing on a non-zero codex exec exit. */
+function throwingRunner(items: unknown[], error: Error) {
+  return {
+    runStreamed: vi.fn(async () =>
+      (async function* () {
+        for (const item of items) {
+          yield item;
+        }
+        throw error;
+      })(),
+    ),
+  };
+}
+
+const MODEL_UNSUPPORTED_API_ERROR = JSON.stringify({
+  type: 'error',
+  status: 400,
+  error: {
+    type: 'invalid_request_error',
+    message: "The 'gpt-5.3-codex' model is not supported when using Codex with a ChatGPT account.",
+  },
+});
+
 function budgetRunner() {
   let observedSignal: AbortSignal | undefined;
   return {
@@ -336,6 +359,29 @@ describe('CodexKtxLlmRuntime', () => {
     expect(order).toEqual(['step-1', 'yielded-after-step-1', 'step-2', 'yielded-after-step-2']);
   });
 
+  it('surfaces the real Codex error event even when the SDK stream throws afterward', async () => {
+    // The SDK yields the error/turn.failed events on stdout, then throws on the
+    // non-zero exit. The masked exit message must not hide the real API error.
+    const fakeRunner = throwingRunner(
+      [
+        { type: 'thread.started', thread_id: 't' },
+        { type: 'turn.started' },
+        { type: 'error', message: MODEL_UNSUPPORTED_API_ERROR },
+        { type: 'turn.failed', error: { message: MODEL_UNSUPPORTED_API_ERROR } },
+      ],
+      new Error('Codex Exec exited with code 1: Reading prompt from stdin...'),
+    );
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hi' })).rejects.toThrow(
+      'not supported when using Codex with a ChatGPT account',
+    );
+  });
+
   it('probes Codex authentication through a minimal non-interactive turn', async () => {
     const fakeRunner = runner([
       { type: 'turn.started' },
@@ -350,5 +396,48 @@ describe('CodexKtxLlmRuntime', () => {
         runner: fakeRunner,
       }),
     ).resolves.toEqual({ ok: true });
+  });
+
+  it('reports an unavailable model without blaming auth when Codex rejects the model', async () => {
+    const fakeRunner = throwingRunner(
+      [
+        { type: 'turn.started' },
+        { type: 'turn.failed', error: { message: MODEL_UNSUPPORTED_API_ERROR } },
+      ],
+      new Error('Codex Exec exited with code 1: Reading prompt from stdin...'),
+    );
+
+    const result = await runCodexAuthProbe({
+      projectDir: '/tmp/project',
+      model: 'gpt-5.3-codex',
+      runner: fakeRunner,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).not.toContain('authentication is not usable');
+      expect(result.message).toContain('not available');
+      expect(result.message).toContain('gpt-5.3-codex');
+      expect(result.message).toContain('not supported when using Codex with a ChatGPT account');
+    }
+  });
+
+  it('reports an auth failure when Codex exits without an error event', async () => {
+    const fakeRunner = throwingRunner(
+      [],
+      new Error('Codex Exec exited with code 1: Not logged in. Run `codex login`.'),
+    );
+
+    const result = await runCodexAuthProbe({
+      projectDir: '/tmp/project',
+      model: 'gpt-5.5',
+      runner: fakeRunner,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('authentication is not usable');
+      expect(result.message).toContain('Not logged in');
+    }
   });
 });

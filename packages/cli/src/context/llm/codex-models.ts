@@ -1,4 +1,4 @@
-const DEFAULT_CODEX_MODEL = 'gpt-5.3-codex';
+export const DEFAULT_CODEX_MODEL = 'gpt-5.5';
 
 const CODEX_MODEL_ALIASES: Record<string, string> = {
   codex: DEFAULT_CODEX_MODEL,

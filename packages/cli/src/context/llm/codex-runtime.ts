@@ -43,6 +43,7 @@ interface CollectCodexEventsOptions {
 interface CollectCodexEventsResult {
   events: unknown[];
   budgetExceeded: boolean;
+  streamError?: Error;
 }
 
 function eventRecord(value: unknown): Record<string, unknown> | undefined {
@@ -69,47 +70,59 @@ async function collectEvents(
   let completedSteps = 0;
   let sawActionStep = false;
   let budgetExceeded = false;
+  let streamError: Error | undefined;
 
-  for await (const event of events) {
-    collected.push(event);
+  // The SDK yields every stdout event, then throws on a non-zero codex exec
+  // exit. Catch that throw so the events already collected (which carry the
+  // real `turn.failed`/`error` reason) survive for the summary; the masked
+  // exit message is kept only as a fallback when no error event was emitted.
+  try {
+    for await (const event of events) {
+      collected.push(event);
 
-    const isActionStep = isCompletedAgentStep(event);
-    if (isActionStep) {
-      sawActionStep = true;
-    } else if (sawActionStep || !isTurnCompleted(event)) {
-      // Only fall back to counting a bare turn as a step when the turn produced
-      // no agent actions; a completed turn is terminal, so it never aborts.
-      continue;
+      const isActionStep = isCompletedAgentStep(event);
+      if (isActionStep) {
+        sawActionStep = true;
+      } else if (sawActionStep || !isTurnCompleted(event)) {
+        // Only fall back to counting a bare turn as a step when the turn produced
+        // no agent actions; a completed turn is terminal, so it never aborts.
+        continue;
+      }
+
+      completedSteps += 1;
+      await options.onStep?.(completedSteps);
+      if (isActionStep && options.stepBudget !== undefined && completedSteps >= options.stepBudget) {
+        budgetExceeded = true;
+        options.abortController?.abort();
+        break;
+      }
     }
-
-    completedSteps += 1;
-    await options.onStep?.(completedSteps);
-    if (isActionStep && options.stepBudget !== undefined && completedSteps >= options.stepBudget) {
-      budgetExceeded = true;
-      options.abortController?.abort();
-      break;
-    }
+  } catch (error) {
+    streamError = error instanceof Error ? error : new Error(String(error));
   }
 
-  return { events: collected, budgetExceeded };
+  return { events: collected, budgetExceeded, ...(streamError ? { streamError } : {}) };
 }
 
 function metrics(summary: CodexExecEventSummary, startedAt: number): { totalMs: number; usage: LlmTokenUsage } {
   return { totalMs: Date.now() - startedAt, usage: summary.usage };
 }
 
-function summaryError(summary: CodexExecEventSummary): Error | undefined {
+function summaryError(summary: CodexExecEventSummary, streamError?: Error): Error | undefined {
+  // A `turn.failed`/`error` event carries the real reason; prefer it over the
+  // SDK's generic non-zero-exit throw. Fall back to the stream error only when
+  // no event explained the failure (e.g. spawn failure or auth before a turn).
   if (summary.error) {
     return summary.error;
   }
   if (summary.toolFailures.length > 0) {
     return new Error(`Codex runtime tool call failed: ${summary.toolFailures.join('; ')}`);
   }
-  return undefined;
+  return streamError;
 }
 
-function assertSuccessfulText(summary: CodexExecEventSummary): string {
-  const error = summaryError(summary);
+function assertSuccessfulText(summary: CodexExecEventSummary, streamError?: Error): string {
+  const error = summaryError(summary, streamError);
   if (error) {
     throw error;
   }
@@ -188,7 +201,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
       );
       const summary = summarizeCodexExecEvents(collected.events, { startedAt });
       input.onMetrics?.(metrics(summary, startedAt));
-      return assertSuccessfulText(summary);
+      return assertSuccessfulText(summary, collected.streamError);
     } finally {
       await mcp?.close();
     }
@@ -230,7 +243,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
       );
       const summary = summarizeCodexExecEvents(collected.events, { startedAt });
       input.onMetrics?.(metrics(summary, startedAt));
-      return parseStructuredOutput(input.schema, assertSuccessfulText(summary));
+      return parseStructuredOutput(input.schema, assertSuccessfulText(summary, collected.streamError));
     } finally {
       await mcp?.close();
     }
@@ -281,7 +294,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
         { stepBudget: params.stepBudget, abortController, onStep },
       );
       const summary = summarizeCodexExecEvents(collected.events, { startedAt });
-      const error = summaryError(summary);
+      const error = summaryError(summary, collected.streamError);
       const stopReason = collected.budgetExceeded ? 'budget' : error ? 'error' : summary.stopReason;
       return {
         stopReason,
@@ -306,6 +319,19 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
   }
 }
 
+// A rejected model is not an auth failure: Codex authenticated, connected, and
+// the API refused the model id. These markers come from the API error envelope
+// (e.g. "model is not supported", "invalid_request_error").
+const MODEL_UNAVAILABLE_MARKERS =
+  /\bnot supported\b|\bnot available\b|\bdoes not exist\b|invalid_request_error|\bunknown model\b|\bunsupported model\b/i;
+
+function describeCodexProbeFailure(model: string, message: string): string {
+  if (MODEL_UNAVAILABLE_MARKERS.test(message)) {
+    return `Codex is authenticated, but the configured model "${model}" is not available for this Codex account. Run \`codex\` to see the models your account supports, then set llm.models.default in ktx.yaml (or rerun \`ktx setup\`). Details: ${message}`;
+  }
+  return `Codex authentication is not usable. Authenticate Codex locally with the Codex CLI, verify the Codex CLI is installed, then rerun setup or the command. Details: ${message}`;
+}
+
 export async function runCodexAuthProbe(input: {
   projectDir: string;
   model: string;
@@ -328,9 +354,6 @@ export async function runCodexAuthProbe(input: {
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return {
-      ok: false,
-      message: `Codex authentication is not usable. Authenticate Codex locally with the Codex CLI, verify the Codex CLI is installed, then rerun setup or the command. ${message}`,
-    };
+    return { ok: false, message: describeCodexProbeFailure(model, message) };
   }
 }

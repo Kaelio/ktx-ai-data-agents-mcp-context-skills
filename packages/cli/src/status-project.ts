@@ -6,6 +6,7 @@ import {
   CODEX_ISOLATION_WARNING_FIX,
 } from './context/llm/codex-isolation.js';
 import { runCodexAuthProbe } from './context/llm/codex-runtime.js';
+import { DEFAULT_CODEX_MODEL } from './context/llm/codex-models.js';
 import type { KtxConfigIssue, KtxProjectConfig, KtxProjectConnectionConfig, KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from './context/project/config.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
@@ -292,7 +293,7 @@ async function buildLlmStatus(
     };
   }
   if (backend === 'codex') {
-    const modelName = model ?? 'gpt-5.3-codex';
+    const modelName = model ?? DEFAULT_CODEX_MODEL;
     if (options.fast === true) {
       return {
         backend,
