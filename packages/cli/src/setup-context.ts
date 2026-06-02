@@ -441,12 +441,10 @@ function writeMissingCapabilities(missing: string[], io: KtxCliIo): void {
   io.stderr.write('\nFix this in setup before building context.\n');
 }
 
-function writeSkippedContext(projectDir: string, io: KtxCliIo): void {
-  io.stdout.write('\nKTX is configured, but context has not been built yet.\n\n');
-  io.stdout.write('Agents were not connected because KTX has not prepared searchable context for them.\n\n');
-  io.stdout.write(`Resume setup:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
-  io.stdout.write(`Build context:\n  ktx setup --project-dir ${resolve(projectDir)}\n\n`);
-  io.stdout.write(`Check status:\n  ktx status --project-dir ${resolve(projectDir)}\n`);
+function writeSkippedContext(io: KtxCliIo): void {
+  // The setup completion screen owns "what to do next" (it points at `ktx ingest`),
+  // so keep this to a short acknowledgement rather than a competing command list.
+  io.stdout.write('\nLeaving context unbuilt for now.\n');
 }
 
 function writeSuccess(
@@ -695,7 +693,7 @@ export async function runKtxSetupContextStep(
         return { status: 'back', projectDir: args.projectDir };
       }
       if (choice === 'skip') {
-        writeSkippedContext(args.projectDir, io);
+        writeSkippedContext(io);
         return { status: 'skipped', projectDir: args.projectDir };
       }
     }
