@@ -70,8 +70,7 @@ export function formatSetupNextStepLines(state: KtxSetupNextStepState, indent = 
 
   if (!state.contextReady) {
     return [
-      `${indent}Build KTX context next.`,
-      `${indent}Run ingest to build database schema context before context-source ingest.`,
+      `${indent}Setup is complete. The only step left is to build context for your agents.`,
       ...commandLines(KTX_CONTEXT_BUILD_COMMANDS, indent),
     ];
   }
