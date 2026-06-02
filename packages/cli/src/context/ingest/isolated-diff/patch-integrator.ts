@@ -155,18 +155,103 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
         },
       );
     } catch (semanticError) {
-      if (preApplyHead) {
-        await input.integrationGit.resetHardTo(preApplyHead);
-      }
+      const reason = errorMessage(semanticError);
       await input.trace.event('error', 'integration', 'patch_semantic_conflict_after_textual_resolution', {
         unitKey: input.unitKey,
         patchPath: input.patchPath,
         touchedPaths: textualResolution.changedPaths,
-        reason: errorMessage(semanticError),
+        reason,
       });
+
+      // A textual conflict and a semantic-gate failure can co-occur: the resolver
+      // reconciles the text but can leave wiki sl_refs pointing at measures the
+      // merged source no longer defines. Recover via the same gate repair the
+      // clean-apply branch uses, instead of hard-failing the whole job.
+      if (input.repairGateFailure) {
+        const gateRepair = await input.repairGateFailure({
+          unitKey: input.unitKey,
+          patchPath: input.patchPath,
+          touchedPaths: textualResolution.changedPaths,
+          reason,
+        });
+
+        if (gateRepair.status !== 'failed') {
+          // The resolver wrote its merge to the worktree (unstaged); the repair
+          // edited a subset on top. Commit the union so neither is dropped.
+          const resolvedAndRepairedPaths = [
+            ...new Set([...textualResolution.changedPaths, ...gateRepair.changedPaths]),
+          ].sort();
+          try {
+            await traceTimed(
+              input.trace,
+              'integration',
+              'semantic_gate_after_gate_repair',
+              { unitKey: input.unitKey, touchedPaths: gateRepair.changedPaths },
+              async () => {
+                await input.validateAppliedTree(gateRepair.changedPaths);
+              },
+            );
+
+            const commit = await input.integrationGit.commitFiles(
+              resolvedAndRepairedPaths,
+              `ingest: resolve WorkUnit ${input.unitKey} conflict`,
+              input.author.name,
+              input.author.email,
+            );
+            if (commit.created) {
+              await input.trace.event('debug', 'integration', 'patch_accepted_after_textual_resolution', {
+                unitKey: input.unitKey,
+                commitSha: commit.commitHash,
+                touchedPaths: resolvedAndRepairedPaths,
+                attempts: textualResolution.attempts,
+                gateRepairAttempts: gateRepair.attempts,
+              });
+              return {
+                status: 'accepted',
+                commitSha: commit.commitHash,
+                touchedPaths: resolvedAndRepairedPaths,
+                textualResolution,
+                gateRepair,
+              };
+            }
+          } catch (repairValidationError) {
+            if (preApplyHead) {
+              await input.integrationGit.resetHardTo(preApplyHead);
+            }
+            await input.trace.event('error', 'integration', 'patch_semantic_conflict_after_textual_resolution', {
+              unitKey: input.unitKey,
+              patchPath: input.patchPath,
+              touchedPaths: gateRepair.changedPaths,
+              reason: errorMessage(repairValidationError),
+            });
+            return {
+              status: 'semantic_conflict',
+              reason: errorMessage(repairValidationError),
+              touchedPaths: gateRepair.changedPaths,
+              textualResolution,
+              gateRepair,
+            };
+          }
+        }
+
+        if (preApplyHead) {
+          await input.integrationGit.resetHardTo(preApplyHead);
+        }
+        return {
+          status: 'semantic_conflict',
+          reason: gateRepair.status === 'failed' ? gateRepair.reason : reason,
+          touchedPaths: textualResolution.changedPaths,
+          textualResolution,
+          gateRepair,
+        };
+      }
+
+      if (preApplyHead) {
+        await input.integrationGit.resetHardTo(preApplyHead);
+      }
       return {
         status: 'semantic_conflict',
-        reason: errorMessage(semanticError),
+        reason,
         touchedPaths: textualResolution.changedPaths,
         textualResolution,
       };

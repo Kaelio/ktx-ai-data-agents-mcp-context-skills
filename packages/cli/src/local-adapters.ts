@@ -12,7 +12,7 @@ import { isKtxSqliteConnectionConfig } from './connectors/sqlite/connector.js';
 import { createSqlServerLiveDatabaseIntrospection } from './connectors/sqlserver/live-database-introspection.js';
 import { isKtxSqlServerConnectionConfig } from './connectors/sqlserver/connector.js';
 import { BigQueryHistoricSqlQueryHistoryReader } from './context/ingest/adapters/historic-sql/bigquery-query-history-reader.js';
-import { queryHistoryDialectForConnection } from './context/ingest/adapters/historic-sql/connection-dialect.js';
+import { historicSqlDialectForConnectionDriver } from './context/ingest/adapters/historic-sql/connection-dialect.js';
 import { createDaemonLiveDatabaseIntrospection } from './context/ingest/adapters/live-database/daemon-introspection.js';
 import { createDefaultLocalIngestAdapters, type DefaultLocalIngestAdaptersOptions } from './context/ingest/local-adapters.js';
 import type { HistoricSqlReader } from './context/ingest/adapters/historic-sql/types.js';
@@ -268,7 +268,12 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
     return undefined;
   }
   const connection = project.config.connections[connectionId];
-  const dialect = queryHistoryDialectForConnection(connection);
+  // historicSqlConnectionId is only set when query history was explicitly
+  // requested for this run (e.g. `--query-history`), so resolve the dialect from
+  // driver capability rather than the persisted context.queryHistory.enabled
+  // flag — otherwise the adapter is missing and findAdapter('historic-sql')
+  // throws even though the run asked for it.
+  const dialect = historicSqlDialectForConnectionDriver(connection);
   if (!dialect) {
     return undefined;
   }

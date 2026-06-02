@@ -401,4 +401,72 @@ describe('integrateWorkUnitPatch', () => {
     });
     await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('old\n');
   });
+
+  it('repairs a semantic gate failure after a textual conflict is resolved', async () => {
+    const { homeDir, configDir, git } = await makeRepo();
+    await mkdir(join(configDir, 'wiki/global'), { recursive: true });
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'base\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'base page', 'System User', 'system@example.com');
+    const conflictBase = await git.revParseHead();
+
+    await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\n', 'utf-8');
+    await git.commitFiles(['wiki/global/a.md'], 'accepted edit', 'System User', 'system@example.com');
+
+    const childDir = join(homeDir, 'child-conflict-repair');
+    await git.addWorktree(childDir, 'child-conflict-repair', conflictBase);
+    const childGit = git.forWorktree(childDir);
+    await writeFile(join(childDir, 'wiki/global/a.md'), 'proposal\n', 'utf-8');
+    await childGit.commitFiles(['wiki/global/a.md'], 'proposal edit', 'System User', 'system@example.com');
+    const patchPath = join(homeDir, 'proposal-repair.patch');
+    await childGit.writeBinaryNoRenamePatch(conflictBase, 'HEAD', patchPath);
+
+    const trace = new FileIngestTraceWriter({
+      tracePath: join(homeDir, '.ktx/ingest-traces/job-resolver-repair/trace.jsonl'),
+      jobId: 'job-resolver-repair',
+      connectionId: 'warehouse',
+      sourceKey: 'metabase',
+      level: 'trace',
+    });
+
+    // Gate fails on the resolver's merged tree, then passes after the repair edit.
+    const validateAppliedTree = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error('final artifact gates failed:\narr-definition: unknown sl_refs entity mart_arr_daily.arr_dollars'),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const repairGateFailure = vi.fn(async (context: { unitKey: string; touchedPaths: string[] }) => {
+      expect(context).toMatchObject({ unitKey: 'wu-conflict-repair', touchedPaths: ['wiki/global/a.md'] });
+      await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\nproposal repaired\n', 'utf-8');
+      return { status: 'repaired' as const, attempts: 1, changedPaths: ['wiki/global/a.md'] };
+    });
+
+    const result = await integrateWorkUnitPatch({
+      unitKey: 'wu-conflict-repair',
+      patchPath,
+      integrationGit: git,
+      trace,
+      author: { name: 'System User', email: 'system@example.com' },
+      slDisallowed: false,
+      allowedTargetConnectionIds: new Set(['warehouse']),
+      validateAppliedTree,
+      resolveTextualConflict: vi.fn(async () => {
+        await writeFile(join(configDir, 'wiki/global/a.md'), 'accepted\nproposal\n', 'utf-8');
+        return { status: 'repaired' as const, attempts: 1, changedPaths: ['wiki/global/a.md'] };
+      }),
+      repairGateFailure,
+    });
+
+    expect(result).toMatchObject({
+      status: 'accepted',
+      touchedPaths: ['wiki/global/a.md'],
+      textualResolution: { status: 'repaired' },
+      gateRepair: { status: 'repaired', attempts: 1, changedPaths: ['wiki/global/a.md'] },
+    });
+    expect(validateAppliedTree).toHaveBeenCalledTimes(2);
+    expect(repairGateFailure).toHaveBeenCalledOnce();
+    await expect(readFile(join(configDir, 'wiki/global/a.md'), 'utf-8')).resolves.toBe('accepted\nproposal repaired\n');
+    await expect(readFile(trace.tracePath, 'utf-8')).resolves.toContain('patch_accepted_after_textual_resolution');
+  });
 });

@@ -70,6 +70,37 @@ describe('CLI local ingest adapters', () => {
     ]);
   });
 
+  it('registers historic SQL when explicitly requested even if connection query history is disabled', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: false',
+        'ingest:',
+        '  adapters:',
+        '    - historic-sql',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+
+    // `--query-history` sets historicSqlConnectionId for the run; that explicit
+    // request is the opt-in, so the persisted context.queryHistory.enabled flag
+    // must not gate adapter registration.
+    const adapters = createKtxCliLocalIngestAdapters(project, {
+      historicSqlConnectionId: 'warehouse',
+      sqlAnalysis: sqlAnalysisStub(),
+    });
+
+    expect(adapters.some((adapter) => adapter.source === 'historic-sql')).toBe(true);
+  });
+
   it('registers BigQuery historic SQL from the requested connection', async () => {
     await writeProject(
       tempDir,
