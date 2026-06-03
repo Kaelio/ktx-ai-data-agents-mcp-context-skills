@@ -9,11 +9,18 @@ import type { StagedPatternsInput } from '../../../../../src/context/ingest/adap
 
 type PatternTemplate = StagedPatternsInput['templates'][number];
 
+function tableRef(value: string): { catalog: string | null; db: string | null; name: string } {
+  const parts = value.split('.');
+  if (parts.length === 3) return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
+  if (parts.length === 2) return { catalog: null, db: parts[0]!, name: parts[1]! };
+  return { catalog: null, db: null, name: value };
+}
+
 function template(id: string, tablesTouched: string[], canonicalSql = 'select 1'): PatternTemplate {
   return {
     id,
     canonicalSql,
-    tablesTouched,
+    tablesTouched: tablesTouched.map(tableRef),
     executionsBucket: '10-100',
     distinctUsersBucket: '2-5',
     dialect: 'postgres',

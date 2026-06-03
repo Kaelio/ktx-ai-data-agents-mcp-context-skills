@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -205,6 +205,8 @@ describe('local ingest adapters', () => {
       dialect: 'postgres',
       minExecutions: 7,
       enabledTables: [],
+      enabledSchemas: [],
+      modeledTableCatalog: [],
       filters: {
         serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
         dropTrivialProbes: true,
@@ -234,6 +236,44 @@ describe('local ingest adapters', () => {
       dialect: 'postgres',
       minExecutions: 7,
       filters: { dropTrivialProbes: true },
+    });
+  });
+
+  it('passes computed modeled scope to direct historic-sql adapter pull config', async () => {
+    await mkdir(join(project.projectDir, 'semantic-layer/warehouse'), { recursive: true });
+    await writeFile(
+      join(project.projectDir, 'semantic-layer/warehouse/revenue.yaml'),
+      [
+        'name: revenue',
+        'table: orbit_analytics.mart_revenue',
+        'grain: [id]',
+        'columns:',
+        '  - name: id',
+        '    type: string',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const projectWithQueryHistory = projectWithConnections({
+      warehouse: {
+        driver: 'postgres',
+        schemas: ['orbit_raw'],
+        context: {
+          queryHistory: {
+            enabled: true,
+            minExecutions: 7,
+            filters: { dropTrivialProbes: true },
+          },
+        },
+      },
+    });
+    const adapter = { source: 'historic-sql' } as never;
+
+    await expect(localPullConfigForAdapter(projectWithQueryHistory, adapter, 'warehouse')).resolves.toMatchObject({
+      dialect: 'postgres',
+      minExecutions: 7,
+      enabledSchemas: ['orbit_analytics', 'orbit_raw'],
+      modeledTableCatalog: [{ catalog: null, db: 'orbit_analytics', name: 'mart_revenue' }],
     });
   });
 

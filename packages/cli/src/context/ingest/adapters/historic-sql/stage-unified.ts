@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
+import { tableRefKey, tableRefSet, type KtxTableRefKey } from '../../../scan/table-ref.js';
+import type { KtxTableRef } from '../../../scan/types.js';
 import {
   bucketDistinctUsers,
   bucketErrorRate,
@@ -38,17 +40,13 @@ interface StageHistoricSqlAggregatedSnapshotInput {
 
 interface ParsedTemplate {
   template: AggregatedTemplate;
-  tablesTouched: string[];
-  includedTables: string[];
+  tablesTouched: KtxTableRef[];
+  includedTables: KtxTableRef[];
   columnsByClause: Record<string, string[]>;
 }
 
-interface EnabledTableFilter {
-  exact: Set<string>;
-  uniqueUnqualified: Set<string>;
-}
-
 interface TableAccumulator {
+  tableRef: KtxTableRef;
   table: string;
   executions: number;
   distinctUsers: number;
@@ -122,90 +120,43 @@ function shouldDropTemplate(template: AggregatedTemplate, config: HistoricSqlUni
   return false;
 }
 
-function normalizeTableIdentifier(value: string): string {
-  return value.trim().toLowerCase();
+function displayTableRef(ref: KtxTableRef): string {
+  return [ref.catalog, ref.db, ref.name].filter((part): part is string => !!part && part.length > 0).join('.');
 }
 
-function unqualifiedTableIdentifier(value: string): string {
-  const parts = normalizeTableIdentifier(value).split('.').filter(Boolean);
-  return parts.at(-1) ?? '';
+function namespaceKey(ref: KtxTableRef): string | null {
+  if (!ref.db) return null;
+  return `${ref.catalog ?? ''}\x1f${ref.db}`;
 }
 
-function buildEnabledTableFilter(enabledTables: string[]): EnabledTableFilter | null {
-  if (enabledTables.length === 0) {
-    return null;
-  }
-  const exact = new Set(enabledTables.map(normalizeTableIdentifier).filter((value) => value.length > 0));
-  const unqualifiedCounts = new Map<string, number>();
-  for (const table of exact) {
-    const unqualified = unqualifiedTableIdentifier(table);
-    if (unqualified.length > 0) {
-      unqualifiedCounts.set(unqualified, (unqualifiedCounts.get(unqualified) ?? 0) + 1);
-    }
-  }
-  return {
-    exact,
-    uniqueUnqualified: new Set(
-      [...unqualifiedCounts.entries()]
-        .filter(([, count]) => count === 1)
-        .map(([table]) => table),
-    ),
-  };
+function namespaceKeysFromSchemas(enabledSchemas: readonly string[]): Set<string> {
+  return new Set(enabledSchemas.filter((schema) => schema !== '*').map((schema) => `\x1f${schema}`));
 }
 
-function isEnabledTable(table: string, filter: EnabledTableFilter | null): boolean {
-  if (!filter) {
-    return true;
-  }
-  const normalized = normalizeTableIdentifier(table);
-  return filter.exact.has(normalized) || filter.uniqueUnqualified.has(unqualifiedTableIdentifier(normalized));
+function isScopeFloorDisabled(config: HistoricSqlUnifiedPullConfig): boolean {
+  return config.enabledSchemas.includes('*');
 }
 
-/**
- * pg_stat_statements records queries as written, so the same physical table can appear
- * both bare (`accounts`, resolved via search_path) and schema-qualified
- * (`orbit_raw.accounts`). Collapse a bare identifier into its schema-qualified form when
- * exactly one qualified form shares its unqualified name, so the two never become separate
- * work units. Ambiguous bare names (two qualified forms) are left untouched.
- */
-function canonicalizeTableIdentifiers(parsedTemplates: ParsedTemplate[]): void {
-  const all = new Set<string>();
-  for (const parsed of parsedTemplates) {
-    for (const table of parsed.includedTables) {
-      all.add(table);
-    }
+function shouldFailOpenScope(config: HistoricSqlUnifiedPullConfig): boolean {
+  return config.enabledTables.length === 0 && !isScopeFloorDisabled(config) && config.enabledSchemas.length === 0;
+}
+
+function includedTableRefs(
+  tablesTouched: readonly KtxTableRef[],
+  config: HistoricSqlUnifiedPullConfig,
+): KtxTableRef[] {
+  if (config.enabledTables.length > 0) {
+    const enabled = tableRefSet(config.enabledTables);
+    return tablesTouched.filter((ref) => enabled.has(tableRefKey(ref)));
   }
-  const qualifiedByUnqualified = new Map<string, Set<string>>();
-  for (const table of all) {
-    if (!table.includes('.')) {
-      continue;
-    }
-    const unqualified = unqualifiedTableIdentifier(table);
-    if (unqualified.length === 0) {
-      continue;
-    }
-    const forms = qualifiedByUnqualified.get(unqualified) ?? new Set<string>();
-    forms.add(table);
-    qualifiedByUnqualified.set(unqualified, forms);
+  if (isScopeFloorDisabled(config) || shouldFailOpenScope(config)) {
+    return [...tablesTouched];
   }
-  const canonical = new Map<string, string>();
-  for (const table of all) {
-    if (table.includes('.')) {
-      continue;
-    }
-    const forms = qualifiedByUnqualified.get(unqualifiedTableIdentifier(table));
-    if (forms && forms.size === 1) {
-      canonical.set(table, [...forms][0]);
-    }
-  }
-  if (canonical.size === 0) {
-    return;
-  }
-  const remap = (table: string): string => canonical.get(table) ?? table;
-  for (const parsed of parsedTemplates) {
-    parsed.includedTables = [...new Set(parsed.includedTables.map(remap))].sort();
-    parsed.tablesTouched = [...new Set(parsed.tablesTouched.map(remap))].sort();
-  }
+  const schemas = namespaceKeysFromSchemas(config.enabledSchemas);
+  return tablesTouched.filter((ref) => {
+    const key = namespaceKey(ref);
+    return key !== null && schemas.has(key);
+  });
 }
 
 function historicSqlWindowDays(config: HistoricSqlUnifiedPullConfig): number {
@@ -240,9 +191,10 @@ function recordJoin(acc: TableAccumulator, otherTable: string, columns: string[]
   }
 }
 
-function accumulatorFor(table: string): TableAccumulator {
+function accumulatorFor(tableRef: KtxTableRef): TableAccumulator {
   return {
-    table,
+    tableRef,
+    table: displayTableRef(tableRef),
     executions: 0,
     distinctUsers: 0,
     errorRateNumerator: 0,
@@ -272,8 +224,8 @@ function addTemplate(acc: TableAccumulator, parsed: ParsedTemplate): void {
     }
   }
   const joinColumns = parsed.columnsByClause.join ?? [];
-  for (const otherTable of parsed.tablesTouched.filter((table) => table !== acc.table)) {
-    recordJoin(acc, otherTable, joinColumns, executions);
+  for (const otherTable of parsed.tablesTouched.filter((table) => tableRefKey(table) !== tableRefKey(acc.tableRef))) {
+    recordJoin(acc, displayTableRef(otherTable), joinColumns, executions);
   }
   acc.topTemplates.push(parsed.template);
 }
@@ -310,6 +262,7 @@ function toStagedTable(acc: TableAccumulator, now: Date): StagedTableInput {
 
   return {
     table: acc.table,
+    tableRef: acc.tableRef,
     stats: {
       executionsBucket: bucketExecutions(acc.executions),
       distinctUsersBucket: bucketDistinctUsers(acc.distinctUsers),
@@ -329,7 +282,7 @@ function toPatternsInput(parsedTemplates: ParsedTemplate[]): StagedPatternsInput
       .map(({ template, tablesTouched }) => ({
         id: template.templateId,
         canonicalSql: template.canonicalSql,
-        tablesTouched: [...tablesTouched].sort(),
+        tablesTouched: [...tablesTouched].sort((left, right) => tableRefKey(left).localeCompare(tableRefKey(right))),
         executionsBucket: bucketExecutions(template.stats.executions),
         distinctUsersBucket: bucketDistinctUsers(template.stats.distinctUsers),
         dialect: template.dialect,
@@ -340,7 +293,6 @@ function toPatternsInput(parsedTemplates: ParsedTemplate[]): StagedPatternsInput
 
 export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSqlAggregatedSnapshotInput): Promise<void> {
   const config = historicSqlUnifiedPullConfigSchema.parse(input.pullConfig);
-  const enabledTableFilter = buildEnabledTableFilter(config.enabledTables);
   const redactors = compileHistoricSqlRedactionPatterns(config.redactionPatterns);
   const now = input.now ?? new Date();
   const windowStart = new Date(now.getTime() - historicSqlWindowDays(config) * 24 * 60 * 60 * 1000);
@@ -359,8 +311,9 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
   const analysis = await input.sqlAnalysis.analyzeBatch(
     snapshot.map((template) => ({ id: template.templateId, sql: template.canonicalSql })),
     config.dialect,
+    config.modeledTableCatalog.length > 0 ? { catalog: { tables: config.modeledTableCatalog } } : undefined,
   );
-  const warnings: string[] = [];
+  const warnings: string[] = shouldFailOpenScope(config) ? ['query_history_scope_floor_disabled:empty_modeled_scope'] : [];
   const parsedTemplates: ParsedTemplate[] = [];
   for (const template of snapshot) {
     const parsed = analysis.get(template.templateId);
@@ -368,8 +321,10 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
       warnings.push(`parse_failed:${template.templateId}`);
       continue;
     }
-    const tablesTouched = [...new Set(parsed.tablesTouched)].filter((table) => table.length > 0).sort();
-    const includedTables = tablesTouched.filter((table) => isEnabledTable(table, enabledTableFilter));
+    const tablesTouched = [...new Map(parsed.tablesTouched.map((ref) => [tableRefKey(ref), ref])).values()]
+      .filter((ref) => ref.name.length > 0)
+      .sort((left, right) => tableRefKey(left).localeCompare(tableRefKey(right)));
+    const includedTables = includedTableRefs(tablesTouched, config);
     if (includedTables.length === 0) {
       continue;
     }
@@ -383,20 +338,19 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
     });
   }
 
-  canonicalizeTableIdentifiers(parsedTemplates);
-
-  const byTable = new Map<string, TableAccumulator>();
+  const byTable = new Map<KtxTableRefKey, TableAccumulator>();
   for (const parsed of parsedTemplates) {
-    for (const table of parsed.includedTables) {
-      const acc = byTable.get(table) ?? accumulatorFor(table);
+    for (const tableRef of parsed.includedTables) {
+      const key = tableRefKey(tableRef);
+      const acc = byTable.get(key) ?? accumulatorFor(tableRef);
       addTemplate(acc, parsed);
-      byTable.set(table, acc);
+      byTable.set(key, acc);
     }
   }
 
   await mkdir(input.stagedDir, { recursive: true });
-  for (const [table, acc] of [...byTable.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    await writeJson(input.stagedDir, `tables/${table}.json`, toStagedTable(acc, now));
+  for (const [, acc] of [...byTable.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+    await writeJson(input.stagedDir, `tables/${acc.table}.json`, toStagedTable(acc, now));
   }
   const patternsInput = toPatternsInput(parsedTemplates);
   const patternInputSplit = splitHistoricSqlPatternInputs(patternsInput);

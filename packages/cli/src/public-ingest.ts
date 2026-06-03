@@ -5,6 +5,7 @@ import type { KtxProgressPort } from './context/scan/types.js';
 import type { KtxCliIo } from './index.js';
 import type { KtxIngestArgs, KtxIngestDeps, KtxIngestProgressUpdate } from './ingest.js';
 import { isDatabaseDriver, normalizeConnectionDriver } from './connection-drivers.js';
+import { resolveQueryHistoryScopeFloor } from './context/ingest/adapters/historic-sql/scope-floor.js';
 import {
   ensureManagedPythonCommandRuntime,
   type KtxManagedPythonInstallPolicy,
@@ -19,6 +20,7 @@ import {
 import { createAggregateProgressPort } from './progress-port-adapter.js';
 import { resolvePublicIngestRuntimeRequirements } from './runtime-requirements.js';
 import type { KtxScanArgs, KtxScanDeps } from './scan.js';
+import type { KtxTableRef } from './context/scan/types.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitProjectStackSnapshot, emitTelemetryEvent } from './telemetry/index.js';
@@ -281,26 +283,29 @@ function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-function enabledTablesForConnection(connection: KtxProjectConnectionConfig): string[] | undefined {
-  const raw = connection.enabled_tables;
-  if (!Array.isArray(raw)) {
-    return undefined;
-  }
-  const tables = raw.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-  return tables.length > 0 ? tables : undefined;
-}
-
 function queryHistoryPullConfig(input: {
   stored: Record<string, unknown>;
   dialect: HistoricSqlDialect;
   windowDays?: number;
-  enabledTables?: string[];
+  enabledTables?: KtxTableRef[];
+  enabledSchemas?: string[];
+  modeledTableCatalog?: KtxTableRef[];
 }): Record<string, unknown> {
-  const { enabled: _enabled, dialect: _dialect, ...storedConfig } = input.stored;
+  const {
+    enabled: _enabled,
+    dialect: _dialect,
+    enabledTables: _enabledTables,
+    enabledSchemas: _enabledSchemas,
+    ...storedConfig
+  } = input.stored;
   return {
     ...storedConfig,
     dialect: input.dialect,
-    ...(input.enabledTables ? { enabledTables: input.enabledTables } : {}),
+    ...(input.enabledTables && input.enabledTables.length > 0 ? { enabledTables: input.enabledTables } : {}),
+    ...(input.enabledSchemas && input.enabledSchemas.length > 0 ? { enabledSchemas: input.enabledSchemas } : {}),
+    ...(input.modeledTableCatalog && input.modeledTableCatalog.length > 0
+      ? { modeledTableCatalog: input.modeledTableCatalog }
+      : {}),
     ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
   };
 }
@@ -361,7 +366,6 @@ function resolveDatabaseTargetOptions(input: {
           stored: storedQh,
           dialect,
           windowDays: queryHistory.windowDays,
-          enabledTables: enabledTablesForConnection(input.connection),
         }),
       },
       steps: ['database-schema', 'query-history'],
@@ -372,6 +376,43 @@ function resolveDatabaseTargetOptions(input: {
     queryHistory,
     steps: ['database-schema'],
   };
+}
+
+async function withResolvedQueryHistoryScopeFloor(
+  plan: KtxPublicIngestPlan,
+  project: KtxPublicIngestProject,
+): Promise<KtxPublicIngestPlan> {
+  const targets = await Promise.all(
+    plan.targets.map(async (target) => {
+      if (target.operation !== 'database-ingest' || target.queryHistory?.enabled !== true || !target.queryHistory.dialect) {
+        return target;
+      }
+      const connection = project.config.connections[target.connectionId];
+      if (!connection) return target;
+      const scopeFloor = await resolveQueryHistoryScopeFloor({
+        projectDir: project.projectDir,
+        connectionId: target.connectionId,
+        driver: target.driver,
+        connection: connection as Record<string, unknown>,
+        storedQueryHistory: storedQueryHistory(connection),
+      });
+      return {
+        ...target,
+        queryHistory: {
+          ...target.queryHistory,
+          pullConfig: queryHistoryPullConfig({
+            stored: storedQueryHistory(connection),
+            dialect: target.queryHistory.dialect,
+            windowDays: target.queryHistory.windowDays,
+            enabledTables: scopeFloor.enabledTables,
+            enabledSchemas: scopeFloor.enabledSchemas,
+            modeledTableCatalog: scopeFloor.modeledTableCatalog,
+          }),
+        },
+      };
+    }),
+  );
+  return { ...plan, targets };
 }
 
 function enrichmentReadinessGaps(config: KtxProjectConfig): string[] {
@@ -1055,7 +1096,7 @@ export async function runKtxPublicIngest(
     deps.loadProject ?? ((options: { projectDir: string }) => loadKtxProject({ projectDir: options.projectDir }));
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {
-    const plan = buildPublicIngestPlan(project, args);
+    const plan = await withResolvedQueryHistoryScopeFloor(buildPublicIngestPlan(project, args), project);
     const requirements = resolvePublicIngestRuntimeRequirements(plan, {
       config: project.config,
       env: deps.env ?? process.env,
@@ -1096,7 +1137,7 @@ export async function runKtxPublicIngest(
     return result.exitCode;
   }
 
-  const plan = buildPublicIngestPlan(project, args);
+  const plan = await withResolvedQueryHistoryScopeFloor(buildPublicIngestPlan(project, args), project);
   const results: KtxPublicIngestTargetResult[] = [];
 
   if (!args.json) {

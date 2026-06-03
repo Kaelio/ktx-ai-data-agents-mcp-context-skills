@@ -103,7 +103,7 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
     for await (const row of reader.fetchAggregated(
       client,
       { start: new Date('2026-02-10T00:00:00.000Z'), end: new Date('2026-05-11T00:00:00.000Z') },
-      { dialect: 'bigquery', minExecutions: 5, windowDays: 90, enabledTables: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
+      { dialect: 'bigquery', minExecutions: 5, windowDays: 90, enabledTables: [], enabledSchemas: [], modeledTableCatalog: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
     )) {
       rows.push(row);
     }
@@ -137,6 +137,8 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
           minExecutions: 5,
           windowDays: 90,
           enabledTables: [],
+          enabledSchemas: [],
+          modeledTableCatalog: [],
           filters: { dropTrivialProbes: true },
           redactionPatterns: [],
           staleArchiveAfterDays: 90,

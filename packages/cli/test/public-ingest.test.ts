@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '../src/context/project/config.js';
@@ -668,10 +668,63 @@ describe('runKtxPublicIngest', () => {
           dropFailedBelow: { errorRate: 0.5, executions: 3 },
         },
         redactionPatterns: ['(?i)secret'],
-        enabledTables: ['orbit_analytics.int_active_contract_arr'],
+        enabledTables: [{ catalog: null, db: 'orbit_analytics', name: 'int_active_contract_arr' }],
       },
     });
     expect(ingestArgs?.historicSqlPullConfigOverride).not.toHaveProperty('enabled');
+  });
+
+  it('passes computed modeled schemas and table catalog to query-history ingest', async () => {
+    const io = makeIo();
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-qh-scope-'));
+    await mkdir(join(projectDir, 'semantic-layer/warehouse'), { recursive: true });
+    await writeFile(
+      join(projectDir, 'semantic-layer/warehouse/revenue.yaml'),
+      [
+        'name: revenue',
+        'table: orbit_analytics.mart_revenue',
+        'grain: [id]',
+        'columns:',
+        '  - name: id',
+        '    type: string',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const project = deepReadyProject({
+      warehouse: {
+        driver: 'postgres',
+        schemas: ['orbit_raw'],
+        context: { queryHistory: { enabled: true } },
+      },
+    });
+    const runScan = vi.fn(async () => 0);
+    const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir,
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => ({ ...project, projectDir })), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    const ingestArgs = runIngest.mock.calls[0]?.[0] as
+      | Extract<Parameters<NonNullable<KtxPublicIngestDeps['runIngest']>>[0], { command: 'run' }>
+      | undefined;
+    expect(ingestArgs?.historicSqlPullConfigOverride).toMatchObject({
+      dialect: 'postgres',
+      enabledSchemas: ['orbit_analytics', 'orbit_raw'],
+      modeledTableCatalog: [{ catalog: null, db: 'orbit_analytics', name: 'mart_revenue' }],
+    });
   });
 
   it('prints the schema-first notice for explicit query-history runs', async () => {

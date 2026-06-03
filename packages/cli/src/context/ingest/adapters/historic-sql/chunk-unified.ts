@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { tableRefKey } from '../../../scan/table-ref.js';
 import type { ChunkResult, DiffSet, ScopeDescriptor, WorkUnit } from '../../types.js';
 import { isHistoricSqlPatternInputShardPath } from './pattern-inputs.js';
 import { stagedManifestSchema, stagedPatternsInputSchema, stagedTableInputSchema } from './types.js';
@@ -37,7 +38,7 @@ export async function chunkHistoricSqlUnifiedStagedDir(stagedDir: string, diffSe
     }
     const table = stagedTableInputSchema.parse(await readJson(stagedDir, path));
     workUnits.push({
-      unitKey: `historic-sql-table-${safeUnitKey(table.table)}`,
+      unitKey: `historic-sql-table-${safeUnitKey(tableRefKey(table.tableRef))}`,
       displayLabel: `Historic SQL usage: ${table.table}`,
       rawFiles: [path],
       dependencyPaths: ['manifest.json'],

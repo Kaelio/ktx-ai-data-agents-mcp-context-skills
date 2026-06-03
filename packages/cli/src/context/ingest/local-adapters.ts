@@ -9,6 +9,7 @@ import { DbtSourceAdapter } from './adapters/dbt/dbt.adapter.js';
 import { FakeSourceAdapter } from './adapters/fake/fake.adapter.js';
 import { HistoricSqlSourceAdapter } from './adapters/historic-sql/historic-sql.adapter.js';
 import { PostgresPgssReader } from './adapters/historic-sql/postgres-pgss-reader.js';
+import { resolveQueryHistoryScopeFloor } from './adapters/historic-sql/scope-floor.js';
 import {
   HISTORIC_SQL_SOURCE_KEY,
   historicSqlUnifiedPullConfigSchema,
@@ -179,12 +180,37 @@ function queryHistoryRecord(connection: unknown): Record<string, unknown> | null
   return queryHistory;
 }
 
-function queryHistoryPullConfig(connection: unknown): Record<string, unknown> | null {
+async function queryHistoryPullConfig(
+  project: KtxLocalProject,
+  connectionId: string,
+  connection: unknown,
+): Promise<Record<string, unknown> | null> {
   const queryHistory = queryHistoryRecord(connection);
   if (queryHistory?.enabled !== true || !isRecord(connection)) return null;
-  const dialect = historicSqlDialectByDriver.get(String(connection.driver ?? '').toLowerCase());
+  const driver = String(connection.driver ?? '').toLowerCase();
+  const dialect = historicSqlDialectByDriver.get(driver);
   if (!dialect) return null;
-  return { ...queryHistory, dialect };
+  const scopeFloor = await resolveQueryHistoryScopeFloor({
+    projectDir: project.projectDir,
+    connectionId,
+    driver,
+    connection,
+    storedQueryHistory: queryHistory,
+  });
+  const {
+    enabled: _enabled,
+    dialect: _dialect,
+    enabledTables: _enabledTables,
+    enabledSchemas: _enabledSchemas,
+    ...stored
+  } = queryHistory;
+  return {
+    ...stored,
+    dialect,
+    ...(scopeFloor.enabledTables.length > 0 ? { enabledTables: scopeFloor.enabledTables } : {}),
+    ...(scopeFloor.enabledSchemas.length > 0 ? { enabledSchemas: scopeFloor.enabledSchemas } : {}),
+    ...(scopeFloor.modeledTableCatalog.length > 0 ? { modeledTableCatalog: scopeFloor.modeledTableCatalog } : {}),
+  };
 }
 
 function stringField(value: unknown): string | null {
@@ -245,7 +271,7 @@ export async function localPullConfigForAdapter(
     if (options.historicSqlPullConfigOverride) {
       return historicSqlUnifiedPullConfigSchema.parse(options.historicSqlPullConfigOverride);
     }
-    const queryHistory = queryHistoryPullConfig(connection);
+    const queryHistory = await queryHistoryPullConfig(project, connectionId, connection);
     if (!queryHistory) {
       throw new Error(`Connection "${connectionId}" does not have context.queryHistory.enabled: true`);
     }

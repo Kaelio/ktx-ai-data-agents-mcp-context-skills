@@ -8,9 +8,21 @@ export type HistoricSqlDialect = z.infer<typeof historicSqlDialectSchema>;
 
 const filterModeSchema = z.enum(['exclude', 'include', 'mark-only']);
 
+const ktxTableRefSchema = z.object({
+  catalog: z.string().nullable(),
+  db: z.string().nullable(),
+  name: z.string().min(1),
+}).strict();
+
+const ktxTableRefWithColumnsSchema = ktxTableRefSchema.extend({
+  columns: z.array(z.string().min(1)).optional(),
+}).strict();
+
 const historicSqlCommonPullConfigSchema = z.object({
   minExecutions: z.number().int().nonnegative().default(5),
-  enabledTables: z.array(z.string().min(1)).default([]),
+  enabledTables: z.array(ktxTableRefSchema).default([]),
+  enabledSchemas: z.array(z.string().min(1)).default([]),
+  modeledTableCatalog: z.array(ktxTableRefWithColumnsSchema).default([]),
   filters: z.object({
     serviceAccounts: z.object({
       patterns: z.array(z.string()).default([]),
@@ -68,6 +80,7 @@ export type AggregatedTemplate = z.infer<typeof aggregatedTemplateSchema>;
 
 export const stagedTableInputSchema = z.object({
   table: z.string().min(1),
+  tableRef: ktxTableRefSchema,
   stats: z.object({
     executionsBucket: z.string(),
     distinctUsersBucket: z.string(),
@@ -93,7 +106,7 @@ export const stagedPatternsInputSchema = z.object({
   templates: z.array(z.object({
     id: z.string(),
     canonicalSql: z.string(),
-    tablesTouched: z.array(z.string()),
+    tablesTouched: z.array(ktxTableRefSchema),
     executionsBucket: z.string(),
     distinctUsersBucket: z.string(),
     dialect: historicSqlDialectSchema,

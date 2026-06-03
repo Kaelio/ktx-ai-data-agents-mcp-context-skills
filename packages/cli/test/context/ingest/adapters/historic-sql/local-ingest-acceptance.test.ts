@@ -126,7 +126,10 @@ function acceptanceSqlAnalysis(): SqlAnalysisPort {
           items.map((item) => [
             item.id,
             {
-              tablesTouched: ['public.orders', 'public.customers'],
+              tablesTouched: [
+                { catalog: null, db: 'public', name: 'orders' },
+                { catalog: null, db: 'public', name: 'customers' },
+              ],
               columnsByClause: {
                 select: ['status', 'segment'],
                 where: ['status'],

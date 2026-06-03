@@ -179,8 +179,16 @@ connections:
     context:
       queryHistory:
         enabled: true
+        enabledSchemas:
+          - orbit_raw
+          - orbit_analytics
         minExecutions: 5
 ```
+
+- `enabledSchemas`: Optional list of schema or dataset names that query-history
+  ingest may mine. Omit it to let **ktx** derive the modeled schema floor from
+  the connection and semantic-layer sources. Use `["*"]` to disable the floor
+  for discovery runs.
 
 ### Metabase
 

@@ -14,6 +14,13 @@ async function readJson<T>(root: string, relPath: string): Promise<T> {
   return JSON.parse(await readFile(join(root, relPath), 'utf-8')) as T;
 }
 
+function tableRef(value: string): { catalog: string | null; db: string | null; name: string } {
+  const parts = value.split('.');
+  if (parts.length === 3) return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
+  if (parts.length === 2) return { catalog: null, db: parts[0]!, name: parts[1]! };
+  return { catalog: null, db: null, name: value };
+}
+
 function aggregate(overrides: Partial<AggregatedTemplate> & { templateId: string; canonicalSql: string }): AggregatedTemplate {
   return {
     templateId: overrides.templateId,
@@ -72,7 +79,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         [
           'orders-by-status',
           {
-            tablesTouched: ['public.orders', 'public.customers'],
+            tablesTouched: [tableRef('public.orders'), tableRef('public.customers')],
             columnsByClause: {
               select: ['status'],
               where: ['created_at'],
@@ -94,6 +101,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       sqlAnalysis,
       pullConfig: {
         dialect: 'postgres',
+        enabledSchemas: ['public'],
         filters: {
           serviceAccounts: { patterns: ['^svc_'], mode: 'exclude' },
         },
@@ -111,6 +119,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         { id: 'bad-parse', sql: 'select broken from' },
       ],
       'postgres',
+      undefined,
     );
 
     expect(await readdir(join(stagedDir, 'tables'))).toEqual(['public.customers.json', 'public.orders.json']);
@@ -131,6 +140,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     const orders = await readJson<Record<string, any>>(stagedDir, 'tables/public.orders.json');
     expect(orders).toMatchObject({
       table: 'public.orders',
+      tableRef: tableRef('public.orders'),
       stats: {
         executionsBucket: '10-100',
         distinctUsersBucket: '2-5',
@@ -159,7 +169,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       {
         id: 'orders-by-status',
         canonicalSql: expect.stringContaining('public.orders'),
-        tablesTouched: ['public.customers', 'public.orders'],
+        tablesTouched: [tableRef('public.customers'), tableRef('public.orders')],
         executionsBucket: '10-100',
         distinctUsersBucket: '2-5',
         dialect: 'postgres',
@@ -198,7 +208,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         [
           'api-events-with-secret',
           {
-            tablesTouched: ['public.api_events'],
+            tablesTouched: [tableRef('public.api_events')],
             columnsByClause: {
               select: [],
               where: ['api_key', 'note'],
@@ -219,6 +229,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       sqlAnalysis,
       pullConfig: {
         dialect: 'postgres',
+        enabledSchemas: ['public'],
         redactionPatterns: ['sk_live_[A-Za-z0-9]+', '(?i)secret_token_[a-z0-9]+'],
       },
       now: new Date('2026-05-11T12:00:00.000Z'),
@@ -227,6 +238,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     expect(sqlAnalysis.analyzeBatch).toHaveBeenCalledWith(
       [{ id: 'api-events-with-secret', sql: originalSql }],
       'postgres',
+      undefined,
     );
 
     const tableJson = await readFile(join(stagedDir, 'tables/public.api_events.json'), 'utf-8');
@@ -266,21 +278,21 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         [
           'selected-qualified',
           {
-            tablesTouched: ['orbit_analytics.int_active_contract_arr'],
+            tablesTouched: [tableRef('orbit_analytics.int_active_contract_arr')],
             columnsByClause: { select: [], where: [], join: [], groupBy: [] },
           },
         ],
         [
           'selected-unqualified',
           {
-            tablesTouched: ['int_customer_health_signals'],
+            tablesTouched: [tableRef('orbit_analytics.int_customer_health_signals')],
             columnsByClause: { select: [], where: [], join: [], groupBy: [] },
           },
         ],
         [
           'unselected',
           {
-            tablesTouched: ['orbit_raw.accounts'],
+            tablesTouched: [tableRef('orbit_raw.accounts')],
             columnsByClause: { select: [], where: [], join: [], groupBy: [] },
           },
         ],
@@ -297,16 +309,16 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       pullConfig: {
         dialect: 'postgres',
         enabledTables: [
-          'orbit_analytics.int_active_contract_arr',
-          'orbit_analytics.int_customer_health_signals',
+          tableRef('orbit_analytics.int_active_contract_arr'),
+          tableRef('orbit_analytics.int_customer_health_signals'),
         ],
       },
       now: new Date('2026-05-11T12:00:00.000Z'),
     });
 
     expect(await readdir(join(stagedDir, 'tables'))).toEqual([
-      'int_customer_health_signals.json',
       'orbit_analytics.int_active_contract_arr.json',
+      'orbit_analytics.int_customer_health_signals.json',
     ]);
     const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
     expect(manifest.touchedTableCount).toBe(2);
@@ -372,7 +384,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         [
           'orders-customers-a',
           {
-            tablesTouched: ['public.orders', 'public.customers'],
+            tablesTouched: [tableRef('public.orders'), tableRef('public.customers')],
             columnsByClause: {
               select: [],
               where: ['payload'],
@@ -384,7 +396,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         [
           'orders-customers-b',
           {
-            tablesTouched: ['public.orders', 'public.customers'],
+            tablesTouched: [tableRef('public.orders'), tableRef('public.customers')],
             columnsByClause: {
               select: [],
               where: ['payload_b'],
@@ -396,7 +408,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
         [
           'orders-single-table',
           {
-            tablesTouched: ['public.orders'],
+            tablesTouched: [tableRef('public.orders')],
             columnsByClause: {
               select: [],
               where: [],
@@ -415,7 +427,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       queryClient: {},
       reader,
       sqlAnalysis,
-      pullConfig: { dialect: 'postgres' },
+      pullConfig: { dialect: 'postgres', enabledSchemas: ['public'] },
       now: new Date('2026-05-11T12:00:00.000Z'),
     });
 
@@ -456,7 +468,13 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     const sqlAnalysis: SqlAnalysisPort = {
       analyzeForFingerprint: vi.fn(),
       analyzeBatch: vi.fn(async () => new Map([
-        ['analytic', { tablesTouched: ['public.orders'], columnsByClause: { select: ['status'], where: [], join: [], groupBy: ['status'] } }],
+        [
+          'analytic',
+          {
+            tablesTouched: [tableRef('public.orders')],
+            columnsByClause: { select: ['status'], where: [], join: [], groupBy: ['status'] },
+          },
+        ],
       ])),
       validateReadOnly: vi.fn(async () => ({ ok: true })),
     };
@@ -467,7 +485,7 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       queryClient: {},
       reader,
       sqlAnalysis,
-      pullConfig: { dialect: 'postgres' },
+      pullConfig: { dialect: 'postgres', enabledSchemas: ['public'] },
       now: new Date('2026-05-11T12:00:00.000Z'),
     });
 
@@ -475,26 +493,27 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     expect(sqlAnalysis.analyzeBatch).toHaveBeenCalledWith(
       [{ id: 'analytic', sql: 'select status, count(*) from public.orders group by status' }],
       'postgres',
+      undefined,
     );
     expect(await readdir(join(stagedDir, 'tables'))).toEqual(['public.orders.json']);
   });
 
-  it('merges bare and schema-qualified references to the same table into one work unit', async () => {
+  it('keeps modeled-schema refs and drops unmodeled-schema refs by default', async () => {
     const stagedDir = await tempDir();
     const reader: HistoricSqlReader = {
       async probe() {
         return { warnings: [], info: [] };
       },
       async *fetchAggregated() {
-        yield aggregate({ templateId: 'qualified', canonicalSql: 'select count(*) from orbit_raw.accounts' });
-        yield aggregate({ templateId: 'bare', canonicalSql: 'select id from accounts where active' });
+        yield aggregate({ templateId: 'modeled', canonicalSql: 'select count(*) from orbit_raw.accounts' });
+        yield aggregate({ templateId: 'noise', canonicalSql: 'select count(*) from metabase.application_table' });
       },
     };
     const sqlAnalysis: SqlAnalysisPort = {
       analyzeForFingerprint: vi.fn(),
       analyzeBatch: vi.fn(async () => new Map([
-        ['qualified', { tablesTouched: ['orbit_raw.accounts'], columnsByClause: { select: [], where: [], join: [], groupBy: [] } }],
-        ['bare', { tablesTouched: ['accounts'], columnsByClause: { select: ['id'], where: ['active'], join: [], groupBy: [] } }],
+        ['modeled', { tablesTouched: [{ catalog: null, db: 'orbit_raw', name: 'accounts' }], columnsByClause: {} }],
+        ['noise', { tablesTouched: [{ catalog: null, db: 'metabase', name: 'application_table' }], columnsByClause: {} }],
       ])),
       validateReadOnly: vi.fn(async () => ({ ok: true })),
     };
@@ -505,16 +524,84 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
       queryClient: {},
       reader,
       sqlAnalysis,
-      pullConfig: { dialect: 'postgres' },
+      pullConfig: {
+        dialect: 'postgres',
+        enabledSchemas: ['orbit_raw'],
+        modeledTableCatalog: [{ catalog: null, db: 'orbit_raw', name: 'accounts' }],
+      },
       now: new Date('2026-05-11T12:00:00.000Z'),
     });
 
-    // The bare `accounts` reference resolves to the unique qualified `orbit_raw.accounts`,
-    // so the two templates collapse into a single work unit instead of two.
     expect(await readdir(join(stagedDir, 'tables'))).toEqual(['orbit_raw.accounts.json']);
-    const merged = await readJson<Record<string, any>>(stagedDir, 'tables/orbit_raw.accounts.json');
-    expect(merged.topTemplates.map((t: any) => t.id).sort()).toEqual(['bare', 'qualified']);
     const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
     expect(manifest.touchedTableCount).toBe(1);
+  });
+
+  it('fails open when the implicit modeled scope is empty', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({ templateId: 'any-table', canonicalSql: 'select count(*) from metabase.application_table' });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        ['any-table', { tablesTouched: [{ catalog: null, db: 'metabase', name: 'application_table' }], columnsByClause: {} }],
+      ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: { dialect: 'postgres', enabledSchemas: [], modeledTableCatalog: [] },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['metabase.application_table.json']);
+    const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
+    expect(manifest.warnings).toContain('query_history_scope_floor_disabled:empty_modeled_scope');
+  });
+
+  it('lets enabledSchemas star disable the floor', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({ templateId: 'noise', canonicalSql: 'select count(*) from metabase.application_table' });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        ['noise', { tablesTouched: [{ catalog: null, db: 'metabase', name: 'application_table' }], columnsByClause: {} }],
+      ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'postgres',
+        enabledSchemas: ['*'],
+        modeledTableCatalog: [{ catalog: null, db: 'orbit_raw', name: 'accounts' }],
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['metabase.application_table.json']);
   });
 });
