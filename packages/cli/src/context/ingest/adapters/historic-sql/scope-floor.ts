@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import YAML from 'yaml';
@@ -74,7 +75,7 @@ function uniqueSortedTableRefs(refs: readonly KtxTableRef[]): KtxTableRef[] {
 
 async function latestLiveDatabaseScanDir(projectDir: string, connectionId: string): Promise<string | null> {
   const root = join(projectDir, 'raw-sources', connectionId, 'live-database');
-  let entries: Awaited<ReturnType<typeof readdir>>;
+  let entries: Dirent[];
   try {
     entries = await readdir(root, { withFileTypes: true });
   } catch (error) {

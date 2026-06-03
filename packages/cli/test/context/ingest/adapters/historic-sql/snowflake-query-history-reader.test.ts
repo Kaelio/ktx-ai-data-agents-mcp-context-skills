@@ -102,7 +102,7 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
     for await (const row of reader.fetchAggregated(
       client,
       { start: new Date('2026-02-10T00:00:00.000Z'), end: new Date('2026-05-11T00:00:00.000Z') },
-      { dialect: 'snowflake', minExecutions: 5, windowDays: 90, enabledTables: [], enabledSchemas: [], modeledTableCatalog: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
+      { dialect: 'snowflake', minExecutions: 5, windowDays: 90, enabledTables: [], enabledSchemas: [], modeledTableCatalog: [], scopeFloorWarnings: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
     )) {
       rows.push(row);
     }
@@ -138,6 +138,7 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
           enabledTables: [],
           enabledSchemas: [],
           modeledTableCatalog: [],
+          scopeFloorWarnings: [],
           filters: { dropTrivialProbes: true },
           redactionPatterns: [],
           staleArchiveAfterDays: 90,
