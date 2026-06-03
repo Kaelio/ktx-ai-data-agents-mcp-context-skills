@@ -148,6 +148,13 @@ fix the prerequisite. If the later schema-context build also fails, interactive
 setup offers **Disable query history and retry** so you can finish database
 setup with `connections.<id>.context.queryHistory.enabled: false`.
 
+After the schema scan completes, setup can derive query-history service-account
+filters from in-scope history. If **ktx** finds clear operational roles, it
+prints each proposed exclusion with a reason and writes
+`connections.<id>.context.queryHistory.filters.serviceAccounts` only when you
+apply the proposal. In non-interactive setup with `--yes`, the proposal is
+applied automatically. Existing `serviceAccounts` blocks are never overwritten.
+
 For BigQuery, the remediation tells you to grant `roles/bigquery.resourceViewer`
 on the BigQuery project, or grant a custom role that contains
 `bigquery.jobs.listAll`.

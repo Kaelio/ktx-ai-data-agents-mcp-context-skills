@@ -137,6 +137,22 @@ function textInputPrompt(message: string): string {
   return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
 
+function queryHistoryFromConfig(connection: unknown): {
+  filters?: { serviceAccounts?: unknown; dropTrivialProbes?: boolean };
+} | undefined {
+  if (!connection || typeof connection !== 'object' || Array.isArray(connection)) {
+    return undefined;
+  }
+  const context = (connection as { context?: unknown }).context;
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    return undefined;
+  }
+  const queryHistory = (context as { queryHistory?: unknown }).queryHistory;
+  return queryHistory && typeof queryHistory === 'object' && !Array.isArray(queryHistory)
+    ? (queryHistory as { filters?: { serviceAccounts?: unknown; dropTrivialProbes?: boolean } })
+    : undefined;
+}
+
 describe('setup databases step', () => {
   let tempDir: string;
 
@@ -2403,7 +2419,7 @@ describe('setup databases step', () => {
 
     expect(result.status).toBe('ready');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.connections.warehouse.context?.queryHistory?.filters).toEqual({ dropTrivialProbes: true });
+    expect(queryHistoryFromConfig(config.connections.warehouse)?.filters).toEqual({ dropTrivialProbes: true });
     expect(prompts.select).toHaveBeenCalledWith({
       message: 'Apply 1 derived query-history service-account exclusion?',
       options: [
@@ -2462,7 +2478,7 @@ describe('setup databases step', () => {
         queryHistoryFilterPicker: vi.fn(async () => ({
           excludedRoles: [{ role: 'svc_loader', pattern: '^svc_loader$', reason: 'Loader traffic.' }],
           consideredRoleCount: 2,
-          skipped: { reason: 'user-block-present' },
+          skipped: { reason: 'user-block-present' as const },
           warnings: [],
         })),
         createQueryHistoryLlmRuntime: vi.fn(() => null),
@@ -2471,7 +2487,7 @@ describe('setup databases step', () => {
 
     expect(result.status).toBe('ready');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.connections.warehouse.context?.queryHistory?.filters?.serviceAccounts).toEqual({
+    expect(queryHistoryFromConfig(config.connections.warehouse)?.filters?.serviceAccounts).toEqual({
       mode: 'exclude',
       patterns: ['^existing$'],
     });

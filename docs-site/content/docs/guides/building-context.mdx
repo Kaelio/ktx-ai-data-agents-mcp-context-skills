@@ -57,7 +57,10 @@ isolation.
 ## Query history
 
 PostgreSQL, BigQuery, and Snowflake can add query-history context: common joins,
-filters, service-account patterns, redaction rules, and high-usage templates.
+filters, redaction rules, high-usage templates, and service-account exclusions.
+When query history is enabled during setup, **ktx** reviews observed in-scope
+roles and can write exact `filters.serviceAccounts` patterns for operational
+traffic such as loader or refresh roles.
 
 Enable it during setup, store it under `connections.<id>.context.queryHistory`,
 or request it for one run:

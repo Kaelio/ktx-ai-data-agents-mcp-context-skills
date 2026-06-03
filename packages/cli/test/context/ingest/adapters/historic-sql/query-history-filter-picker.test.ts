@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { KtxLlmRuntimePort } from '../../../../../src/context/llm/runtime-port.js';
-import type { SqlAnalysisPort } from '../../../../../src/context/sql-analysis/ports.js';
+import type {
+  SqlAnalysisBatchItem,
+  SqlAnalysisBatchResult,
+  SqlAnalysisPort,
+} from '../../../../../src/context/sql-analysis/ports.js';
 import {
   proposeQueryHistoryServiceAccountFilters,
   regexEscapeForExactRolePattern,
@@ -45,8 +49,8 @@ function reader(...templates: AggregatedTemplate[]): HistoricSqlReader {
 function sqlAnalysis(tablesById: Record<string, Array<{ catalog: string | null; db: string | null; name: string }>>): SqlAnalysisPort {
   return {
     analyzeForFingerprint: vi.fn(),
-    analyzeBatch: vi.fn(async (items) =>
-      new Map(
+    analyzeBatch: vi.fn(async (items: SqlAnalysisBatchItem[]): Promise<Map<string, SqlAnalysisBatchResult>> =>
+      new Map<string, SqlAnalysisBatchResult>(
         items.map((item) => [
           item.id,
           {
@@ -61,9 +65,10 @@ function sqlAnalysis(tablesById: Record<string, Array<{ catalog: string | null; 
 }
 
 function llm(decisions: Array<{ role: string; exclude: boolean; reason: string }>): KtxLlmRuntimePort {
+  const generateObject = vi.fn(async () => ({ roles: decisions })) as KtxLlmRuntimePort['generateObject'];
   return {
     generateText: vi.fn(),
-    generateObject: vi.fn(async () => ({ roles: decisions })),
+    generateObject,
     runAgentLoop: vi.fn(),
   };
 }
