@@ -124,13 +124,12 @@ function displayTableRef(ref: KtxTableRef): string {
   return [ref.catalog, ref.db, ref.name].filter((part): part is string => !!part && part.length > 0).join('.');
 }
 
-function namespaceKey(ref: KtxTableRef): string | null {
-  if (!ref.db) return null;
-  return `${ref.catalog ?? ''}\x1f${ref.db}`;
+function schemaNameForRef(ref: KtxTableRef): string | null {
+  return ref.db && ref.db.length > 0 ? ref.db : null;
 }
 
-function namespaceKeysFromSchemas(enabledSchemas: readonly string[]): Set<string> {
-  return new Set(enabledSchemas.filter((schema) => schema !== '*').map((schema) => `\x1f${schema}`));
+function schemaNamesFromConfig(enabledSchemas: readonly string[]): Set<string> {
+  return new Set(enabledSchemas.filter((schema) => schema !== '*'));
 }
 
 function isScopeFloorDisabled(config: HistoricSqlUnifiedPullConfig): boolean {
@@ -152,10 +151,10 @@ function includedTableRefs(
   if (isScopeFloorDisabled(config) || shouldFailOpenScope(config)) {
     return [...tablesTouched];
   }
-  const schemas = namespaceKeysFromSchemas(config.enabledSchemas);
+  const schemas = schemaNamesFromConfig(config.enabledSchemas);
   return tablesTouched.filter((ref) => {
-    const key = namespaceKey(ref);
-    return key !== null && schemas.has(key);
+    const schema = schemaNameForRef(ref);
+    return schema !== null && schemas.has(schema);
   });
 }
 
@@ -308,12 +307,25 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
     }
   }
 
-  const analysis = await input.sqlAnalysis.analyzeBatch(
-    snapshot.map((template) => ({ id: template.templateId, sql: template.canonicalSql })),
-    config.dialect,
-    config.modeledTableCatalog.length > 0 ? { catalog: { tables: config.modeledTableCatalog } } : undefined,
-  );
-  const warnings: string[] = shouldFailOpenScope(config) ? ['query_history_scope_floor_disabled:empty_modeled_scope'] : [];
+  const analysisItems = snapshot.map((template) => ({ id: template.templateId, sql: template.canonicalSql }));
+  const analysisOptions =
+    config.modeledTableCatalog.length > 0 ? { catalog: { tables: config.modeledTableCatalog } } : undefined;
+  const warnings: string[] = [
+    ...config.scopeFloorWarnings,
+    ...(shouldFailOpenScope(config) ? ['query_history_scope_floor_disabled:empty_modeled_scope'] : []),
+  ];
+  let scopeDisabledByQualificationFailure = false;
+  let analysis: Awaited<ReturnType<SqlAnalysisPort['analyzeBatch']>>;
+  try {
+    analysis = await input.sqlAnalysis.analyzeBatch(analysisItems, config.dialect, analysisOptions);
+  } catch (error) {
+    if (!analysisOptions || config.enabledTables.length > 0 || isScopeFloorDisabled(config)) {
+      throw error;
+    }
+    warnings.push('query_history_scope_floor_disabled:catalog_qualification_failed');
+    scopeDisabledByQualificationFailure = true;
+    analysis = await input.sqlAnalysis.analyzeBatch(analysisItems, config.dialect, undefined);
+  }
   const parsedTemplates: ParsedTemplate[] = [];
   for (const template of snapshot) {
     const parsed = analysis.get(template.templateId);
@@ -324,7 +336,7 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
     const tablesTouched = [...new Map(parsed.tablesTouched.map((ref) => [tableRefKey(ref), ref])).values()]
       .filter((ref) => ref.name.length > 0)
       .sort((left, right) => tableRefKey(left).localeCompare(tableRefKey(right)));
-    const includedTables = includedTableRefs(tablesTouched, config);
+    const includedTables = scopeDisabledByQualificationFailure ? [...tablesTouched] : includedTableRefs(tablesTouched, config);
     if (includedTables.length === 0) {
       continue;
     }
@@ -354,7 +366,7 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
   }
   const patternsInput = toPatternsInput(parsedTemplates);
   const patternInputSplit = splitHistoricSqlPatternInputs(patternsInput);
-  const allWarnings = [...warnings, ...patternInputSplit.warnings];
+  const allWarnings = [...new Set([...warnings, ...patternInputSplit.warnings])];
   await writeJson(input.stagedDir, 'patterns-input.json', patternInputSplit.auditInput);
   for (const shard of patternInputSplit.shards) {
     await writeJson(input.stagedDir, shard.path, shard.input);

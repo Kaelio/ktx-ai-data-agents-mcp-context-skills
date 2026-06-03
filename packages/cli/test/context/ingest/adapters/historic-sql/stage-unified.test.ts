@@ -604,4 +604,133 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
 
     expect(await readdir(join(stagedDir, 'tables'))).toEqual(['metabase.application_table.json']);
   });
+
+  it('matches BigQuery dataset scope even when refs include a catalog', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({ templateId: 'modeled', canonicalSql: 'select count(*) from `demo-project.orbit_analytics.orders`' });
+        yield aggregate({ templateId: 'noise', canonicalSql: 'select count(*) from `demo-project.metabase.application_table`' });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        ['modeled', { tablesTouched: [{ catalog: 'demo-project', db: 'orbit_analytics', name: 'orders' }], columnsByClause: {} }],
+        ['noise', { tablesTouched: [{ catalog: 'demo-project', db: 'metabase', name: 'application_table' }], columnsByClause: {} }],
+      ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'bigquery',
+        enabledSchemas: ['orbit_analytics'],
+        modeledTableCatalog: [{ catalog: 'demo-project', db: 'orbit_analytics', name: 'orders' }],
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['demo-project.orbit_analytics.orders.json']);
+  });
+
+  it('writes propagated scope-floor warnings to the staged manifest', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({ templateId: 'any-table', canonicalSql: 'select count(*) from metabase.application_table' });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        ['any-table', { tablesTouched: [{ catalog: null, db: 'metabase', name: 'application_table' }], columnsByClause: {} }],
+      ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'postgres',
+        enabledSchemas: ['*'],
+        scopeFloorWarnings: ['query_history_scope_floor_disabled:catalog_unavailable'],
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
+    expect(manifest.warnings).toContain('query_history_scope_floor_disabled:catalog_unavailable');
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['metabase.application_table.json']);
+  });
+
+  it('retries without the catalog and disables the floor when catalog qualification fails wholesale', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({ templateId: 'noise', canonicalSql: 'select count(*) from metabase.application_table' });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('catalog qualification failed'))
+        .mockResolvedValueOnce(
+          new Map([
+            ['noise', { tablesTouched: [{ catalog: null, db: 'metabase', name: 'application_table' }], columnsByClause: {} }],
+          ]),
+        ),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'postgres',
+        enabledSchemas: ['orbit_raw'],
+        modeledTableCatalog: [{ catalog: null, db: 'orbit_raw', name: 'accounts' }],
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    expect(sqlAnalysis.analyzeBatch).toHaveBeenCalledTimes(2);
+    expect(sqlAnalysis.analyzeBatch).toHaveBeenNthCalledWith(
+      1,
+      [{ id: 'noise', sql: 'select count(*) from metabase.application_table' }],
+      'postgres',
+      { catalog: { tables: [{ catalog: null, db: 'orbit_raw', name: 'accounts' }] } },
+    );
+    expect(sqlAnalysis.analyzeBatch).toHaveBeenNthCalledWith(
+      2,
+      [{ id: 'noise', sql: 'select count(*) from metabase.application_table' }],
+      'postgres',
+      undefined,
+    );
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['metabase.application_table.json']);
+    const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
+    expect(manifest.warnings).toContain('query_history_scope_floor_disabled:catalog_qualification_failed');
+  });
 });
