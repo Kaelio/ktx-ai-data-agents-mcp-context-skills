@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { tableRefKey } from '../../../scan/table-ref.js';
 import type { StagedPatternsInput } from './types.js';
 
 const HISTORIC_SQL_PATTERN_WORKUNIT_DIR = 'patterns-input';
@@ -44,11 +45,16 @@ function sortedAuditTemplates(templates: readonly PatternTemplate[]): PatternTem
 function sortedPatternCandidates(templates: readonly PatternTemplate[]): PatternTemplate[] {
   return [...templates]
     .filter((template) => template.tablesTouched.length >= 2)
-    .map((template) => ({ ...template, tablesTouched: [...template.tablesTouched].sort() }))
+    .map((template) => ({
+      ...template,
+      tablesTouched: [...template.tablesTouched].sort((left, right) => tableRefKey(left).localeCompare(tableRefKey(right))),
+    }))
     .sort((left, right) => {
       const cardinality = right.tablesTouched.length - left.tablesTouched.length;
       if (cardinality !== 0) return cardinality;
-      const tableSignature = left.tablesTouched.join('\0').localeCompare(right.tablesTouched.join('\0'));
+      const leftSignature = left.tablesTouched.map(tableRefKey).join('\0');
+      const rightSignature = right.tablesTouched.map(tableRefKey).join('\0');
+      const tableSignature = leftSignature.localeCompare(rightSignature);
       if (tableSignature !== 0) return tableSignature;
       return left.id.localeCompare(right.id);
     });

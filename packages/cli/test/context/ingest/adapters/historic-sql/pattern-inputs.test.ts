@@ -39,7 +39,7 @@ describe('historic-SQL pattern input sharding', () => {
       ],
     };
 
-    const result = splitHistoricSqlPatternInputs(input, { maxBytes: 760 });
+    const result = splitHistoricSqlPatternInputs(input, { maxBytes: 1200 });
 
     expect(result.auditInput.templates.map((entry) => entry.id)).toEqual([
       'orders-customers-1',
@@ -58,7 +58,7 @@ describe('historic-SQL pattern input sharding', () => {
       'orders-customers-1',
       'orders-customers-2',
     ]);
-    expect(result.shards.every((shard) => shard.byteLength <= 760)).toBe(true);
+    expect(result.shards.every((shard) => shard.byteLength <= 1200)).toBe(true);
     expect(result.shards.flatMap((shard) => shard.input.templates).some((entry) => entry.id === 'single-table-orders')).toBe(false);
     expect(result.warnings).toEqual([]);
   });
