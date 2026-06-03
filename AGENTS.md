@@ -159,6 +159,65 @@ and naming asymmetries are bugs in waiting — see
 [`docs/code-design.md`](docs/code-design.md). Treat the `MUST` / `MUST NOT`
 rules there with the same weight as the ones in this file.
 
+## Design Reasoning Defaults
+
+When proposing a design, an approach, or any non-trivial change, apply these
+defaults and run the self-check before presenting it. They encode the
+corrections users most often have to make; reaching these conclusions
+autonomously — without being asked the leading question — is the bar.
+
+- **MUST**: Optimize for the best outcome, not for an unstated constraint. Do not
+  silently adopt "smallest change", "least effort", "cheapest", or "least user
+  intervention" as the goal unless the user said so. Default to the most correct,
+  durable solution, and present cost / effort / scope as information for the user
+  to weigh — not as a ceiling you impose on their behalf.
+- **MUST**: Separate one-time cost from recurring cost before discarding an
+  option. A fixed cost paid once (a setup-time computation, an extra LLM call
+  during setup, a contract change) to make every later run cheaper or more
+  correct is usually worth it. Do not reject it with recurring-cost reasoning;
+  quantify both sides. (Example smell: "don't add an LLM call to a cost-cutting
+  feature" — wrong when the call is one-time and the savings recur.)
+- **MUST**: Treat a user's example as a representative of a class, not as the
+  spec. Design for the general population the example stands for, then stress-test
+  against deliberately different instances — another warehouse, dialect, stack
+  layout, or input shape — before committing. If a design only works because of an
+  incidental property of the example (e.g. "the noise happened to be in a separate
+  schema *on this demo*"), it is curve-fitting; generalize it or state the
+  assumption explicitly.
+- **MUST**: Prefer deriving from the system's own state over enumerating cases.
+  Favor an allowlist computed from declared/observed state (config, scanned
+  catalog, query log, the user's own inputs) over a denylist of known-bad
+  specifics (particular tables, schemas, tools, or vendors). A hardcoded or
+  hand-maintained list of external specifics is a smell: it rots and fails on the
+  next stack. The only acceptable static patterns are genuinely universal
+  invariants (e.g. DB-engine system catalogs) and ktx's own self-emitted
+  signatures.
+- **SHOULD**: Before inventing an abstraction or hand-rolling structural logic,
+  search for what already exists and reuse it — the codebase's canonical
+  representation (a structured ref/key type) instead of a parallel string scheme,
+  and a mandated/available tool (e.g. `sqlglot` for SQL structure; see
+  [SQL and Structured Parsing](#sql-and-structured-parsing)) instead of
+  hand-parsing. Normalize ambiguous input to the canonical form at the boundary;
+  do not carry the ambiguity downstream. This is the single-source-of-truth / DRY
+  item from the Priority Hierarchy applied at design time.
+
+Before presenting a design, answer these explicitly:
+
+1. Am I optimizing for a goal the user actually stated, or one I assumed?
+2. Does this generalize beyond the example in front of me? Name a real case where
+   it would break.
+3. Am I enumerating known-bad cases when I could derive scope from the system's
+   own declared/observed state?
+4. Is there an existing canonical representation or mandated tool I should reuse
+   instead of building or parsing my own?
+5. Am I discarding the better option on a weak or misapplied constraint
+   (one-time vs recurring cost, "more surface area", "more work now")?
+
+A user question that nudges toward an alternative ("would X help?", "should I
+always do Y?", "will you hardcode Z?") is a signal that a better option exists.
+Investigate the implied direction and reason it through *before* defending the
+original proposal — and prefer to have asked yourself the question first.
+
 ## TypeScript Standards
 
 - Use Node 22+ and pnpm workspace commands.
