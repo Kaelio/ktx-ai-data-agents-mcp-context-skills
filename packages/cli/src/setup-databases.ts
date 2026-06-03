@@ -1930,19 +1930,23 @@ async function runDatabaseConnectionSetupWithRecovery(input: {
   deps: KtxSetupDatabasesDeps;
   canReturnToDriverSelection: boolean;
   allowSkip: boolean;
+  interactive?: boolean;
   forceScopeAndTables?: boolean;
   editBaseline?: KtxProjectConnectionConfig;
-  configureExistingOnly?: boolean;
+  reuseExistingOnFirstConfigure?: boolean;
 }): Promise<RecoveryOutcome> {
+  let configureCalls = 0;
+
   return await runConnectionSetupWithRecovery({
     label: input.connectionId,
-    interactive: input.args.inputMode !== 'disabled',
+    interactive: input.interactive ?? input.args.inputMode !== 'disabled',
     allowSkip: input.allowSkip,
     io: input.io,
     prompts: input.prompts,
     snapshot: () => createConnectionConfigRollback(input.projectDir, input.connectionId),
     configure: async () => {
-      if (input.configureExistingOnly) {
+      configureCalls += 1;
+      if (input.reuseExistingOnFirstConfigure && configureCalls === 1) {
         const historicSqlResult = await applyHistoricSqlConfigToExistingConnection({
           projectDir: input.projectDir,
           connectionId: input.connectionId,
@@ -2042,7 +2046,8 @@ export async function runKtxSetupDatabasesStep(
         deps,
         canReturnToDriverSelection: false,
         allowSkip: false,
-        configureExistingOnly: true,
+        interactive: false,
+        reuseExistingOnFirstConfigure: true,
       });
       if (setupOutcome === 'back') {
         return { status: 'back', projectDir: args.projectDir };
@@ -2187,7 +2192,7 @@ export async function runKtxSetupDatabasesStep(
           deps,
           canReturnToDriverSelection,
           allowSkip: true,
-          configureExistingOnly: connectionChoice.kind === 'existing',
+          reuseExistingOnFirstConfigure: connectionChoice.kind === 'existing',
         });
         if (setupOutcome === 'back') {
           if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
