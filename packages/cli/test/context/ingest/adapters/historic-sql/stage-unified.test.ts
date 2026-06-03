@@ -177,6 +177,129 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     ]);
   });
 
+  it('keeps templates when service-account topUsers are only a partial execution sample', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({
+          templateId: 'shared-bigquery-template',
+          canonicalSql: 'select status, count(*) from `demo.analytics.orders` group by status',
+          dialect: 'bigquery',
+          stats: {
+            executions: 42,
+            distinctUsers: 2,
+            firstSeen: '2026-05-01T00:00:00.000Z',
+            lastSeen: '2026-05-11T00:00:00.000Z',
+            p50RuntimeMs: 20,
+            p95RuntimeMs: 80,
+            errorRate: 0,
+            rowsProduced: null,
+          },
+          topUsers: [{ user: 'svc_loader', executions: 5 }],
+        });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () =>
+        new Map([
+          [
+            'shared-bigquery-template',
+            {
+              tablesTouched: [tableRef('demo.analytics.orders')],
+              columnsByClause: { select: ['status'], groupBy: ['status'] },
+            },
+          ],
+        ]),
+      ),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'bigquery',
+        windowDays: 90,
+        enabledSchemas: ['analytics'],
+        filters: {
+          serviceAccounts: { patterns: ['^svc_loader$'], mode: 'exclude' },
+        },
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    const patterns = await readJson<Record<string, any>>(stagedDir, 'patterns-input.json');
+    expect(patterns.templates.map((template: { id: string }) => template.id)).toEqual([
+      'shared-bigquery-template',
+    ]);
+    const orders = await readJson<Record<string, any>>(stagedDir, 'tables/demo.analytics.orders.json');
+    expect(orders.topTemplates).toEqual([
+      {
+        id: 'shared-bigquery-template',
+        canonicalSql: 'select status, count(*) from `demo.analytics.orders` group by status',
+        topUsers: [{ user: 'svc_loader' }],
+      },
+    ]);
+  });
+
+  it('drops service-account-only templates when matched users cover all executions', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({
+          templateId: 'service-only-template',
+          canonicalSql: 'merge into analytics.orders using staging.orders_delta on orders.id = orders_delta.id',
+          stats: {
+            executions: 12,
+            distinctUsers: 1,
+            firstSeen: '2026-05-01T00:00:00.000Z',
+            lastSeen: '2026-05-11T00:00:00.000Z',
+            p50RuntimeMs: 20,
+            p95RuntimeMs: 80,
+            errorRate: 0,
+            rowsProduced: 0,
+          },
+          topUsers: [{ user: 'svc_loader', executions: 12 }],
+        });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map()),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: {
+        dialect: 'postgres',
+        enabledSchemas: ['analytics'],
+        filters: {
+          serviceAccounts: { patterns: ['^svc_loader$'], mode: 'exclude' },
+        },
+      },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    expect(sqlAnalysis.analyzeBatch).toHaveBeenCalledWith([], 'postgres', undefined);
+    const patterns = await readJson<Record<string, any>>(stagedDir, 'patterns-input.json');
+    expect(patterns.templates).toEqual([]);
+  });
+
   it('redacts configured SQL substrings in staged artifacts while analyzing original SQL', async () => {
     const stagedDir = await tempDir();
     const originalSql =

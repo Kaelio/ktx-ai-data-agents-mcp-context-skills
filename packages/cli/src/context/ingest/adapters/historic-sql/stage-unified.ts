@@ -108,8 +108,7 @@ function shouldDropByUsers(template: AggregatedTemplate, config: HistoricSqlUnif
   const matchingExecutions = template.topUsers
     .filter((entry) => matchesAny(entry.user, patterns))
     .reduce((sum, entry) => sum + entry.executions, 0);
-  const allExecutions = template.topUsers.reduce((sum, entry) => sum + entry.executions, 0);
-  const serviceOnly = allExecutions > 0 && matchingExecutions >= allExecutions;
+  const serviceOnly = template.stats.executions > 0 && matchingExecutions >= template.stats.executions;
   return service.mode === 'exclude' ? serviceOnly : !serviceOnly;
 }
 
