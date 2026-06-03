@@ -264,6 +264,7 @@ describe('setup context build state', () => {
           now: () => new Date('2026-05-09T10:00:00.000Z'),
           runContextBuild: runContextBuildMock,
           verifyContextReady,
+          testConnection: async () => 0,
         },
       ),
     ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-abc123' });
@@ -315,6 +316,7 @@ describe('setup context build state', () => {
           runIdFactory: () => 'setup-context-local-failed',
           now: () => new Date('2026-05-09T10:00:00.000Z'),
           runContextBuild: runContextBuildMock,
+          testConnection: async () => 0,
         },
       ),
     ).resolves.toEqual({ status: 'failed', projectDir: tempDir });
@@ -399,6 +401,7 @@ describe('setup context build state', () => {
           runIdFactory: () => 'setup-context-local-enriched-scan',
           now: () => new Date('2026-05-09T10:00:00.000Z'),
           runContextBuild: runContextBuildMock,
+          testConnection: async () => 0,
         },
       ),
     ).resolves.toEqual({ status: 'ready', projectDir: tempDir, runId: 'setup-context-local-enriched-scan' });
@@ -433,7 +436,7 @@ describe('setup context build state', () => {
       runKtxSetupContextStep(
         { projectDir: tempDir, inputMode: 'disabled' },
         io.io,
-        { runContextBuild: runContextBuildMock },
+        { runContextBuild: runContextBuildMock, testConnection: async () => 0 },
       ),
     ).resolves.toMatchObject({ status: 'ready' });
 
@@ -528,10 +531,117 @@ describe('setup context build state', () => {
       runKtxSetupContextStep(
         { projectDir: tempDir, inputMode: 'disabled' },
         io.io,
-        { runContextBuild: runContextBuildMock, verifyContextReady },
+        { runContextBuild: runContextBuildMock, verifyContextReady, testConnection: async () => 0 },
       ),
     ).resolves.toMatchObject({ status: 'ready' });
 
     expect(runContextBuildMock).toHaveBeenCalledOnce();
+  });
+
+  it('blocks the build and names the failing connection without leaking raw error text', async () => {
+    const missingDbPath = join(tempDir, 'missing-warehouse.sqlite');
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'sqlite', path: missingDbPath } },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'disabled' },
+        io.io,
+        {
+          runIdFactory: () => 'setup-context-local-gate',
+          now: () => new Date('2026-05-09T10:00:00.000Z'),
+          runContextBuild: runContextBuildMock,
+        },
+      ),
+    ).resolves.toEqual({ status: 'failed', projectDir: tempDir });
+
+    expect(runContextBuildMock).not.toHaveBeenCalled();
+    // Names the failing connection by id + connector type, with remediation.
+    expect(io.stderr()).toContain('warehouse (sqlite)');
+    expect(io.stderr()).toContain('ktx connection test');
+    // Never surfaces raw connection error text (or the database path) to the user.
+    expect(io.stderr()).not.toContain('File not found');
+    expect(io.stderr()).not.toContain(missingDbPath);
+    // The failed context state forces context.ready=false so setup cannot read as ready.
+    await expect(readKtxSetupContextState(tempDir)).resolves.toMatchObject({
+      status: 'failed',
+      failureReason: 'Required connections failed their live test: warehouse (sqlite).',
+    });
+    expect((await readKtxSetupState(tempDir)).completed_steps).not.toContain('context');
+  });
+
+  it('retries connection tests after a fix and then builds in interactive mode', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
+    let gateRounds = 0;
+    const testConnection = vi.fn(async () => (++gateRounds === 1 ? 1 : 0));
+    let selectCalls = 0;
+    const select = vi.fn(async () => {
+      selectCalls += 1;
+      return selectCalls === 1 ? 'build' : 'retry';
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto' },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          runContextBuild: runContextBuildMock,
+          verifyContextReady,
+          testConnection,
+        },
+      ),
+    ).resolves.toMatchObject({ status: 'ready' });
+
+    expect(testConnection).toHaveBeenCalledTimes(2);
+    expect(runContextBuildMock).toHaveBeenCalledOnce();
+    expect(io.stderr()).toContain('warehouse (postgres)');
+  });
+
+  it('returns to setup when the user backs out of a failing connection in interactive mode', async () => {
+    await writeReadyProject(tempDir, {
+      connections: { warehouse: { driver: 'postgres', readonly: true } },
+    });
+    const io = makeIo();
+    const runContextBuildMock = vi.fn(async () => ({ exitCode: 0 }));
+    const verifyContextReady = vi.fn(async () => ({
+      ready: true,
+      agentContextReady: true,
+      semanticSearchReady: true,
+      details: ['ready'],
+    }));
+    let selectCalls = 0;
+    const select = vi.fn(async () => {
+      selectCalls += 1;
+      return selectCalls === 1 ? 'build' : 'back';
+    });
+
+    await expect(
+      runKtxSetupContextStep(
+        { projectDir: tempDir, inputMode: 'auto' },
+        io.io,
+        {
+          prompts: { select, cancel: vi.fn() },
+          runContextBuild: runContextBuildMock,
+          verifyContextReady,
+          testConnection: async () => 1,
+        },
+      ),
+    ).resolves.toEqual({ status: 'back', projectDir: tempDir });
+
+    expect(runContextBuildMock).not.toHaveBeenCalled();
   });
 });

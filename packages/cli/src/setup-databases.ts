@@ -22,6 +22,7 @@ import {
   writePrefixedLines,
 } from './clack.js';
 import { runKtxConnection } from './connection.js';
+import { createBufferedCommandIo } from './io/buffered-command-io.js';
 import {
   pickDatabaseScope as defaultPickDatabaseScope,
   type DatabaseScopePickResult,
@@ -992,35 +993,6 @@ async function defaultScanConnection(projectDir: string, connectionId: string, i
     },
     io,
   );
-}
-
-interface BufferedCommandIo extends KtxCliIo {
-  stdoutText(): string;
-  stderrText(): string;
-}
-
-function createBufferedCommandIo(): BufferedCommandIo {
-  let stdout = '';
-  let stderr = '';
-  return {
-    stdout: {
-      isTTY: false,
-      write(chunk: string) {
-        stdout += chunk;
-      },
-    },
-    stderr: {
-      write(chunk: string) {
-        stderr += chunk;
-      },
-    },
-    stdoutText() {
-      return stdout;
-    },
-    stderrText() {
-      return stderr;
-    },
-  };
 }
 
 function envWithCurrentNodeFirst(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

@@ -7,6 +7,8 @@ import { serializeKtxProjectConfig } from './context/project/config.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { errorMessage, writePrefixedLines } from './clack.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
+import { runKtxConnection } from './connection.js';
+import { type BufferedCommandIo, createBufferedCommandIo } from './io/buffered-command-io.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import {
   type ContextBuildSourceProgressUpdate,
@@ -90,6 +92,7 @@ export interface KtxSetupContextDeps {
   now?: () => Date;
   runContextBuild?: typeof runContextBuild;
   verifyContextReady?: (projectDir: string) => Promise<KtxSetupContextReadiness>;
+  testConnection?: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>;
 }
 
 interface KtxSetupContextTargets {
@@ -274,6 +277,134 @@ function listContextTargets(project: KtxLocalProject): KtxSetupContextTargets {
       .filter((target) => target.operation === 'source-ingest')
       .map((target) => target.connectionId),
   };
+}
+
+interface ConnectionGateFailure {
+  connectionId: string;
+  driver: string;
+}
+
+type ConnectionGateResult = { ok: true } | { ok: false; failures: ConnectionGateFailure[] };
+
+type PreparedBuild =
+  | { kind: 'ready'; project: KtxLocalProject; targets: KtxSetupContextTargets }
+  | { kind: 'result'; result: KtxSetupContextResult };
+
+function requiredConnectionIds(targets: KtxSetupContextTargets): string[] {
+  return [...targets.primarySourceConnectionIds, ...targets.contextSourceConnectionIds];
+}
+
+function connectorTypeLabel(project: KtxLocalProject, connectionId: string): string {
+  const driver = String(project.config.connections[connectionId]?.driver ?? '')
+    .trim()
+    .toLowerCase();
+  return driver.length > 0 ? driver : 'unknown';
+}
+
+async function defaultGateTestConnection(
+  projectDir: string,
+  connectionId: string,
+  io: KtxCliIo,
+): Promise<number> {
+  return await runKtxConnection({ command: 'test', projectDir, connectionId }, io);
+}
+
+/**
+ * Runs a live connection test for every connection the build depends on. Each
+ * test's output is captured in a buffer and discarded so raw error text never
+ * reaches the user — callers surface only the connection id and connector type.
+ */
+async function testRequiredConnections(
+  projectDir: string,
+  project: KtxLocalProject,
+  targets: KtxSetupContextTargets,
+  testConnection: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>,
+): Promise<ConnectionGateResult> {
+  const failures: ConnectionGateFailure[] = [];
+  for (const connectionId of requiredConnectionIds(targets)) {
+    const buffered: BufferedCommandIo = createBufferedCommandIo();
+    const exitCode = await testConnection(projectDir, connectionId, buffered);
+    if (exitCode !== 0) {
+      failures.push({ connectionId, driver: connectorTypeLabel(project, connectionId) });
+    }
+  }
+  return failures.length === 0 ? { ok: true } : { ok: false, failures };
+}
+
+/**
+ * Loads the project and resolves the connections the build depends on, applying
+ * the empty-targets and preflight-capability checks. Used both on first entry
+ * and on interactive retry so a fix that adds, removes, or reconfigures a
+ * connection is honored.
+ */
+async function prepareBuildTargets(args: KtxSetupContextStepArgs, io: KtxCliIo): Promise<PreparedBuild> {
+  const project = await loadKtxProject({ projectDir: args.projectDir });
+  const targets = listContextTargets(project);
+  if (targets.primarySourceConnectionIds.length === 0 && targets.contextSourceConnectionIds.length === 0) {
+    if (args.allowEmpty === true) {
+      return { kind: 'result', result: { status: 'skipped', projectDir: args.projectDir } };
+    }
+    io.stderr.write('No databases or context sources are configured for a KTX context build.\n');
+    return { kind: 'result', result: { status: 'failed', projectDir: args.projectDir } };
+  }
+  const preflightPlan = buildPublicIngestPlan(project, { projectDir: project.projectDir, all: true });
+  const preflightFailures = preflightPlan.targets.flatMap((target) =>
+    target.preflightFailure ? [`${target.connectionId}: ${target.preflightFailure}`] : [],
+  );
+  if (preflightFailures.length > 0) {
+    if (args.allowEmpty === true) {
+      return { kind: 'result', result: { status: 'skipped', projectDir: args.projectDir } };
+    }
+    writeMissingCapabilities(preflightFailures, io);
+    return { kind: 'result', result: { status: 'missing-input', projectDir: args.projectDir } };
+  }
+  return { kind: 'ready', project, targets };
+}
+
+function writeConnectionGateFailureLines(io: KtxCliIo, failures: ConnectionGateFailure[]): void {
+  io.stderr.write('KTX cannot build context: a required connection failed its live test.\n\n');
+  io.stderr.write('Failed connections:\n');
+  for (const failure of failures) {
+    io.stderr.write(`  ${failure.connectionId} (${failure.driver})\n`);
+  }
+  io.stderr.write('\nEach connection must be reachable before KTX builds context.\n');
+  io.stderr.write('Run `ktx connection test <id>` to see the error, fix the connection, then retry.\n');
+}
+
+function connectionGateFailureReason(failures: ConnectionGateFailure[]): string {
+  const names = failures.map((failure) => `${failure.connectionId} (${failure.driver})`).join(', ');
+  return `Required connections failed their live test: ${names}.`;
+}
+
+async function writeConnectionGateFailedState(
+  args: KtxSetupContextStepArgs,
+  deps: KtxSetupContextDeps,
+  targets: KtxSetupContextTargets,
+  failures: ConnectionGateFailure[],
+): Promise<void> {
+  const at = (deps.now ?? (() => new Date()))().toISOString();
+  await writeKtxSetupContextState(args.projectDir, {
+    status: 'failed',
+    startedAt: at,
+    updatedAt: at,
+    primarySourceConnectionIds: targets.primarySourceConnectionIds,
+    contextSourceConnectionIds: targets.contextSourceConnectionIds,
+    reportIds: [],
+    artifactPaths: [],
+    retryableFailedTargets: [],
+    commands: contextBuildCommands(args.projectDir),
+    failureReason: connectionGateFailureReason(failures),
+  });
+}
+
+async function promptConnectionGateRetry(prompts: KtxSetupContextPromptAdapter): Promise<'retry' | 'back'> {
+  return (await prompts.select({
+    message: 'Fix the failing connection, then choose how to proceed.',
+    options: [
+      { value: 'retry', label: 'Retry connection tests' },
+      { value: 'back', label: 'Back' },
+    ],
+  })) as 'retry' | 'back';
 }
 
 async function hasFileWithExtension(
@@ -642,7 +773,6 @@ export async function runKtxSetupContextStep(
   deps: KtxSetupContextDeps = {},
 ): Promise<KtxSetupContextResult> {
   try {
-    const project = await loadKtxProject({ projectDir: args.projectDir });
     const prompts = deps.prompts ?? createPromptAdapter();
     const existingState = await readKtxSetupContextState(args.projectDir);
     const completedSteps = (await readKtxSetupState(args.projectDir)).completed_steps;
@@ -660,26 +790,12 @@ export async function runKtxSetupContextStep(
       io.stdout.write('Previous context build state is stale; starting a fresh foreground build.\n');
     }
 
-    const targets = listContextTargets(project);
-    if (targets.primarySourceConnectionIds.length === 0 && targets.contextSourceConnectionIds.length === 0) {
-      if (args.allowEmpty === true) {
-        return { status: 'skipped', projectDir: args.projectDir };
-      }
-      io.stderr.write('No databases or context sources are configured for a KTX context build.\n');
-      return { status: 'failed', projectDir: args.projectDir };
+    const prepared = await prepareBuildTargets(args, io);
+    if (prepared.kind === 'result') {
+      return prepared.result;
     }
-
-    const preflightPlan = buildPublicIngestPlan(project, { projectDir: project.projectDir, all: true });
-    const preflightFailures = preflightPlan.targets.flatMap((target) =>
-      target.preflightFailure ? [`${target.connectionId}: ${target.preflightFailure}`] : [],
-    );
-    if (preflightFailures.length > 0) {
-      if (args.allowEmpty === true) {
-        return { status: 'skipped', projectDir: args.projectDir };
-      }
-      writeMissingCapabilities(preflightFailures, io);
-      return { status: 'missing-input', projectDir: args.projectDir };
-    }
+    let { project, targets } = prepared;
+    const interactive = args.inputMode !== 'disabled' && args.prompt !== false;
 
     if (args.forcePrompt !== true && args.prompt !== false && deps.verifyContextReady === undefined) {
       const existingContextResult = await completeExistingContext(args, io, deps, targets);
@@ -688,7 +804,7 @@ export async function runKtxSetupContextStep(
       }
     }
 
-    if (args.inputMode !== 'disabled' && args.prompt !== false) {
+    if (interactive) {
       const choice = await promptForBuild(prompts);
       if (choice === 'back') {
         return { status: 'back', projectDir: args.projectDir };
@@ -699,7 +815,32 @@ export async function runKtxSetupContextStep(
       }
     }
 
-    return await runBuild(args, io, deps, project, targets);
+    // Live-connection gate: every connection the build depends on must pass a
+    // live test before the (expensive) build starts. A red connection is a hard
+    // stop — we surface only the connection id and connector type, never raw
+    // error text.
+    const testConnection = deps.testConnection ?? defaultGateTestConnection;
+    while (true) {
+      const gate = await testRequiredConnections(args.projectDir, project, targets, testConnection);
+      if (gate.ok) {
+        return await runBuild(args, io, deps, project, targets);
+      }
+      writeConnectionGateFailureLines(io, gate.failures);
+      if (!interactive) {
+        await writeConnectionGateFailedState(args, deps, targets, gate.failures);
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      const choice = await promptConnectionGateRetry(prompts);
+      if (choice === 'back') {
+        return { status: 'back', projectDir: args.projectDir };
+      }
+      const reprepared = await prepareBuildTargets(args, io);
+      if (reprepared.kind === 'result') {
+        return reprepared.result;
+      }
+      project = reprepared.project;
+      targets = reprepared.targets;
+    }
   } catch (error) {
     writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
     return { status: 'failed', projectDir: args.projectDir };

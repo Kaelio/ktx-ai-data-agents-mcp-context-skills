@@ -280,6 +280,26 @@ Context sources:
   dbt_main: memory update complete
 ```
 
+Before the build starts, **ktx** runs a live test for every connection the
+build depends on. A context build can take several minutes, so if any required
+connection is unreachable or misconfigured the build is blocked up front and
+**ktx** names the failing connection by id and connector type:
+
+```text
+KTX cannot build context: a required connection failed its live test.
+
+Failed connections:
+  warehouse (postgres)
+
+Each connection must be reachable before KTX builds context.
+Run `ktx connection test <id>` to see the error, fix the connection, then retry.
+```
+
+Run `ktx connection test <connection-id>` to see the underlying error, fix the
+connection, then continue. In interactive setup you can retry without
+restarting; with `--no-input` the build exits non-zero and names the failing
+connection so scripts can stop early.
+
 ## Connect a coding agent
 
 The setup wizard installs project-local agent rules in the last step. To
@@ -340,6 +360,7 @@ surface.
 | Setup resumes the wrong project | Pass `--project-dir <path>` |
 | LLM or embeddings health check fails | Rerun setup and pick a different credential, model, or backend |
 | Database test fails | Verify the same connection with the database's native client, then rerun setup |
+| Context build blocked: a connection failed its live test | Run `ktx connection test <connection-id>` to see the error, fix the connection, then retry the build |
 | Agent integration is incomplete | Run `ktx setup --agents --target <target>` |
 
 ## Next steps
