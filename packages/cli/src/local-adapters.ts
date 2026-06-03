@@ -31,7 +31,7 @@ import {
   createManagedDaemonLookerTableIdentifierParser,
   createManagedDaemonSqlAnalysisPort,
   managedDaemonDatabaseIntrospectionOptions,
-  type ManagedPythonCoreDaemonOptions,
+  type ManagedPythonDaemonHttpOptions,
 } from './managed-python-http.js';
 import type { KtxOperationalLogger } from './io/logger.js';
 import { resolveKtxConfigReference } from './context/core/config-reference.js';
@@ -161,7 +161,7 @@ export interface KtxCliLocalIngestAdaptersOptions extends DefaultLocalIngestAdap
   historicSqlConnectionId?: string;
   sqlAnalysis?: SqlAnalysisPort;
   sqlAnalysisUrl?: string;
-  managedDaemon?: ManagedPythonCoreDaemonOptions;
+  managedDaemon?: ManagedPythonDaemonHttpOptions;
   logger?: KtxOperationalLogger;
 }
 
