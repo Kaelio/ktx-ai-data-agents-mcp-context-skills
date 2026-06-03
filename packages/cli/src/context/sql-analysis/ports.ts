@@ -1,3 +1,5 @@
+import type { KtxTableRef } from '../scan/types.js';
+
 export type SqlAnalysisDialect =
   | 'bigquery'
   | 'snowflake'
@@ -32,8 +34,20 @@ export interface SqlAnalysisBatchItem {
   sql: string;
 }
 
+interface SqlAnalysisCatalogTable extends KtxTableRef {
+  columns?: string[];
+}
+
+interface SqlAnalysisCatalog {
+  tables: SqlAnalysisCatalogTable[];
+}
+
+export interface SqlAnalysisBatchOptions {
+  catalog?: SqlAnalysisCatalog;
+}
+
 export interface SqlAnalysisBatchResult {
-  tablesTouched: string[];
+  tablesTouched: KtxTableRef[];
   columnsByClause: Partial<Record<SqlAnalysisClause, string[]>>;
   error?: string | null;
 }
@@ -48,6 +62,7 @@ export interface SqlAnalysisPort {
   analyzeBatch(
     items: SqlAnalysisBatchItem[],
     dialect: SqlAnalysisDialect,
+    options?: SqlAnalysisBatchOptions,
   ): Promise<Map<string, SqlAnalysisBatchResult>>;
   validateReadOnly(sql: string, dialect: SqlAnalysisDialect): Promise<SqlReadOnlyValidationResult>;
 }

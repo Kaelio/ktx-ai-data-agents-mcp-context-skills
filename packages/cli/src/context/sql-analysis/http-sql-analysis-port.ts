@@ -1,8 +1,10 @@
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { URL } from 'node:url';
+import type { KtxTableRef } from '../scan/types.js';
 import type {
   SqlAnalysisBatchItem,
+  SqlAnalysisBatchOptions,
   SqlAnalysisBatchResult,
   SqlAnalysisDialect,
   SqlAnalysisFingerprintResult,
@@ -87,6 +89,14 @@ function optionalString(raw: Record<string, unknown>, field: string): string | n
     return value;
   }
   throw new Error(`sql analysis response has invalid optional string field ${field}`);
+}
+
+function optionalNullableStringField(raw: Record<string, unknown>, field: string): string | null {
+  const value = raw[field];
+  if (value === null || value === undefined || typeof value === 'string') {
+    return value ?? null;
+  }
+  throw new Error(`sql analysis response has invalid optional nullable string field ${field}`);
 }
 
 function requiredStringArray(raw: Record<string, unknown>, field: string): string[] {
@@ -175,10 +185,34 @@ function mapColumnsByClause(raw: Record<string, unknown>): SqlAnalysisBatchResul
   return result;
 }
 
+function requiredTableRef(raw: unknown, field: string): KtxTableRef {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(`sql analysis response contains invalid table ref in ${field}`);
+  }
+  const record = raw as Record<string, unknown>;
+  const name = record.name;
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error(`sql analysis response table ref in ${field} is missing name`);
+  }
+  return {
+    catalog: optionalNullableStringField(record, 'catalog'),
+    db: optionalNullableStringField(record, 'db'),
+    name,
+  };
+}
+
+function requiredTableRefArray(raw: Record<string, unknown>, field: string): KtxTableRef[] {
+  const value = raw[field];
+  if (!Array.isArray(value)) {
+    throw new Error(`sql analysis response is missing table-ref[] field ${field}`);
+  }
+  return value.map((item, index) => requiredTableRef(item, `${field}.${index}`));
+}
+
 function mapBatchResult(raw: Record<string, unknown>): SqlAnalysisBatchResult {
   const error = optionalString(raw, 'error');
   return {
-    tablesTouched: requiredStringArray(raw, 'tables_touched'),
+    tablesTouched: requiredTableRefArray(raw, 'tables_touched'),
     columnsByClause: mapColumnsByClause(raw),
     ...(error !== undefined ? { error } : {}),
   };
@@ -215,10 +249,11 @@ export function createHttpSqlAnalysisPort(options: HttpSqlAnalysisPortOptions): 
       });
       return mapResult(raw);
     },
-    async analyzeBatch(items: SqlAnalysisBatchItem[], dialect: SqlAnalysisDialect) {
+    async analyzeBatch(items: SqlAnalysisBatchItem[], dialect: SqlAnalysisDialect, options?: SqlAnalysisBatchOptions) {
       const raw = await requestJson('/sql/analyze-batch', {
         dialect,
         items,
+        ...(options?.catalog ? { catalog: options.catalog } : {}),
       });
       return mapBatchResponse(raw);
     },
