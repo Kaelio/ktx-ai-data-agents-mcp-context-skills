@@ -161,7 +161,7 @@ describe('KTX daemon ingest ports', () => {
     const requestJson = vi.fn(async () => ({
       results: {
         orders: {
-          tables_touched: ['public.orders'],
+          tables_touched: [{ catalog: null, db: 'public', name: 'orders' }],
           columns_by_clause: { select: ['status'] },
           error: null,
         },
@@ -175,7 +175,7 @@ describe('KTX daemon ingest ports', () => {
           [
             'orders',
             {
-              tablesTouched: ['public.orders'],
+              tablesTouched: [{ catalog: null, db: 'public', name: 'orders' }],
               columnsByClause: { select: ['status'] },
               error: null,
             },

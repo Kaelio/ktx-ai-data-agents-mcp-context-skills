@@ -59,6 +59,7 @@ describe('historic-sql unified contracts', () => {
     expect(
       stagedTableInputSchema.parse({
         table: 'public.orders',
+        tableRef: { catalog: null, db: 'public', name: 'orders' },
         stats: {
           executionsBucket: '10-100',
           distinctUsersBucket: '2-5',
@@ -81,7 +82,7 @@ describe('historic-sql unified contracts', () => {
           {
             id: 'pg:123',
             canonicalSql: 'select * from public.orders',
-            tablesTouched: ['public.orders'],
+            tablesTouched: [{ catalog: null, db: 'public', name: 'orders' }],
             executionsBucket: '10-100',
             distinctUsersBucket: '2-5',
             dialect: 'postgres',

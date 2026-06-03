@@ -30,6 +30,7 @@ async function writeUnifiedStagedDir(root: string): Promise<void> {
   });
   await writeJson(root, 'tables/public.orders.json', {
     table: 'public.orders',
+    tableRef: { catalog: null, db: 'public', name: 'orders' },
     stats: {
       executionsBucket: '10-100',
       distinctUsersBucket: '2-5',
@@ -46,7 +47,10 @@ async function writeUnifiedStagedDir(root: string): Promise<void> {
       {
         id: 'orders',
         canonicalSql: 'select * from public.orders join public.customers on true',
-        tablesTouched: ['public.orders', 'public.customers'],
+        tablesTouched: [
+          { catalog: null, db: 'public', name: 'orders' },
+          { catalog: null, db: 'public', name: 'customers' },
+        ],
         executionsBucket: '10-100',
         distinctUsersBucket: '2-5',
         dialect: 'postgres',
@@ -58,7 +62,10 @@ async function writeUnifiedStagedDir(root: string): Promise<void> {
       {
         id: 'orders',
         canonicalSql: 'select * from public.orders join public.customers on true',
-        tablesTouched: ['public.orders', 'public.customers'],
+        tablesTouched: [
+          { catalog: null, db: 'public', name: 'orders' },
+          { catalog: null, db: 'public', name: 'customers' },
+        ],
         executionsBucket: '10-100',
         distinctUsersBucket: '2-5',
         dialect: 'postgres',
@@ -155,7 +162,10 @@ describe('chunkHistoricSqlUnifiedStagedDir', () => {
         {
           id: 'line-items',
           canonicalSql: 'select * from public.orders join public.line_items on true',
-          tablesTouched: ['public.orders', 'public.line_items'],
+          tablesTouched: [
+            { catalog: null, db: 'public', name: 'orders' },
+            { catalog: null, db: 'public', name: 'line_items' },
+          ],
           executionsBucket: '10-100',
           distinctUsersBucket: '2-5',
           dialect: 'postgres',

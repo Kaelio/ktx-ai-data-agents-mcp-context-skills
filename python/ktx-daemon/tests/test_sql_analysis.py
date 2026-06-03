@@ -32,7 +32,10 @@ def test_analyze_sql_batch_extracts_tables_and_clause_columns() -> None:
 
     result = response.results["orders_by_customer"]
     assert result.error is None
-    assert result.tables_touched == ["public.orders", "public.customers"]
+    assert [item.model_dump() for item in result.tables_touched] == [
+        {"catalog": None, "db": "public", "name": "orders"},
+        {"catalog": None, "db": "public", "name": "customers"},
+    ]
     assert result.columns_by_clause == {
         "select": ["status"],
         "where": ["created_at"],
@@ -54,6 +57,114 @@ def test_analyze_sql_batch_returns_per_item_parse_errors() -> None:
     assert result.tables_touched == []
     assert result.columns_by_clause == {}
     assert result.error is not None
+
+
+def test_analyze_sql_batch_qualifies_bare_table_from_catalog() -> None:
+    response = analyze_sql_batch_response(
+        AnalyzeSqlBatchRequest(
+            dialect="postgres",
+            catalog={
+                "tables": [
+                    {
+                        "catalog": None,
+                        "db": "orbit_raw",
+                        "name": "accounts",
+                        "columns": ["id"],
+                    },
+                    {
+                        "catalog": None,
+                        "db": "orbit_analytics",
+                        "name": "orders",
+                        "columns": ["id"],
+                    },
+                ]
+            },
+            items=[AnalyzeSqlBatchItem(id="bare", sql="select id from accounts")],
+            max_workers=1,
+        )
+    )
+
+    assert [item.model_dump() for item in response.results["bare"].tables_touched] == [
+        {"catalog": None, "db": "orbit_raw", "name": "accounts"}
+    ]
+
+
+def test_analyze_sql_batch_returns_all_ambiguous_modeled_matches() -> None:
+    response = analyze_sql_batch_response(
+        AnalyzeSqlBatchRequest(
+            dialect="postgres",
+            catalog={
+                "tables": [
+                    {
+                        "catalog": None,
+                        "db": "orbit_raw",
+                        "name": "events",
+                        "columns": ["id"],
+                    },
+                    {
+                        "catalog": None,
+                        "db": "orbit_analytics",
+                        "name": "events",
+                        "columns": ["id"],
+                    },
+                ]
+            },
+            items=[AnalyzeSqlBatchItem(id="ambiguous", sql="select id from events")],
+            max_workers=1,
+        )
+    )
+
+    assert [
+        item.model_dump() for item in response.results["ambiguous"].tables_touched
+    ] == [
+        {"catalog": None, "db": "orbit_raw", "name": "events"},
+        {"catalog": None, "db": "orbit_analytics", "name": "events"},
+    ]
+
+
+def test_analyze_sql_batch_leaves_unresolved_bare_refs_unqualified() -> None:
+    response = analyze_sql_batch_response(
+        AnalyzeSqlBatchRequest(
+            dialect="postgres",
+            catalog={
+                "tables": [{"catalog": None, "db": "orbit_raw", "name": "accounts"}]
+            },
+            items=[AnalyzeSqlBatchItem(id="missing", sql="select * from invoices")],
+            max_workers=1,
+        )
+    )
+
+    assert [
+        item.model_dump() for item in response.results["missing"].tables_touched
+    ] == [{"catalog": None, "db": None, "name": "invoices"}]
+
+
+def test_analyze_sql_batch_returns_bigquery_project_dataset_table_refs() -> None:
+    response = analyze_sql_batch_response(
+        AnalyzeSqlBatchRequest(
+            dialect="bigquery",
+            catalog={
+                "tables": [
+                    {
+                        "catalog": "demo-project",
+                        "db": "orbit_analytics",
+                        "name": "orders",
+                    }
+                ]
+            },
+            items=[
+                AnalyzeSqlBatchItem(
+                    id="bq",
+                    sql="select * from `demo-project.orbit_analytics.orders`",
+                )
+            ],
+            max_workers=1,
+        )
+    )
+
+    assert [item.model_dump() for item in response.results["bq"].tables_touched] == [
+        {"catalog": "demo-project", "db": "orbit_analytics", "name": "orders"}
+    ]
 
 
 def test_columns_from_nodes_ignores_non_expression_clause_values() -> None:

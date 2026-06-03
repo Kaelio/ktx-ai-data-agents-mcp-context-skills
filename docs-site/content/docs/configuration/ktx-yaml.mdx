@@ -179,8 +179,21 @@ connections:
     context:
       queryHistory:
         enabled: true
+        enabledSchemas:
+          - orbit_raw
+          - orbit_analytics
         minExecutions: 5
 ```
+
+- `enabledSchemas`: Optional list of schema or dataset names that query-history
+  ingest may mine. Omit it to let **ktx** derive the modeled schema floor from
+  the connection and semantic-layer sources. Use `["*"]` to disable the floor
+  for discovery runs.
+- `filters.serviceAccounts`: Optional service-account filter block. During
+  setup, when query history is enabled and no service-account block already
+  exists, **ktx** can propose exact role patterns such as `^svc_loader$` from
+  observed in-scope query history. The block uses `mode: exclude` and remains
+  hand-editable.
 
 ### Metabase
 

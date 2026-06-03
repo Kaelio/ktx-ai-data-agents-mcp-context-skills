@@ -76,7 +76,10 @@ describe('HistoricSqlSourceAdapter', () => {
           [
             'pg:1',
             {
-              tablesTouched: ['public.orders', 'public.customers'],
+              tablesTouched: [
+                { catalog: null, db: 'public', name: 'orders' },
+                { catalog: null, db: 'public', name: 'customers' },
+              ],
               columnsByClause: { select: ['status'], join: ['customer_id', 'id'], groupBy: ['status'] },
             },
           ],

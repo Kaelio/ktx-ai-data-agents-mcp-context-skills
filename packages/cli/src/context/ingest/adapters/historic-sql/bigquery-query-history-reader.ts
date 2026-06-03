@@ -200,27 +200,78 @@ export class BigQueryHistoricSqlQueryHistoryReader {
     config: HistoricSqlUnifiedPullConfig,
   ): AsyncIterable<AggregatedTemplate> {
     const sql = `
+WITH filtered_jobs AS (
+  SELECT
+    COALESCE(query_info.query_hashes.normalized_literals, TO_HEX(SHA256(query))) AS template_id,
+    query,
+    user_email,
+    creation_time,
+    end_time,
+    error_result
+  FROM ${this.viewPath}
+  WHERE job_type = 'QUERY'
+    AND statement_type IN ('SELECT', 'MERGE')
+    AND creation_time >= ${timestampExpression(window.start)}
+    AND creation_time < ${timestampExpression(window.end)}
+    AND query IS NOT NULL
+),
+template_stats AS (
+  SELECT
+    template_id,
+    MIN(query) AS canonical_sql,
+    COUNT(*) AS executions,
+    COUNT(DISTINCT user_email) AS distinct_users,
+    MIN(creation_time) AS first_seen,
+    MAX(creation_time) AS last_seen,
+    APPROX_QUANTILES(TIMESTAMP_DIFF(end_time, creation_time, MILLISECOND), 100)[OFFSET(50)] AS p50_ms,
+    APPROX_QUANTILES(TIMESTAMP_DIFF(end_time, creation_time, MILLISECOND), 100)[OFFSET(95)] AS p95_ms,
+    SAFE_DIVIDE(COUNTIF(error_result IS NOT NULL), COUNT(*)) AS error_rate,
+    CAST(NULL AS INT64) AS rows_produced
+  FROM filtered_jobs
+  GROUP BY template_id
+  HAVING COUNT(*) >= ${config.minExecutions}
+),
+template_users AS (
+  SELECT
+    template_id,
+    user_email AS user,
+    COUNT(*) AS executions,
+    MAX(creation_time) AS last_seen
+  FROM filtered_jobs
+  GROUP BY template_id, user_email
+)
 SELECT
-  query_hash AS template_id,
-  MIN(query) AS canonical_sql,
-  COUNT(*) AS executions,
-  COUNT(DISTINCT user_email) AS distinct_users,
-  MIN(creation_time) AS first_seen,
-  MAX(creation_time) AS last_seen,
-  APPROX_QUANTILES(TIMESTAMP_DIFF(end_time, creation_time, MILLISECOND), 100)[OFFSET(50)] AS p50_ms,
-  APPROX_QUANTILES(TIMESTAMP_DIFF(end_time, creation_time, MILLISECOND), 100)[OFFSET(95)] AS p95_ms,
-  SAFE_DIVIDE(COUNTIF(error_result IS NOT NULL), COUNT(*)) AS error_rate,
-  CAST(NULL AS INT64) AS rows_produced,
-  TO_JSON_STRING(ARRAY_AGG(STRUCT(user_email AS user, 1 AS executions) ORDER BY creation_time DESC LIMIT 5)) AS top_users
-FROM ${this.viewPath}
-WHERE job_type = 'QUERY'
-  AND statement_type IN ('SELECT', 'MERGE')
-  AND creation_time >= ${timestampExpression(window.start)}
-  AND creation_time < ${timestampExpression(window.end)}
-  AND query IS NOT NULL
-GROUP BY query_hash
-HAVING COUNT(*) >= ${config.minExecutions}
-ORDER BY executions DESC`.trim();
+  stats.template_id,
+  stats.canonical_sql,
+  stats.executions,
+  stats.distinct_users,
+  stats.first_seen,
+  stats.last_seen,
+  stats.p50_ms,
+  stats.p95_ms,
+  stats.error_rate,
+  stats.rows_produced,
+  TO_JSON_STRING(
+    ARRAY_AGG(
+      STRUCT(users.user AS user, users.executions AS executions)
+      ORDER BY users.executions DESC, users.last_seen DESC
+    )
+  ) AS top_users
+FROM template_stats AS stats
+JOIN template_users AS users
+  ON users.template_id = stats.template_id
+GROUP BY
+  stats.template_id,
+  stats.canonical_sql,
+  stats.executions,
+  stats.distinct_users,
+  stats.first_seen,
+  stats.last_seen,
+  stats.p50_ms,
+  stats.p95_ms,
+  stats.error_rate,
+  stats.rows_produced
+ORDER BY stats.executions DESC`.trim();
     const result = await queryClient(client).executeQuery(sql);
     if (result.error) {
       throw grantsError(result.error);

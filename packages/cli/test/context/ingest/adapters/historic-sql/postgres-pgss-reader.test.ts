@@ -215,7 +215,7 @@ describe('PostgresPgssReader aggregate path', () => {
     for await (const row of reader.fetchAggregated(
       { executeQuery },
       { start: new Date('2026-02-10T00:00:00.000Z'), end: new Date('2026-05-11T00:00:00.000Z') },
-      { dialect: 'postgres', minExecutions: 5, enabledTables: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
+      { dialect: 'postgres', minExecutions: 5, enabledTables: [], enabledSchemas: [], modeledTableCatalog: [], scopeFloorWarnings: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
     )) {
       rows.push(row);
     }

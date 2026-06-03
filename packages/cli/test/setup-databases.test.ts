@@ -6,6 +6,7 @@ import { parseKtxProjectConfig } from '../src/context/project/config.js';
 import { readKtxSetupState, writeKtxSetupState } from '../src/context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  managedDaemonOptionsForSetupQueryHistoryPicker,
   type KtxSetupDatabaseDriver,
   type KtxSetupDatabasesDeps,
   type KtxSetupDatabasesPromptAdapter,
@@ -137,6 +138,22 @@ function textInputPrompt(message: string): string {
   return `${title}\n│\n│  ${bodyLines.join('\n│  ')}\n│  Press Escape to go back.\n│`;
 }
 
+function queryHistoryFromConfig(connection: unknown): {
+  filters?: { serviceAccounts?: unknown; dropTrivialProbes?: boolean };
+} | undefined {
+  if (!connection || typeof connection !== 'object' || Array.isArray(connection)) {
+    return undefined;
+  }
+  const context = (connection as { context?: unknown }).context;
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    return undefined;
+  }
+  const queryHistory = (context as { queryHistory?: unknown }).queryHistory;
+  return queryHistory && typeof queryHistory === 'object' && !Array.isArray(queryHistory)
+    ? (queryHistory as { filters?: { serviceAccounts?: unknown; dropTrivialProbes?: boolean } })
+    : undefined;
+}
+
 describe('setup databases step', () => {
   let tempDir: string;
 
@@ -148,6 +165,61 @@ describe('setup databases step', () => {
   afterEach(async () => {
     vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('builds managed daemon options for setup query-history SQL analysis', () => {
+    const io = makeIo();
+
+    expect(
+      managedDaemonOptionsForSetupQueryHistoryPicker({
+        projectDir: tempDir,
+        args: {
+          inputMode: 'disabled',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        io: io.io,
+      }),
+    ).toEqual({
+      cliVersion: '0.2.0',
+      projectDir: tempDir,
+      installPolicy: 'auto',
+      io: io.io,
+    });
+  });
+
+  it('defaults managed daemon setup options when the database step is called directly', () => {
+    const io = makeIo();
+
+    expect(
+      managedDaemonOptionsForSetupQueryHistoryPicker({
+        projectDir: tempDir,
+        args: {
+          inputMode: 'disabled',
+        },
+        io: io.io,
+      }),
+    ).toMatchObject({
+      cliVersion: expect.any(String),
+      projectDir: tempDir,
+      installPolicy: 'never',
+      io: io.io,
+    });
+
+    expect(
+      managedDaemonOptionsForSetupQueryHistoryPicker({
+        projectDir: tempDir,
+        args: {
+          inputMode: 'auto',
+        },
+        io: io.io,
+      }),
+    ).toMatchObject({
+      cliVersion: expect.any(String),
+      projectDir: tempDir,
+      installPolicy: 'prompt',
+      io: io.io,
+    });
   });
 
   it('shows every supported database in the interactive checklist', async () => {
@@ -2567,6 +2639,190 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('Query history probe...');
     expect(io.stdout()).not.toContain('Historic SQL probe...');
     expect(io.stdout()).toContain('pg_stat_statements ready');
+  });
+
+  it('auto-applies derived query-history service-account filters in non-interactive setup', async () => {
+    const io = makeIo();
+    const queryHistoryFilterPicker = vi.fn(async () => ({
+      excludedRoles: [
+        {
+          role: 'svc_loader',
+          pattern: '^svc_loader$',
+          reason: 'Runs recurring loader traffic against modeled tables.',
+        },
+      ],
+      consideredRoleCount: 2,
+      skipped: null,
+      warnings: [],
+    }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        yes: true,
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: ['public'],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlReadinessProbe: vi.fn(async () => {
+          const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+          return {
+            ok: true as const,
+            dialect: 'postgres' as const,
+            runner,
+            result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+          };
+        }),
+        queryHistoryFilterPicker,
+        createQueryHistoryLlmRuntime: vi.fn(() => null),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(queryHistoryFilterPicker).toHaveBeenCalledTimes(1);
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.warehouse).toMatchObject({
+      context: {
+        queryHistory: {
+          filters: {
+            dropTrivialProbes: true,
+            serviceAccounts: {
+              mode: 'exclude',
+              patterns: ['^svc_loader$'],
+            },
+          },
+        },
+      },
+    });
+    expect(io.stdout()).toContain('Proposed query-history service-account filters');
+    expect(io.stdout()).toContain('svc_loader');
+  });
+
+  it('lets interactive setup skip applying derived filters', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['skip'],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        yes: false,
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: ['public'],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlReadinessProbe: vi.fn(async () => {
+          const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+          return {
+            ok: true as const,
+            dialect: 'postgres' as const,
+            runner,
+            result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+          };
+        }),
+        queryHistoryFilterPicker: vi.fn(async () => ({
+          excludedRoles: [{ role: 'svc_loader', pattern: '^svc_loader$', reason: 'Loader traffic.' }],
+          consideredRoleCount: 2,
+          skipped: null,
+          warnings: [],
+        })),
+        createQueryHistoryLlmRuntime: vi.fn(() => null),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(queryHistoryFromConfig(config.connections.warehouse)?.filters).toEqual({ dropTrivialProbes: true });
+    expect(prompts.select).toHaveBeenCalledWith({
+      message: 'Apply 1 derived query-history service-account exclusion?',
+      options: [
+        { value: 'apply', label: 'Apply derived filters (recommended)' },
+        { value: 'skip', label: 'Leave query history filters unchanged' },
+      ],
+    });
+  });
+
+  it('does not overwrite an existing serviceAccounts block', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        '        filters:',
+        '          dropTrivialProbes: true',
+        '          serviceAccounts:',
+        '            mode: exclude',
+        '            patterns:',
+        "              - '^existing$'",
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const io = makeIo();
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        yes: true,
+        databaseConnectionIds: ['warehouse'],
+        databaseSchemas: [],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlReadinessProbe: vi.fn(async () => {
+          const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+          return {
+            ok: true as const,
+            dialect: 'postgres' as const,
+            runner,
+            result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+          };
+        }),
+        queryHistoryFilterPicker: vi.fn(async () => ({
+          excludedRoles: [{ role: 'svc_loader', pattern: '^svc_loader$', reason: 'Loader traffic.' }],
+          consideredRoleCount: 2,
+          skipped: { reason: 'user-block-present' as const },
+          warnings: [],
+        })),
+        createQueryHistoryLlmRuntime: vi.fn(() => null),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(queryHistoryFromConfig(config.connections.warehouse)?.filters?.serviceAccounts).toEqual({
+      mode: 'exclude',
+      patterns: ['^existing$'],
+    });
+    expect(io.stdout()).toContain('Existing query-history service-account filters left unchanged');
   });
 
   it('asks interactive Postgres setup whether to enable query history', async () => {

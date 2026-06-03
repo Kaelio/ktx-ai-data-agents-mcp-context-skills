@@ -9,11 +9,18 @@ import type { StagedPatternsInput } from '../../../../../src/context/ingest/adap
 
 type PatternTemplate = StagedPatternsInput['templates'][number];
 
+function tableRef(value: string): { catalog: string | null; db: string | null; name: string } {
+  const parts = value.split('.');
+  if (parts.length === 3) return { catalog: parts[0]!, db: parts[1]!, name: parts[2]! };
+  if (parts.length === 2) return { catalog: null, db: parts[0]!, name: parts[1]! };
+  return { catalog: null, db: null, name: value };
+}
+
 function template(id: string, tablesTouched: string[], canonicalSql = 'select 1'): PatternTemplate {
   return {
     id,
     canonicalSql,
-    tablesTouched,
+    tablesTouched: tablesTouched.map(tableRef),
     executionsBucket: '10-100',
     distinctUsersBucket: '2-5',
     dialect: 'postgres',
@@ -32,7 +39,7 @@ describe('historic-SQL pattern input sharding', () => {
       ],
     };
 
-    const result = splitHistoricSqlPatternInputs(input, { maxBytes: 760 });
+    const result = splitHistoricSqlPatternInputs(input, { maxBytes: 1200 });
 
     expect(result.auditInput.templates.map((entry) => entry.id)).toEqual([
       'orders-customers-1',
@@ -51,7 +58,7 @@ describe('historic-SQL pattern input sharding', () => {
       'orders-customers-1',
       'orders-customers-2',
     ]);
-    expect(result.shards.every((shard) => shard.byteLength <= 760)).toBe(true);
+    expect(result.shards.every((shard) => shard.byteLength <= 1200)).toBe(true);
     expect(result.shards.flatMap((shard) => shard.input.templates).some((entry) => entry.id === 'single-table-orders')).toBe(false);
     expect(result.warnings).toEqual([]);
   });

@@ -49,7 +49,10 @@ describe('createHttpSqlAnalysisPort', () => {
     const requestJson = vi.fn(async () => ({
       results: {
         orders: {
-          tables_touched: ['public.orders', 'public.customers'],
+          tables_touched: [
+            { catalog: null, db: 'public', name: 'orders' },
+            { catalog: null, db: 'public', name: 'customers' },
+          ],
           columns_by_clause: {
             select: ['status'],
             where: ['created_at'],
@@ -79,7 +82,10 @@ describe('createHttpSqlAnalysisPort', () => {
         [
           'orders',
           {
-            tablesTouched: ['public.orders', 'public.customers'],
+            tablesTouched: [
+              { catalog: null, db: 'public', name: 'orders' },
+              { catalog: null, db: 'public', name: 'customers' },
+            ],
             columnsByClause: {
               select: ['status'],
               where: ['created_at'],
@@ -105,6 +111,62 @@ describe('createHttpSqlAnalysisPort', () => {
         { id: 'orders', sql: 'select status from public.orders' },
         { id: 'broken', sql: 'select * from where' },
       ],
+    });
+  });
+
+  it('passes an optional catalog and maps structured table refs for SQL batch analysis', async () => {
+    const requestJson = vi.fn(async () => ({
+      results: {
+        orders: {
+          tables_touched: [
+            { catalog: null, db: 'orbit_raw', name: 'accounts' },
+            { catalog: 'demo_project', db: 'orbit_analytics', name: 'orders' },
+          ],
+          columns_by_clause: { select: ['id'] },
+          error: null,
+        },
+      },
+    }));
+    const port = createHttpSqlAnalysisPort({ baseUrl: 'http://python.test', requestJson });
+
+    await expect(
+      port.analyzeBatch(
+        [{ id: 'orders', sql: 'select id from accounts' }],
+        'postgres',
+        {
+          catalog: {
+            tables: [
+              { catalog: null, db: 'orbit_raw', name: 'accounts', columns: ['id'] },
+              { catalog: 'demo_project', db: 'orbit_analytics', name: 'orders', columns: ['id'] },
+            ],
+          },
+        },
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          'orders',
+          {
+            tablesTouched: [
+              { catalog: null, db: 'orbit_raw', name: 'accounts' },
+              { catalog: 'demo_project', db: 'orbit_analytics', name: 'orders' },
+            ],
+            columnsByClause: { select: ['id'] },
+            error: null,
+          },
+        ],
+      ]),
+    );
+
+    expect(requestJson).toHaveBeenCalledWith('/sql/analyze-batch', {
+      dialect: 'postgres',
+      items: [{ id: 'orders', sql: 'select id from accounts' }],
+      catalog: {
+        tables: [
+          { catalog: null, db: 'orbit_raw', name: 'accounts', columns: ['id'] },
+          { catalog: 'demo_project', db: 'orbit_analytics', name: 'orders', columns: ['id'] },
+        ],
+      },
     });
   });
 
@@ -150,7 +212,7 @@ describe('createHttpSqlAnalysisPort', () => {
     const requestJson = vi.fn(async () => ({
       results: {
         orders: {
-          tables_touched: ['public.orders'],
+          tables_touched: [{ catalog: null, db: 'public', name: 'orders' }],
           columns_by_clause: { select: ['status'], where: [42] },
           error: null,
         },

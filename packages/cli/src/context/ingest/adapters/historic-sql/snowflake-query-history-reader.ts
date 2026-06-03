@@ -188,26 +188,75 @@ export class SnowflakeHistoricSqlQueryHistoryReader {
     config: HistoricSqlUnifiedPullConfig,
   ): AsyncIterable<AggregatedTemplate> {
     const sql = `
+WITH filtered_queries AS (
+  SELECT
+    query_hash,
+    query_text,
+    user_name,
+    start_time,
+    total_elapsed_time,
+    execution_status,
+    rows_produced
+  FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+  WHERE query_text IS NOT NULL
+    AND query_type IN ('SELECT', 'MERGE')
+    AND start_time >= ${timestampLiteral(window.start)}
+    AND start_time < ${timestampLiteral(window.end)}
+),
+template_stats AS (
+  SELECT
+    query_hash AS template_id,
+    MIN(query_text) AS canonical_sql,
+    COUNT(*) AS executions,
+    COUNT(DISTINCT user_name) AS distinct_users,
+    MIN(start_time) AS first_seen,
+    MAX(start_time) AS last_seen,
+    APPROX_PERCENTILE(total_elapsed_time, 0.50) AS p50_ms,
+    APPROX_PERCENTILE(total_elapsed_time, 0.95) AS p95_ms,
+    DIV0(COUNT_IF(execution_status != 'SUCCESS'), COUNT(*)) AS error_rate,
+    SUM(rows_produced) AS rows_produced
+  FROM filtered_queries
+  GROUP BY query_hash
+  HAVING COUNT(*) >= ${config.minExecutions}
+),
+template_users AS (
+  SELECT
+    query_hash AS template_id,
+    user_name AS user,
+    COUNT(*) AS executions,
+    MAX(start_time) AS last_seen
+  FROM filtered_queries
+  GROUP BY query_hash, user_name
+)
 SELECT
-  query_hash AS template_id,
-  MIN(query_text) AS canonical_sql,
-  COUNT(*) AS executions,
-  COUNT(DISTINCT user_name) AS distinct_users,
-  MIN(start_time) AS first_seen,
-  MAX(start_time) AS last_seen,
-  APPROX_PERCENTILE(total_elapsed_time, 0.50) AS p50_ms,
-  APPROX_PERCENTILE(total_elapsed_time, 0.95) AS p95_ms,
-  DIV0(COUNT_IF(execution_status != 'SUCCESS'), COUNT(*)) AS error_rate,
-  SUM(rows_produced) AS rows_produced,
-  ARRAY_AGG(OBJECT_CONSTRUCT('user', user_name, 'executions', 1)) WITHIN GROUP (ORDER BY start_time DESC)::string AS top_users
-FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-WHERE query_text IS NOT NULL
-  AND query_type IN ('SELECT', 'MERGE')
-  AND start_time >= ${timestampLiteral(window.start)}
-  AND start_time < ${timestampLiteral(window.end)}
-GROUP BY query_hash
-HAVING COUNT(*) >= ${config.minExecutions}
-ORDER BY executions DESC`.trim();
+  stats.template_id,
+  stats.canonical_sql,
+  stats.executions,
+  stats.distinct_users,
+  stats.first_seen,
+  stats.last_seen,
+  stats.p50_ms,
+  stats.p95_ms,
+  stats.error_rate,
+  stats.rows_produced,
+  ARRAY_AGG(
+    OBJECT_CONSTRUCT('user', users.user, 'executions', users.executions)
+  ) WITHIN GROUP (ORDER BY users.executions DESC, users.last_seen DESC)::string AS top_users
+FROM template_stats AS stats
+JOIN template_users AS users
+  ON users.template_id = stats.template_id
+GROUP BY
+  stats.template_id,
+  stats.canonical_sql,
+  stats.executions,
+  stats.distinct_users,
+  stats.first_seen,
+  stats.last_seen,
+  stats.p50_ms,
+  stats.p95_ms,
+  stats.error_rate,
+  stats.rows_produced
+ORDER BY stats.executions DESC`.trim();
     const result = await queryClient(client).executeQuery(sql);
     if (result.error) {
       throw grantsError(result.error);

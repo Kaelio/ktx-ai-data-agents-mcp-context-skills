@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '../src/context/project/config.js';
@@ -668,10 +668,132 @@ describe('runKtxPublicIngest', () => {
           dropFailedBelow: { errorRate: 0.5, executions: 3 },
         },
         redactionPatterns: ['(?i)secret'],
-        enabledTables: ['orbit_analytics.int_active_contract_arr'],
+        enabledTables: [{ catalog: null, db: 'orbit_analytics', name: 'int_active_contract_arr' }],
       },
     });
     expect(ingestArgs?.historicSqlPullConfigOverride).not.toHaveProperty('enabled');
+  });
+
+  it('resolves query-history scope after the schema scan writes artifacts', async () => {
+    const io = makeIo();
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-qh-scope-'));
+    const project = deepReadyProject({
+      warehouse: {
+        driver: 'postgres',
+        schemas: ['orbit_raw'],
+        context: { queryHistory: { enabled: true } },
+      },
+    });
+    const runScan = vi.fn(async () => {
+      await mkdir(join(projectDir, 'semantic-layer/warehouse'), { recursive: true });
+      await writeFile(
+        join(projectDir, 'semantic-layer/warehouse/revenue.yaml'),
+        [
+          'name: revenue',
+          'table: orbit_analytics.mart_revenue',
+          'grain: [id]',
+          'columns:',
+          '  - name: id',
+          '    type: string',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      const rawRoot = join(projectDir, 'raw-sources/warehouse/live-database/sync-1');
+      await mkdir(join(rawRoot, 'tables'), { recursive: true });
+      await writeFile(
+        join(rawRoot, 'connection.json'),
+        `${JSON.stringify({ connectionId: 'warehouse', driver: 'postgres' }, null, 2)}\n`,
+        'utf-8',
+      );
+      await writeFile(
+        join(rawRoot, 'tables/accounts.json'),
+        `${JSON.stringify(
+          {
+            catalog: null,
+            db: 'orbit_raw',
+            name: 'accounts',
+            kind: 'table',
+            comment: null,
+            estimatedRows: null,
+            columns: [
+              {
+                name: 'id',
+                nativeType: 'integer',
+                normalizedType: 'integer',
+                dimensionType: 'number',
+                nullable: false,
+                primaryKey: true,
+                comment: null,
+              },
+            ],
+            foreignKeys: [],
+          },
+          null,
+          2,
+        )}\n`,
+        'utf-8',
+      );
+      await writeFile(
+        join(rawRoot, 'scan-report.json'),
+        `${JSON.stringify(
+          {
+            connectionId: 'warehouse',
+            driver: 'postgres',
+            syncId: 'sync-1',
+            runId: 'scan-sync-1',
+            trigger: 'cli',
+            mode: 'enriched',
+            dryRun: false,
+            artifactPaths: {
+              rawSourcesDir: 'raw-sources/warehouse/live-database/sync-1',
+              reportPath: 'raw-sources/warehouse/live-database/sync-1/scan-report.json',
+              manifestShards: [],
+              enrichmentArtifacts: [],
+            },
+            counts: {},
+            warnings: [],
+            enrichment: {},
+            enrichmentState: {},
+          },
+          null,
+          2,
+        )}\n`,
+        'utf-8',
+      );
+      return 0;
+    });
+    const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async () => 0);
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir,
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'disabled',
+          queryHistory: 'enabled',
+        },
+        io.io,
+        { loadProject: vi.fn(async () => ({ ...project, projectDir })), runScan, runIngest },
+      ),
+    ).resolves.toBe(0);
+
+    const ingestArgs = runIngest.mock.calls[0]?.[0] as
+      | Extract<Parameters<NonNullable<KtxPublicIngestDeps['runIngest']>>[0], { command: 'run' }>
+      | undefined;
+    expect(ingestArgs?.historicSqlPullConfigOverride).toMatchObject({
+      dialect: 'postgres',
+      enabledSchemas: ['orbit_analytics', 'orbit_raw'],
+      modeledTableCatalog: [
+        { catalog: null, db: 'orbit_analytics', name: 'mart_revenue' },
+        { catalog: null, db: 'orbit_raw', name: 'accounts' },
+      ],
+    });
+
+    await rm(projectDir, { recursive: true, force: true });
   });
 
   it('prints the schema-first notice for explicit query-history runs', async () => {

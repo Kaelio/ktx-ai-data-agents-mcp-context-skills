@@ -90,7 +90,10 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
             40,
             0.05,
             100,
-            JSON.stringify([{ user: 'ANALYST', executions: 1 }]),
+            JSON.stringify([
+              { user: 'SVC_LOADER', executions: 40 },
+              { user: 'ANALYST', executions: 2 },
+            ]),
           ],
         ],
         totalRows: 1,
@@ -102,15 +105,20 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
     for await (const row of reader.fetchAggregated(
       client,
       { start: new Date('2026-02-10T00:00:00.000Z'), end: new Date('2026-05-11T00:00:00.000Z') },
-      { dialect: 'snowflake', minExecutions: 5, windowDays: 90, enabledTables: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
+      { dialect: 'snowflake', minExecutions: 5, windowDays: 90, enabledTables: [], enabledSchemas: [], modeledTableCatalog: [], scopeFloorWarnings: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
     )) {
       rows.push(row);
     }
 
     const sql = firstQuery(client);
+    expect(sql).toContain('WITH filtered_queries AS');
+    expect(sql).toContain('template_stats AS');
+    expect(sql).toContain('template_users AS');
     expect(sql).toContain('SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY');
     expect(sql).toContain('COUNT(*) AS executions');
-    expect(sql).toContain('GROUP BY query_hash');
+    expect(sql).toContain('COUNT(DISTINCT user_name) AS distinct_users');
+    expect(sql).toContain('GROUP BY query_hash, user_name');
+    expect(sql).toContain('ORDER BY users.executions DESC');
     expect(sql).toContain('HAVING COUNT(*) >= 5');
     expect(rows).toMatchObject([
       {
@@ -119,7 +127,10 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
           executions: 42,
           errorRate: 0.05,
         },
-        topUsers: [{ user: 'ANALYST', executions: 1 }],
+        topUsers: [
+          { user: 'SVC_LOADER', executions: 40 },
+          { user: 'ANALYST', executions: 2 },
+        ],
       },
     ]);
   });
@@ -136,6 +147,9 @@ describe('SnowflakeHistoricSqlQueryHistoryReader', () => {
           minExecutions: 5,
           windowDays: 90,
           enabledTables: [],
+          enabledSchemas: [],
+          modeledTableCatalog: [],
+          scopeFloorWarnings: [],
           filters: { dropTrivialProbes: true },
           redactionPatterns: [],
           staleArchiveAfterDays: 90,

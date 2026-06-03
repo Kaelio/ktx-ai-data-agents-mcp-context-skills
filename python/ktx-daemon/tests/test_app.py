@@ -368,7 +368,9 @@ def test_sql_analyze_batch_endpoint_returns_per_item_results() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["results"]["orders"]["tables_touched"] == ["public.orders"]
+    assert body["results"]["orders"]["tables_touched"] == [
+        {"catalog": None, "db": "public", "name": "orders"}
+    ]
     assert body["results"]["orders"]["columns_by_clause"] == {
         "select": ["status"],
         "where": ["created_at"],

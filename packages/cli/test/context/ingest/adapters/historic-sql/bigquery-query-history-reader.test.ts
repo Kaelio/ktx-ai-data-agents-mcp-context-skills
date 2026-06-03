@@ -91,7 +91,10 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
             40,
             0.05,
             null,
-            JSON.stringify([{ user: 'analyst@example.test', executions: 1 }]),
+            JSON.stringify([
+              { user: 'svc-loader@example.test', executions: 40 },
+              { user: 'analyst@example.test', executions: 2 },
+            ]),
           ],
         ],
         totalRows: 1,
@@ -103,15 +106,25 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
     for await (const row of reader.fetchAggregated(
       client,
       { start: new Date('2026-02-10T00:00:00.000Z'), end: new Date('2026-05-11T00:00:00.000Z') },
-      { dialect: 'bigquery', minExecutions: 5, windowDays: 90, enabledTables: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
+      { dialect: 'bigquery', minExecutions: 5, windowDays: 90, enabledTables: [], enabledSchemas: [], modeledTableCatalog: [], scopeFloorWarnings: [], filters: { dropTrivialProbes: true }, redactionPatterns: [], staleArchiveAfterDays: 90 },
     )) {
       rows.push(row);
     }
 
     const sql = firstQuery(client);
+    expect(sql).toContain('WITH filtered_jobs AS');
+    expect(sql).toContain('query_info.query_hashes.normalized_literals');
+    expect(sql).toContain('TO_HEX(SHA256(query))');
+    expect(sql).toContain('AS template_id');
+    expect(sql).toContain('template_stats AS');
+    expect(sql).toContain('template_users AS');
     expect(sql).toContain('COUNT(*) AS executions');
     expect(sql).toContain('COUNT(DISTINCT user_email) AS distinct_users');
-    expect(sql).toContain('GROUP BY query_hash');
+    expect(sql).toContain('GROUP BY template_id');
+    expect(sql).toContain('GROUP BY template_id, user_email');
+    expect(sql).toContain('ORDER BY users.executions DESC');
+    expect(sql).not.toMatch(/\bquery_hash\b/);
+    expect(sql).not.toContain('LIMIT 5');
     expect(sql).toContain('HAVING COUNT(*) >= 5');
     expect(rows).toMatchObject([
       {
@@ -120,7 +133,10 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
           executions: 42,
           errorRate: 0.05,
         },
-        topUsers: [{ user: 'analyst@example.test', executions: 1 }],
+        topUsers: [
+          { user: 'svc-loader@example.test', executions: 40 },
+          { user: 'analyst@example.test', executions: 2 },
+        ],
       },
     ]);
   });
@@ -137,6 +153,9 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
           minExecutions: 5,
           windowDays: 90,
           enabledTables: [],
+          enabledSchemas: [],
+          modeledTableCatalog: [],
+          scopeFloorWarnings: [],
           filters: { dropTrivialProbes: true },
           redactionPatterns: [],
           staleArchiveAfterDays: 90,
