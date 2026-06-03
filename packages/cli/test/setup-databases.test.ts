@@ -6,6 +6,7 @@ import { parseKtxProjectConfig } from '../src/context/project/config.js';
 import { readKtxSetupState, writeKtxSetupState } from '../src/context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  managedDaemonOptionsForSetupQueryHistoryPicker,
   type KtxSetupDatabaseDriver,
   type KtxSetupDatabasesDeps,
   type KtxSetupDatabasesPromptAdapter,
@@ -164,6 +165,61 @@ describe('setup databases step', () => {
   afterEach(async () => {
     vi.unstubAllEnvs();
     await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('builds managed daemon options for setup query-history SQL analysis', () => {
+    const io = makeIo();
+
+    expect(
+      managedDaemonOptionsForSetupQueryHistoryPicker({
+        projectDir: tempDir,
+        args: {
+          inputMode: 'disabled',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        io: io.io,
+      }),
+    ).toEqual({
+      cliVersion: '0.2.0',
+      projectDir: tempDir,
+      installPolicy: 'auto',
+      io: io.io,
+    });
+  });
+
+  it('defaults managed daemon setup options when the database step is called directly', () => {
+    const io = makeIo();
+
+    expect(
+      managedDaemonOptionsForSetupQueryHistoryPicker({
+        projectDir: tempDir,
+        args: {
+          inputMode: 'disabled',
+        },
+        io: io.io,
+      }),
+    ).toMatchObject({
+      cliVersion: expect.any(String),
+      projectDir: tempDir,
+      installPolicy: 'never',
+      io: io.io,
+    });
+
+    expect(
+      managedDaemonOptionsForSetupQueryHistoryPicker({
+        projectDir: tempDir,
+        args: {
+          inputMode: 'auto',
+        },
+        io: io.io,
+      }),
+    ).toMatchObject({
+      cliVersion: expect.any(String),
+      projectDir: tempDir,
+      installPolicy: 'prompt',
+      io: io.io,
+    });
   });
 
   it('shows every supported database in the interactive checklist', async () => {

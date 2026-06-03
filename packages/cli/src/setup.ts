@@ -736,6 +736,8 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
             yes: args.yes,
+            cliVersion: args.cliVersion,
+            runtimeInstallPolicy: setupRuntimeInstallPolicy(args),
             ...(args.databaseDrivers ? { databaseDrivers: args.databaseDrivers } : {}),
             ...(args.databaseConnectionIds ? { databaseConnectionIds: args.databaseConnectionIds } : {}),
             ...(args.databaseConnectionId ? { databaseConnectionId: args.databaseConnectionId } : {}),

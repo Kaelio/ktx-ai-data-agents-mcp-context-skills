@@ -23,7 +23,7 @@ import { type KtxProjectConnectionConfig, serializeKtxProjectConfig } from './co
 import { loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete, setKtxSetupDatabaseConnectionIds } from './context/project/setup-config.js';
 import type { KtxTableListEntry } from './context/scan/types.js';
-import type { KtxCliIo } from './cli-runtime.js';
+import { getKtxCliPackageInfo, type KtxCliIo } from './cli-runtime.js';
 import {
   errorMessage,
   flushPrefixedBufferedCommandOutput,
@@ -37,6 +37,8 @@ import {
 } from './database-tree-picker.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { createKtxCliHistoricSqlRuntime } from './local-adapters.js';
+import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
+import type { ManagedPythonCoreDaemonOptions } from './managed-python-http.js';
 import { queryHistoryPullConfig } from './public-ingest.js';
 import { runKtxScan } from './scan.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
@@ -65,6 +67,8 @@ export interface KtxSetupDatabasesArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
   yes?: boolean;
+  cliVersion?: string;
+  runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
   databaseDrivers?: KtxSetupDatabaseDriver[];
   databaseConnectionIds?: string[];
   databaseConnectionId?: string;
@@ -1681,6 +1685,20 @@ function createSetupQueryHistoryLlmRuntime(input: {
   }
 }
 
+/** @internal */
+export function managedDaemonOptionsForSetupQueryHistoryPicker(input: {
+  projectDir: string;
+  args: Pick<KtxSetupDatabasesArgs, 'cliVersion' | 'runtimeInstallPolicy' | 'inputMode'>;
+  io: KtxCliIo;
+}): ManagedPythonCoreDaemonOptions {
+  return {
+    cliVersion: input.args.cliVersion ?? getKtxCliPackageInfo().version,
+    projectDir: input.projectDir,
+    installPolicy: input.args.runtimeInstallPolicy ?? (input.args.inputMode === 'disabled' ? 'never' : 'prompt'),
+    io: input.io,
+  };
+}
+
 async function maybeProposeQueryHistoryFilters(input: {
   projectDir: string;
   connectionId: string;
@@ -1716,7 +1734,13 @@ async function maybeProposeQueryHistoryFilters(input: {
     return;
   }
 
-  const runtime = createKtxCliHistoricSqlRuntime(project, input.connectionId);
+  const runtime = createKtxCliHistoricSqlRuntime(project, input.connectionId, {
+    managedDaemon: managedDaemonOptionsForSetupQueryHistoryPicker({
+      projectDir: input.projectDir,
+      args: input.args,
+      io: input.io,
+    }),
+  });
   if (!runtime) {
     return;
   }

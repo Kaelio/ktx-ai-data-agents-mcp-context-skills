@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadKtxProject } from '../src/context/project/project.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createKtxCliHistoricSqlRuntime, createKtxCliLocalIngestAdapters } from '../src/local-adapters.js';
 
 function sqlAnalysisStub() {
@@ -96,6 +96,88 @@ describe('CLI local ingest adapters', () => {
     });
     expect(runtime?.reader).toBeDefined();
     expect(runtime?.queryClient).toBeDefined();
+  });
+
+  it('uses managed daemon SQL analysis when query-history runtime gets managed daemon options', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+    const testIo = {
+      stdout: { write: vi.fn() },
+      stderr: { write: vi.fn() },
+    };
+    const ensureRuntime = vi.fn(async () => ({
+      layout: {} as never,
+      manifest: {} as never,
+    }));
+    const startDaemon = vi.fn(async () => ({
+      status: 'started' as const,
+      layout: {} as never,
+      state: { pid: 1234 } as never,
+      baseUrl: 'http://127.0.0.1:61234',
+    }));
+    const postJson = vi.fn(async () => ({
+      results: {
+        probe: {
+          tables_touched: [],
+          columns_by_clause: {},
+          error: null,
+        },
+      },
+    }));
+
+    const runtime = createKtxCliHistoricSqlRuntime(project, 'warehouse', {
+      managedDaemon: {
+        cliVersion: '0.2.0',
+        projectDir: tempDir,
+        installPolicy: 'auto',
+        io: testIo,
+        ensureRuntime,
+        startDaemon,
+        postJson,
+      },
+    });
+
+    await expect(runtime?.sqlAnalysis.analyzeBatch([{ id: 'probe', sql: 'select 1' }], 'postgres')).resolves.toEqual(
+      new Map([
+        [
+          'probe',
+          {
+            tablesTouched: [],
+            columnsByClause: {},
+            error: null,
+          },
+        ],
+      ]),
+    );
+    expect(ensureRuntime).toHaveBeenCalledWith({
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: testIo,
+      feature: 'core',
+    });
+    expect(startDaemon).toHaveBeenCalledWith({
+      cliVersion: '0.2.0',
+      projectDir: tempDir,
+      features: ['core'],
+      force: false,
+    });
+    expect(postJson).toHaveBeenCalledWith('http://127.0.0.1:61234', '/sql/analyze-batch', {
+      dialect: 'postgres',
+      items: [{ id: 'probe', sql: 'select 1' }],
+    });
   });
 
   it('registers historic SQL when explicitly requested even if connection query history is disabled', async () => {

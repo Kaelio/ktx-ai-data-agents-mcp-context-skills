@@ -1685,6 +1685,8 @@ describe('setup status', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         yes: true,
+        cliVersion: '0.2.0',
+        runtimeInstallPolicy: 'auto',
         databaseDrivers: ['postgres'],
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',
