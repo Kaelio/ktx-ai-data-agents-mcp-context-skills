@@ -359,7 +359,7 @@ surface.
 | `ktx: command not found` | Reinstall `@kaelio/ktx` and open a new shell |
 | Setup resumes the wrong project | Pass `--project-dir <path>` |
 | LLM or embeddings health check fails | Rerun setup and pick a different credential, model, or backend |
-| Database test fails | Verify the same connection with the database's native client, then rerun setup |
+| Database test fails | Use the setup recovery menu to retry or re-enter details; if it still fails, verify the same connection with the database's native client |
 | Context build blocked: a connection failed its live test | Run `ktx connection test <connection-id>` to see the error, fix the connection, then retry the build |
 | Agent integration is incomplete | Run `ktx setup --agents --target <target>` |
 

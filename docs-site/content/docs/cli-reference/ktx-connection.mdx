@@ -104,6 +104,6 @@ configured connection and exit non-zero if any probe fails.
 | Error | Cause | Recovery |
 |-------|-------|----------|
 | No connections configured | The project has no entries under `connections` | Run `ktx setup` and add a database or context-source connection |
-| Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Verify the same URL with the database's native client, then rerun `ktx setup` and reconfigure the connection |
-| Mapping validation fails during setup | BI database mappings do not point at valid warehouse connections | Rerun `ktx setup` and update the context-source mapping selections |
+| Connection test fails | Credentials, network access, database, warehouse, or schema is invalid | Use the setup recovery menu to retry or re-enter details; if it still fails, verify the same URL with the database's native client |
+| Mapping validation fails during setup | BI database mappings do not point at valid warehouse connections | Use the setup recovery menu to retry validation or re-enter mapping selections; rerun `ktx setup` if you already exited |
 | Notion page picker cannot run | The terminal is non-interactive or Notion discovery failed | Rerun interactive `ktx setup`, or use non-interactive setup flags with explicit root page ids |
