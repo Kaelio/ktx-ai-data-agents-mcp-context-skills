@@ -79,8 +79,21 @@ function matchesAny(value: string | null, patterns: RegExp[]): boolean {
   return !!value && patterns.some((pattern) => pattern.test(value));
 }
 
+// ktx's own warehouse scan emits relationship- and column-profiling probes that land in
+// pg_stat_statements (relationship-validation, relationship-composite-candidates, and each
+// dialect's relationship value aggregation). They are ktx introspection, not genuine query
+// usage, so they must not be mined back as query history. The markers are ktx-owned
+// identifiers, stable across dialects.
+function isKtxScanProbe(sql: string): boolean {
+  if (/\brelationship_profile_values\b/i.test(sql)) {
+    return true;
+  }
+  return /\bchild_values\b/i.test(sql) && /\bparent_values\b/i.test(sql);
+}
+
 function shouldDropBySql(sql: string, config: HistoricSqlUnifiedPullConfig): boolean {
   if (NOISE_PREFIX_RE.test(sql) || SYSTEM_TABLE_RE.test(sql)) return true;
+  if (isKtxScanProbe(sql)) return true;
   if (config.filters.dropTrivialProbes !== false && TRIVIAL_SQL_RE.test(sql)) return true;
   return false;
 }
@@ -146,6 +159,53 @@ function isEnabledTable(table: string, filter: EnabledTableFilter | null): boole
   }
   const normalized = normalizeTableIdentifier(table);
   return filter.exact.has(normalized) || filter.uniqueUnqualified.has(unqualifiedTableIdentifier(normalized));
+}
+
+/**
+ * pg_stat_statements records queries as written, so the same physical table can appear
+ * both bare (`accounts`, resolved via search_path) and schema-qualified
+ * (`orbit_raw.accounts`). Collapse a bare identifier into its schema-qualified form when
+ * exactly one qualified form shares its unqualified name, so the two never become separate
+ * work units. Ambiguous bare names (two qualified forms) are left untouched.
+ */
+function canonicalizeTableIdentifiers(parsedTemplates: ParsedTemplate[]): void {
+  const all = new Set<string>();
+  for (const parsed of parsedTemplates) {
+    for (const table of parsed.includedTables) {
+      all.add(table);
+    }
+  }
+  const qualifiedByUnqualified = new Map<string, Set<string>>();
+  for (const table of all) {
+    if (!table.includes('.')) {
+      continue;
+    }
+    const unqualified = unqualifiedTableIdentifier(table);
+    if (unqualified.length === 0) {
+      continue;
+    }
+    const forms = qualifiedByUnqualified.get(unqualified) ?? new Set<string>();
+    forms.add(table);
+    qualifiedByUnqualified.set(unqualified, forms);
+  }
+  const canonical = new Map<string, string>();
+  for (const table of all) {
+    if (table.includes('.')) {
+      continue;
+    }
+    const forms = qualifiedByUnqualified.get(unqualifiedTableIdentifier(table));
+    if (forms && forms.size === 1) {
+      canonical.set(table, [...forms][0]);
+    }
+  }
+  if (canonical.size === 0) {
+    return;
+  }
+  const remap = (table: string): string => canonical.get(table) ?? table;
+  for (const parsed of parsedTemplates) {
+    parsed.includedTables = [...new Set(parsed.includedTables.map(remap))].sort();
+    parsed.tablesTouched = [...new Set(parsed.tablesTouched.map(remap))].sort();
+  }
 }
 
 function historicSqlWindowDays(config: HistoricSqlUnifiedPullConfig): number {
@@ -322,6 +382,8 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
       ),
     });
   }
+
+  canonicalizeTableIdentifiers(parsedTemplates);
 
   const byTable = new Map<string, TableAccumulator>();
   for (const parsed of parsedTemplates) {

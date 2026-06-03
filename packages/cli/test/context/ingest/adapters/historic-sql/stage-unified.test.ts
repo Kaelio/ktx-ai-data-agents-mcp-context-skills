@@ -433,4 +433,88 @@ describe('stageHistoricSqlAggregatedSnapshot', () => {
     const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
     expect(manifest.warnings).toEqual([]);
   });
+
+  it("drops ktx's own scan/relationship probes from query history", async () => {
+    const stagedDir = await tempDir();
+    const fkOverlapProbe =
+      'select * from (WITH child_values AS ( SELECT DISTINCT "account_id" AS value FROM "account_owners" WHERE "account_id" IS NOT NULL LIMIT $1 ), parent_values AS ( SELECT DISTINCT "account_id" AS value FROM "accounts" WHERE "account_id" IS NOT NULL ) SELECT (SELECT COUNT(*) FROM child_values) AS child_distinct, (SELECT COUNT(*) FROM parent_values) AS parent_distinct) probe';
+    const profileProbe =
+      'select * from (SELECT $1 AS column_name, (SELECT COUNT(*) FROM "orbit_raw"."accounts") AS total, (SELECT STRING_AGG(CAST(value AS TEXT), CHR(31)) FROM (SELECT DISTINCT "id" AS value FROM "orbit_raw"."accounts" LIMIT $2) AS relationship_profile_values) AS samples) profile';
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({
+          templateId: 'analytic',
+          canonicalSql: 'select status, count(*) from public.orders group by status',
+        });
+        yield aggregate({ templateId: 'ktx-fk-overlap', canonicalSql: fkOverlapProbe });
+        yield aggregate({ templateId: 'ktx-profile', canonicalSql: profileProbe });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        ['analytic', { tablesTouched: ['public.orders'], columnsByClause: { select: ['status'], where: [], join: [], groupBy: ['status'] } }],
+      ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: { dialect: 'postgres' },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    // ktx scan probes are filtered before SQL analysis, so only the analytic query is parsed.
+    expect(sqlAnalysis.analyzeBatch).toHaveBeenCalledWith(
+      [{ id: 'analytic', sql: 'select status, count(*) from public.orders group by status' }],
+      'postgres',
+    );
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['public.orders.json']);
+  });
+
+  it('merges bare and schema-qualified references to the same table into one work unit', async () => {
+    const stagedDir = await tempDir();
+    const reader: HistoricSqlReader = {
+      async probe() {
+        return { warnings: [], info: [] };
+      },
+      async *fetchAggregated() {
+        yield aggregate({ templateId: 'qualified', canonicalSql: 'select count(*) from orbit_raw.accounts' });
+        yield aggregate({ templateId: 'bare', canonicalSql: 'select id from accounts where active' });
+      },
+    };
+    const sqlAnalysis: SqlAnalysisPort = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(async () => new Map([
+        ['qualified', { tablesTouched: ['orbit_raw.accounts'], columnsByClause: { select: [], where: [], join: [], groupBy: [] } }],
+        ['bare', { tablesTouched: ['accounts'], columnsByClause: { select: ['id'], where: ['active'], join: [], groupBy: [] } }],
+      ])),
+      validateReadOnly: vi.fn(async () => ({ ok: true })),
+    };
+
+    await stageHistoricSqlAggregatedSnapshot({
+      stagedDir,
+      connectionId: 'warehouse',
+      queryClient: {},
+      reader,
+      sqlAnalysis,
+      pullConfig: { dialect: 'postgres' },
+      now: new Date('2026-05-11T12:00:00.000Z'),
+    });
+
+    // The bare `accounts` reference resolves to the unique qualified `orbit_raw.accounts`,
+    // so the two templates collapse into a single work unit instead of two.
+    expect(await readdir(join(stagedDir, 'tables'))).toEqual(['orbit_raw.accounts.json']);
+    const merged = await readJson<Record<string, any>>(stagedDir, 'tables/orbit_raw.accounts.json');
+    expect(merged.topTemplates.map((t: any) => t.id).sort()).toEqual(['bare', 'qualified']);
+    const manifest = await readJson<Record<string, any>>(stagedDir, 'manifest.json');
+    expect(manifest.touchedTableCount).toBe(1);
+  });
 });
