@@ -4,6 +4,11 @@ import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js'
 import { tableRefKey } from '../../../scan/table-ref.js';
 import type { KtxTableRef } from '../../../scan/types.js';
 import { bucketDistinctUsers, bucketExecutions, bucketRecency } from './buckets.js';
+import {
+  compileHistoricSqlRedactionPatterns,
+  redactHistoricSqlText,
+  type HistoricSqlRedactionPattern,
+} from './redaction.js';
 import { includedQueryHistoryTableRefs } from './scope-membership.js';
 import {
   aggregatedTemplateSchema,
@@ -74,6 +79,19 @@ function emptyProposal(skipped: QueryHistoryFilterProposal['skipped'], warnings:
 
 function displayTableRef(ref: KtxTableRef): string {
   return [ref.catalog, ref.db, ref.name].filter((part): part is string => !!part && part.length > 0).join('.');
+}
+
+function redactTemplateSqlForPicker(
+  template: AggregatedTemplate,
+  redactors: readonly HistoricSqlRedactionPattern[],
+): AggregatedTemplate {
+  if (redactors.length === 0) {
+    return template;
+  }
+  return {
+    ...template,
+    canonicalSql: redactHistoricSqlText(template.canonicalSql, redactors),
+  };
 }
 
 /** @internal */
@@ -157,6 +175,7 @@ export async function proposeQueryHistoryServiceAccountFilters(
   }
 
   const config = historicSqlUnifiedPullConfigSchema.parse(input.pullConfig);
+  const redactors = compileHistoricSqlRedactionPatterns(config.redactionPatterns);
   const now = input.now ?? new Date();
   const windowDays = 'windowDays' in config ? config.windowDays : 90;
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
@@ -203,7 +222,11 @@ export async function proposeQueryHistoryServiceAccountFilters(
     if (includedTables.length === 0) {
       continue;
     }
-    parsedTemplates.push({ template, tablesTouched, includedTables });
+    parsedTemplates.push({
+      template: redactTemplateSqlForPicker(template, redactors),
+      tablesTouched,
+      includedTables,
+    });
   }
 
   const records = roleRecords(parsedTemplates, now);

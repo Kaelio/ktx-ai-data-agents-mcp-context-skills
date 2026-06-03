@@ -127,6 +127,61 @@ describe('query-history filter picker', () => {
     });
   });
 
+  it('redacts representative SQL before sending role records to the LLM', async () => {
+    const originalSql =
+      "select * from public.api_events where api_key = 'sk_live_abc123' and note = 'Secret_Token_9f'"; // pragma: allowlist secret
+    const runtime = llm([
+      { role: 'svc_loader', exclude: false, reason: 'Keep by default.' },
+      { role: 'analyst', exclude: false, reason: 'Interactive analytic usage.' },
+    ]);
+    const analysis = sqlAnalysis({
+      secret: [{ catalog: null, db: 'public', name: 'api_events' }],
+      analyst: [{ catalog: null, db: 'public', name: 'orders' }],
+    });
+
+    await proposeQueryHistoryServiceAccountFilters({
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+      queryClient: {},
+      reader: reader(
+        aggregate({
+          templateId: 'secret',
+          canonicalSql: originalSql,
+          topUsers: [{ user: 'svc_loader', executions: 30 }],
+        }),
+        aggregate({
+          templateId: 'analyst',
+          canonicalSql: 'select status, count(*) from public.orders group by status',
+          topUsers: [{ user: 'analyst', executions: 25 }],
+        }),
+      ),
+      sqlAnalysis: analysis,
+      llmRuntime: runtime,
+      pullConfig: {
+        dialect: 'postgres',
+        enabledSchemas: ['public'],
+        enabledTables: [],
+        modeledTableCatalog: [],
+        redactionPatterns: ['sk_live_[A-Za-z0-9]+', '(?i)secret_token_[a-z0-9]+'],
+        filters: { dropTrivialProbes: true },
+      },
+      now: new Date('2026-06-03T00:00:00.000Z'),
+    });
+
+    expect(analysis.analyzeBatch).toHaveBeenCalledWith(
+      [
+        { id: 'secret', sql: originalSql },
+        { id: 'analyst', sql: 'select status, count(*) from public.orders group by status' },
+      ],
+      'postgres',
+      undefined,
+    );
+    const call = vi.mocked(runtime.generateObject).mock.calls[0]?.[0];
+    expect(call?.prompt).toContain('[REDACTED]');
+    expect(call?.prompt).not.toContain('sk_live_abc123');
+    expect(call?.prompt).not.toContain('Secret_Token_9f');
+  });
+
   it('fails open with no LLM runtime', async () => {
     const proposal = await proposeQueryHistoryServiceAccountFilters({
       connectionId: 'warehouse',
