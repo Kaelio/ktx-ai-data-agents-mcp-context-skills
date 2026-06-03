@@ -15,7 +15,7 @@ import { BigQueryHistoricSqlQueryHistoryReader } from './context/ingest/adapters
 import { historicSqlDialectForConnectionDriver } from './context/ingest/adapters/historic-sql/connection-dialect.js';
 import { createDaemonLiveDatabaseIntrospection } from './context/ingest/adapters/live-database/daemon-introspection.js';
 import { createDefaultLocalIngestAdapters, type DefaultLocalIngestAdaptersOptions } from './context/ingest/local-adapters.js';
-import type { HistoricSqlReader } from './context/ingest/adapters/historic-sql/types.js';
+import type { HistoricSqlDialect, HistoricSqlReader } from './context/ingest/adapters/historic-sql/types.js';
 import type {
   LiveDatabaseIntrospectionOptions,
   LiveDatabaseIntrospectionPort,
@@ -165,6 +165,13 @@ export interface KtxCliLocalIngestAdaptersOptions extends DefaultLocalIngestAdap
   logger?: KtxOperationalLogger;
 }
 
+export interface KtxCliHistoricSqlRuntime {
+  dialect: HistoricSqlDialect;
+  sqlAnalysis: SqlAnalysisPort;
+  reader: HistoricSqlReader;
+  queryClient: unknown;
+}
+
 function createEphemeralPostgresHistoricSqlClient(project: KtxLocalProject, connectionId: string) {
   const connection = project.config.connections[connectionId] as KtxPostgresConnectionConfig | undefined;
   const inputDriver = connection?.driver ?? 'unknown';
@@ -262,7 +269,10 @@ function bigQueryRegion(connection: KtxBigQueryConnectionConfig): string {
     : 'us';
 }
 
-function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCliLocalIngestAdaptersOptions) {
+function historicSqlOptionsForLocalRun(
+  project: KtxLocalProject,
+  options: KtxCliLocalIngestAdaptersOptions,
+): KtxCliHistoricSqlRuntime | undefined {
   const connectionId = options.historicSqlConnectionId;
   if (!connectionId) {
     return undefined;
@@ -285,6 +295,7 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
   if (dialect === 'postgres') {
     return {
       ...base,
+      dialect,
       reader: new PostgresPgssReader() satisfies HistoricSqlReader,
       queryClient: createEphemeralPostgresHistoricSqlClient(project, connectionId),
     };
@@ -297,6 +308,7 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
     }
     return {
       ...base,
+      dialect,
       reader: new BigQueryHistoricSqlQueryHistoryReader({
         projectId: bigQueryProjectId(connection, process.env),
         region: bigQueryRegion(connection),
@@ -307,6 +319,7 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
 
   return {
     ...base,
+    dialect,
     reader: new SnowflakeHistoricSqlQueryHistoryReader() satisfies HistoricSqlReader,
     queryClient: {
       async executeQuery(query: string) {
@@ -318,11 +331,24 @@ function historicSqlOptionsForLocalRun(project: KtxLocalProject, options: KtxCli
   };
 }
 
+export function createKtxCliHistoricSqlRuntime(
+  project: KtxLocalProject,
+  connectionId: string,
+  options: KtxCliLocalIngestAdaptersOptions = {},
+): KtxCliHistoricSqlRuntime | undefined {
+  return historicSqlOptionsForLocalRun(project, {
+    ...options,
+    historicSqlConnectionId: connectionId,
+  });
+}
+
 export function createKtxCliLocalIngestAdapters(
   project: KtxLocalProject,
   options: KtxCliLocalIngestAdaptersOptions = {},
 ): SourceAdapter[] {
-  const historicSql = historicSqlOptionsForLocalRun(project, options);
+  const historicSql = options.historicSqlConnectionId
+    ? createKtxCliHistoricSqlRuntime(project, options.historicSqlConnectionId, options)
+    : undefined;
   const base = createDefaultLocalIngestAdapters(project, {
     ...options,
     databaseIntrospection: ktxCliDaemonDatabaseIntrospectionOptions(options),

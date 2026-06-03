@@ -1684,6 +1684,7 @@ describe('setup status', () => {
       expect.objectContaining({
         projectDir: tempDir,
         inputMode: 'disabled',
+        yes: true,
         databaseDrivers: ['postgres'],
         databaseConnectionId: 'warehouse',
         databaseUrl: 'env:DATABASE_URL',

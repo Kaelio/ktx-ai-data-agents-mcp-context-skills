@@ -4,7 +4,15 @@ import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { getDriverRegistration } from './context/connections/drivers.js';
+import { createLocalKtxLlmRuntimeFromConfig } from './context/llm/local-config.js';
+import type { KtxLlmRuntimePort } from './context/llm/runtime-port.js';
 import { queryHistoryDialectForConnection } from './context/ingest/adapters/historic-sql/connection-dialect.js';
+import {
+  proposeQueryHistoryServiceAccountFilters,
+  type ProposeQueryHistoryServiceAccountFiltersInput,
+  type QueryHistoryFilterProposal,
+} from './context/ingest/adapters/historic-sql/query-history-filter-picker.js';
+import { resolveQueryHistoryScopeFloor } from './context/ingest/adapters/historic-sql/scope-floor.js';
 import type { HistoricSqlDialect } from './context/ingest/adapters/historic-sql/types.js';
 import {
   runHistoricSqlReadinessProbe,
@@ -28,6 +36,8 @@ import {
   type PickDatabaseScopeArgs,
 } from './database-tree-picker.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
+import { createKtxCliHistoricSqlRuntime } from './local-adapters.js';
+import { queryHistoryPullConfig } from './public-ingest.js';
 import { runKtxScan } from './scan.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
@@ -54,6 +64,7 @@ export type KtxSetupDatabaseDriver =
 export interface KtxSetupDatabasesArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
+  yes?: boolean;
   databaseDrivers?: KtxSetupDatabaseDriver[];
   databaseConnectionIds?: string[];
   databaseConnectionId?: string;
@@ -116,6 +127,13 @@ export interface KtxSetupDatabasesDeps {
   listTables?: (projectDir: string, connectionId: string, schemas?: string[]) => Promise<KtxTableListEntry[]>;
   pickDatabaseScope?: (args: PickDatabaseScopeArgs, io: KtxCliIo) => Promise<DatabaseScopePickResult>;
   historicSqlReadinessProbe?: HistoricSqlReadinessProbe;
+  queryHistoryFilterPicker?: (
+    input: ProposeQueryHistoryServiceAccountFiltersInput,
+  ) => Promise<QueryHistoryFilterProposal>;
+  createQueryHistoryLlmRuntime?: (
+    projectDir: string,
+    project: Awaited<ReturnType<typeof loadKtxProject>>,
+  ) => KtxLlmRuntimePort | null;
 }
 
 const DRIVER_OPTIONS: Array<{ value: KtxSetupDatabaseDriver; label: string }> = [
@@ -941,10 +959,14 @@ async function maybeApplyHistoricSqlConfig(input: {
     return withQueryHistoryConfig(input.connection, { ...existing, enabled: false });
   }
 
+  const existingFilters =
+    existing.filters && typeof existing.filters === 'object' && !Array.isArray(existing.filters)
+      ? (existing.filters as Record<string, unknown>)
+      : {};
   const common: Record<string, unknown> = {
     ...existing,
     enabled: true,
-    filters: historicSqlFiltersForSetup(input.args.queryHistoryServiceAccountPatterns),
+    filters: historicSqlFiltersForSetup(input.args.queryHistoryServiceAccountPatterns, existingFilters),
   };
 
   if (dialect === 'postgres') {
@@ -961,9 +983,13 @@ async function maybeApplyHistoricSqlConfig(input: {
   });
 }
 
-function historicSqlFiltersForSetup(patterns: string[] | undefined) {
+function historicSqlFiltersForSetup(
+  patterns: string[] | undefined,
+  existingFilters: Record<string, unknown> = {},
+) {
   const serviceAccountPatterns = patterns ?? [];
   return {
+    ...existingFilters,
     dropTrivialProbes: true,
     ...(serviceAccountPatterns.length > 0
       ? {
@@ -1585,6 +1611,169 @@ async function maybeRunHistoricSqlSetupProbe(input: {
   return result.ok;
 }
 
+function hasServiceAccountsBlock(connection: KtxProjectConnectionConfig | undefined): boolean {
+  const queryHistory = queryHistoryConfigRecord(connection);
+  const filters = queryHistory?.filters;
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
+    return false;
+  }
+  return 'serviceAccounts' in filters;
+}
+
+function printQueryHistoryFilterProposal(io: KtxCliIo, proposal: QueryHistoryFilterProposal): void {
+  if (proposal.excludedRoles.length === 0) {
+    if (proposal.skipped?.reason === 'no-llm') {
+      io.stdout.write('│  Query-history filter picker skipped: no LLM is configured.\n');
+    } else if (proposal.skipped?.reason === 'no-daemon') {
+      io.stdout.write('│  Query-history filter picker skipped: SQL analysis is unavailable.\n');
+    } else if (proposal.skipped?.reason === 'no-in-scope-history') {
+      io.stdout.write('│  Query-history filter picker found no in-scope service-account exclusions.\n');
+    }
+    for (const warning of proposal.warnings) {
+      io.stdout.write(`│  ! ${warning}\n`);
+    }
+    return;
+  }
+
+  io.stdout.write('│  Proposed query-history service-account filters:\n');
+  for (const excluded of proposal.excludedRoles) {
+    io.stdout.write(`│  - ${excluded.role}: ${excluded.reason}\n`);
+  }
+}
+
+async function shouldApplyQueryHistoryFilterProposal(input: {
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+  proposal: QueryHistoryFilterProposal;
+}): Promise<boolean> {
+  if (input.proposal.excludedRoles.length === 0 || input.proposal.skipped?.reason === 'user-block-present') {
+    return false;
+  }
+  if (input.args.yes === true || input.args.inputMode === 'disabled') {
+    return true;
+  }
+  const choice = await input.prompts.select({
+    message: `Apply ${input.proposal.excludedRoles.length} derived query-history service-account exclusion${
+      input.proposal.excludedRoles.length === 1 ? '' : 's'
+    }?`,
+    options: [
+      { value: 'apply', label: 'Apply derived filters (recommended)' },
+      { value: 'skip', label: 'Leave query history filters unchanged' },
+    ],
+  });
+  return choice === 'apply';
+}
+
+function createSetupQueryHistoryLlmRuntime(input: {
+  projectDir: string;
+  project: Awaited<ReturnType<typeof loadKtxProject>>;
+  deps: KtxSetupDatabasesDeps;
+}): KtxLlmRuntimePort | null {
+  try {
+    return (
+      input.deps.createQueryHistoryLlmRuntime?.(input.projectDir, input.project) ??
+      createLocalKtxLlmRuntimeFromConfig(input.project.config.llm, {
+        projectDir: input.projectDir,
+      })
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function maybeProposeQueryHistoryFilters(input: {
+  projectDir: string;
+  connectionId: string;
+  io: KtxCliIo;
+  deps: KtxSetupDatabasesDeps;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+}): Promise<void> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const connection = project.config.connections[input.connectionId];
+  const queryHistory = queryHistoryConfigRecord(connection);
+  if (!connection || queryHistory?.enabled !== true) {
+    return;
+  }
+  const dialect = queryHistoryDialectForConnection(connection);
+  if (!dialect) {
+    return;
+  }
+
+  const picker = input.deps.queryHistoryFilterPicker ?? proposeQueryHistoryServiceAccountFilters;
+  const llmRuntime = createSetupQueryHistoryLlmRuntime({
+    projectDir: input.projectDir,
+    project,
+    deps: input.deps,
+  });
+  if (!llmRuntime && !input.deps.queryHistoryFilterPicker) {
+    printQueryHistoryFilterProposal(input.io, {
+      excludedRoles: [],
+      consideredRoleCount: 0,
+      skipped: { reason: 'no-llm' },
+      warnings: [],
+    });
+    return;
+  }
+
+  const runtime = createKtxCliHistoricSqlRuntime(project, input.connectionId);
+  if (!runtime) {
+    return;
+  }
+  const userServiceAccountsPresent = hasServiceAccountsBlock(connection);
+  const scopeFloor = await resolveQueryHistoryScopeFloor({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    driver: String(connection.driver ?? ''),
+    connection: connection as Record<string, unknown>,
+    storedQueryHistory: queryHistory,
+  });
+  const pullConfig = queryHistoryPullConfig({
+    stored: queryHistory,
+    dialect,
+    enabledTables: scopeFloor.enabledTables,
+    enabledSchemas: scopeFloor.enabledSchemas,
+    modeledTableCatalog: scopeFloor.modeledTableCatalog,
+    scopeFloorWarnings: scopeFloor.warnings,
+  });
+  const proposal = await picker({
+    connectionId: input.connectionId,
+    dialect,
+    queryClient: runtime.queryClient,
+    reader: runtime.reader,
+    sqlAnalysis: runtime.sqlAnalysis,
+    llmRuntime,
+    pullConfig,
+    userServiceAccountsPresent,
+  });
+
+  printQueryHistoryFilterProposal(input.io, proposal);
+  if (proposal.skipped?.reason === 'user-block-present') {
+    input.io.stdout.write('│  Existing query-history service-account filters left unchanged.\n');
+    return;
+  }
+  if (!(await shouldApplyQueryHistoryFilterProposal({ args: input.args, prompts: input.prompts, proposal }))) {
+    return;
+  }
+
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: withQueryHistoryConfig(connection, {
+      ...queryHistory,
+      filters: {
+        ...(queryHistory.filters && typeof queryHistory.filters === 'object' && !Array.isArray(queryHistory.filters)
+          ? queryHistory.filters
+          : {}),
+        serviceAccounts: {
+          mode: 'exclude',
+          patterns: proposal.excludedRoles.map((role) => role.pattern),
+        },
+      },
+    }),
+  });
+}
+
 async function applyHistoricSqlConfigToExistingConnection(input: {
   projectDir: string;
   connectionId: string;
@@ -1721,6 +1910,16 @@ async function validateAndScanConnection(input: {
     `Schema context complete for ${input.connectionId}`,
     [`Changes: ${summarizeScanChanges(scanOutput)}`],
   );
+  if (queryHistoryAvailable) {
+    await maybeProposeQueryHistoryFilters({
+      projectDir: input.projectDir,
+      connectionId: input.connectionId,
+      io: input.io,
+      deps: input.deps,
+      args: input.args,
+      prompts: input.prompts,
+    });
+  }
   writeSetupSection(input.io, 'Database ready', [
     `${input.connectionId} · ${driverDisplay} · schema context complete`,
   ]);

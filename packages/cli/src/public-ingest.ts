@@ -283,7 +283,8 @@ function positiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-function queryHistoryPullConfig(input: {
+/** @internal */
+export function queryHistoryPullConfig(input: {
   stored: Record<string, unknown>;
   dialect: HistoricSqlDialect;
   windowDays?: number;

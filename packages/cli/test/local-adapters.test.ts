@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadKtxProject } from '../src/context/project/project.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createKtxCliLocalIngestAdapters } from '../src/local-adapters.js';
+import { createKtxCliHistoricSqlRuntime, createKtxCliLocalIngestAdapters } from '../src/local-adapters.js';
 
 function sqlAnalysisStub() {
   return {
@@ -68,6 +68,34 @@ describe('CLI local ingest adapters', () => {
       'historic_sql_table_digest',
       'historic_sql_patterns',
     ]);
+  });
+
+  it('creates reusable query-history runtime dependencies for setup', async () => {
+    await writeProject(
+      tempDir,
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:WAREHOUSE_DATABASE_URL',
+        '    readonly: true',
+        '    context:',
+        '      queryHistory:',
+        '        enabled: true',
+        '',
+      ].join('\n'),
+    );
+    const project = await loadKtxProject({ projectDir: tempDir });
+    const sqlAnalysis = sqlAnalysisStub();
+
+    const runtime = createKtxCliHistoricSqlRuntime(project, 'warehouse', { sqlAnalysis });
+
+    expect(runtime).toMatchObject({
+      dialect: 'postgres',
+      sqlAnalysis,
+    });
+    expect(runtime?.reader).toBeDefined();
+    expect(runtime?.queryClient).toBeDefined();
   });
 
   it('registers historic SQL when explicitly requested even if connection query history is disabled', async () => {
