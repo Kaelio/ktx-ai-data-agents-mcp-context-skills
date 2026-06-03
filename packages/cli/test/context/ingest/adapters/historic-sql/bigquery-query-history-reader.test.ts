@@ -91,7 +91,10 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
             40,
             0.05,
             null,
-            JSON.stringify([{ user: 'analyst@example.test', executions: 1 }]),
+            JSON.stringify([
+              { user: 'svc-loader@example.test', executions: 40 },
+              { user: 'analyst@example.test', executions: 2 },
+            ]),
           ],
         ],
         totalRows: 1,
@@ -109,9 +112,14 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
     }
 
     const sql = firstQuery(client);
+    expect(sql).toContain('WITH filtered_jobs AS');
+    expect(sql).toContain('template_stats AS');
+    expect(sql).toContain('template_users AS');
     expect(sql).toContain('COUNT(*) AS executions');
     expect(sql).toContain('COUNT(DISTINCT user_email) AS distinct_users');
-    expect(sql).toContain('GROUP BY query_hash');
+    expect(sql).toContain('GROUP BY query_hash, user_email');
+    expect(sql).toContain('ORDER BY users.executions DESC');
+    expect(sql).not.toContain('LIMIT 5');
     expect(sql).toContain('HAVING COUNT(*) >= 5');
     expect(rows).toMatchObject([
       {
@@ -120,7 +128,10 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
           executions: 42,
           errorRate: 0.05,
         },
-        topUsers: [{ user: 'analyst@example.test', executions: 1 }],
+        topUsers: [
+          { user: 'svc-loader@example.test', executions: 40 },
+          { user: 'analyst@example.test', executions: 2 },
+        ],
       },
     ]);
   });
