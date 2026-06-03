@@ -65,8 +65,7 @@ describe('KTX demo next steps', () => {
       agentIntegrationReady: true,
     }).join('\n');
 
-    expect(rendered).toContain('Build KTX context next.');
-    expect(rendered).toContain('Run ingest to build database schema context before context-source ingest.');
+    expect(rendered).toContain('Setup is complete. The only step left is to build context for your agents.');
     expect(rendered).toContain('ktx ingest');
     expect(rendered).not.toContain('resume');
     expect(rendered).not.toContain('scan');
@@ -87,6 +86,6 @@ describe('KTX demo next steps', () => {
     expect(rendered).toContain('ktx status --json');
     expect(rendered).not.toContain('ktx agent');
     expect(rendered).not.toContain('ktx serve --mcp stdio --user-id local');
-    expect(rendered).not.toContain('Build KTX context next.');
+    expect(rendered).not.toContain('Setup is complete.');
   });
 });

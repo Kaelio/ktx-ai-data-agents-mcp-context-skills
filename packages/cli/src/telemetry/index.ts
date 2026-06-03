@@ -22,7 +22,6 @@ export type { CommandOutcome, CompletedCommandSpan };
 
 export async function showTelemetryNoticeIfNeeded(io: KtxCliIo, packageInfo: KtxCliPackageInfo): Promise<void> {
   const identity = await loadTelemetryIdentity({
-    stdoutIsTTY: io.stdout.isTTY === true,
     stderr: io.stderr,
     env: process.env,
   });
@@ -81,7 +80,6 @@ export async function emitTelemetryEvent<Name extends TelemetryEventName>(input:
 }): Promise<void> {
   const debug = telemetryDebugEnabled();
   const identity = await loadTelemetryIdentity({
-    stdoutIsTTY: input.io.stdout.isTTY === true,
     stderr: input.io.stderr,
     env: process.env,
   });
@@ -153,4 +151,21 @@ export async function emitCompletedCommand(input: {
     io: input.io,
     packageInfo: input.packageInfo,
   });
+}
+
+/**
+ * Flush telemetry when the process is interrupted (Ctrl-C / kill). The normal
+ * `command` emit + flush lives in a `finally` that a signal skips, so without
+ * this an interrupted long-running command (ingest, `mcp stdio`) loses its
+ * `command` event and any queued events. Marks the active command span as
+ * `aborted`, emits it, and drains the emitter. Best-effort and idempotent: if
+ * the span was already completed (normal exit racing a signal) the emit no-ops.
+ */
+export async function emitAbortedCommandAndShutdown(input: {
+  packageInfo: KtxCliPackageInfo;
+  io: KtxCliIo;
+}): Promise<void> {
+  const completed = completeCommandSpan({ completedAt: performance.now(), outcome: 'aborted' });
+  await emitCompletedCommand({ completed, packageInfo: input.packageInfo, io: input.io });
+  await shutdownTelemetryEmitter();
 }

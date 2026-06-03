@@ -6,7 +6,7 @@ import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { readKtxSetupState } from './context/project/setup-config.js';
 import { getKtxCliPackageInfo, type KtxCliIo } from './cli-runtime.js';
-import { formatSetupNextStepLines } from './next-steps.js';
+import { formatNextStepLines, formatSetupNextStepLines } from './next-steps.js';
 import { runtimeInstallPolicyFromFlags } from './managed-python-command.js';
 import { readManagedPythonRuntimeStatus } from './managed-python-runtime.js';
 import { resolveProjectRuntimeRequirements } from './runtime-requirements.js';
@@ -33,10 +33,10 @@ import {
 } from './setup-models.js';
 import { type KtxSetupProjectDeps, runKtxSetupProjectStep } from './setup-project.js';
 import {
-  isKtxPreAgentSetupReady,
-  isKtxSetupReady,
+  classifyKtxSetupCompletion,
   type KtxSetupReadyMenuDeps,
-  runKtxSetupReadyChangeMenu,
+  runKtxSetupReadyMenu,
+  setupHasContextTargets,
 } from './setup-ready-menu.js';
 import { type KtxSetupSourcesDeps, type KtxSetupSourceType, runKtxSetupSourcesStep } from './setup-sources.js';
 import {
@@ -217,6 +217,7 @@ async function recordSetupStep(input: {
   startedAt: number;
   io: KtxCliIo;
   cliVersion?: string;
+  errorDetail?: string;
 }): Promise<void> {
   const { emitTelemetryEvent } = await import('./telemetry/index.js');
   await emitTelemetryEvent({
@@ -228,6 +229,7 @@ async function recordSetupStep(input: {
       step: input.step,
       outcome: setupTelemetryOutcome(input.status),
       durationMs: Math.max(0, performance.now() - input.startedAt),
+      ...(input.errorDetail ? { errorDetail: input.errorDetail } : {}),
     },
   });
 }
@@ -527,10 +529,6 @@ function setupStatusReady(status: KtxSetupStatus): boolean {
   );
 }
 
-function setupHasContextTargets(status: KtxSetupStatus): boolean {
-  return status.databases.length > 0 || status.sources.length > 0;
-}
-
 function setupContextReady(status: KtxSetupStatus): boolean {
   return status.context.ready;
 }
@@ -628,12 +626,19 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     let readyAction: string | undefined;
 
     if (args.inputMode !== 'disabled' && !agentsRequested) {
-      if (isKtxSetupReady(currentStatus)) {
-        readyAction = (await runKtxSetupReadyChangeMenu(currentStatus, deps.readyMenuDeps)).action;
-        if (readyAction === 'exit') return 0;
-      } else if (isKtxPreAgentSetupReady(currentStatus)) {
+      const completion = classifyKtxSetupCompletion(currentStatus);
+      if (completion === 'ready') {
+        setupUi.note(formatNextStepLines().join('\n'), 'ktx is ready', io);
+        const choice = (await runKtxSetupReadyMenu(currentStatus, deps.readyMenuDeps)).action;
+        if (choice === 'exit') return 0;
+        readyAction = choice;
+      } else if (completion === 'needs-context') {
+        // Config is done; skip the re-walk and land straight on the build prompt.
+        readyAction = 'context';
+      } else if (completion === 'needs-agents') {
         readyAction = 'agents';
       }
+      // 'incomplete' → readyAction stays undefined → run the full setup walk.
     }
 
     const runOnly = readyAction;
@@ -683,7 +688,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       if (!step) break;
 
       const stepStartedAt = performance.now();
-      let stepResult: { status: KtxSetupFlowStatus };
+      let stepResult: { status: KtxSetupFlowStatus; errorDetail?: string };
       if (step === 'models') {
         const modelRunner =
           deps.model ?? ((modelArgs, modelIo) => runKtxSetupAnthropicModelStep(modelArgs, modelIo, deps.modelDeps));
@@ -844,6 +849,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         startedAt: stepStartedAt,
         io,
         cliVersion: args.cliVersion,
+        ...(stepResult.errorDetail ? { errorDetail: stepResult.errorDetail } : {}),
       });
 
       if (stepResult.status === 'failed') {
@@ -869,7 +875,9 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       }
       if (step === 'context' && stepResult.status !== 'ready') {
         if (shouldRunAgents && args.skipAgents !== true) {
-          return 0;
+          // Context isn't built, so skip agent install — but still reach the
+          // completion screen, which states readiness and points at `ktx ingest`.
+          break setupLoop;
         }
       }
 

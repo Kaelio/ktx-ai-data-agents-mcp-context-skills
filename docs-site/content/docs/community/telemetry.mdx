@@ -6,11 +6,10 @@ description: Understand what usage telemetry ktx collects and how to opt out.
 **ktx** collects aggregated usage telemetry so maintainers can see
 which commands work, where setup fails, and which parts of the data-agent
 workflow need improvement. Telemetry is opt-out: it turns on the first time you
-run **ktx** in an interactive terminal, which prints a one-time notice. From
-then on the same install also reports background activity that has no terminal
-of its own, such as the local MCP server your agent calls. It stays disabled in
-CI, whenever an opt-out is set, and until that first interactive run has shown
-the notice.
+run **ktx** in any way — an interactive command, a script, or an
+agent-launched MCP server — and prints a one-time notice (to the terminal when
+there is one, otherwise to standard error). It stays disabled in CI and whenever
+an opt-out is set.
 
 ## Opt out
 
@@ -25,10 +24,11 @@ Use any of these mechanisms to disable telemetry:
 
 ## What we collect
 
-High-level signals only: which commands run, how long they take, whether they
+High-level signals: which commands run, how long they take, whether they
 succeed or fail, and basic environment metadata (CLI version, Node version, OS
-platform). For project-level analysis, **ktx** sends a salted hash of the
-project directory — never the raw path.
+platform). When an operation fails, we also include diagnostic detail about the
+error so we can debug it. For project-level analysis, **ktx** sends a salted
+hash of the project directory to group events.
 
 When an agent reaches **ktx** through MCP, we also record the connecting client
 tool's self-reported name and version (for example Claude Desktop, Cursor, or
@@ -37,11 +37,14 @@ tool, never you or your data.
 
 ## What we never collect
 
-- File paths, hostnames, environment variable values, or command arguments
-- `ktx.yaml` contents, connection passwords, API keys, or tokens
-- Schema names, table names, column names, SQL text, or query results
-- Error messages or stack traces
-- Git remote URLs, Git user email, OS user, or hostname
+We build telemetry around counts and coarse signals, not the contents of your
+data or configuration. We don't deliberately collect your `ktx.yaml`, query
+results, passwords, API keys, or access tokens.
+
+The one place environment-specific text can appear is failure diagnostics: when
+an operation errors, the detail we record is the error as your tools reported
+it, which can include identifiers from your setup. If you'd rather send nothing
+at all, turn telemetry off using any of the options above.
 
 ## Storage and retention
 

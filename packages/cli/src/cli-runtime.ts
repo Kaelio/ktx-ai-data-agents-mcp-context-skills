@@ -89,6 +89,46 @@ export async function runInitForCommander(
   return await runInit(args, io);
 }
 
+function signalExitCode(signal: NodeJS.Signals): number {
+  // 128 + signal number: SIGINT (2) -> 130, SIGTERM (15) -> 143.
+  return signal === 'SIGTERM' ? 143 : 130;
+}
+
+/**
+ * Flush telemetry on interrupt for the real CLI process. `capture()` is
+ * fire-and-forget and the only flush guarantee lives in a `finally` a signal
+ * skips, so Ctrl-C / `kill` of a long-running command (ingest, `mcp stdio`)
+ * would otherwise drop its `command` event and queued events. Installed only
+ * when driving the actual process; programmatic/test callers pass their own
+ * `io` and never reach here. Returns a disposer that removes the listeners.
+ */
+function installTelemetrySignalFlush(io: KtxCliIo, info: KtxCliPackageInfo): () => void {
+  let handling = false;
+  const handle = (signal: NodeJS.Signals): void => {
+    if (handling) {
+      process.exit(signalExitCode(signal));
+    }
+    handling = true;
+    void (async () => {
+      try {
+        const { emitAbortedCommandAndShutdown } = await import('./telemetry/index.js');
+        await emitAbortedCommandAndShutdown({ packageInfo: info, io });
+      } catch {
+        // Best-effort: never let a telemetry hiccup block the interrupt exit.
+      }
+      process.exit(signalExitCode(signal));
+    })();
+  };
+  const onSigint = (): void => handle('SIGINT');
+  const onSigterm = (): void => handle('SIGTERM');
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
+  return () => {
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+  };
+}
+
 export async function runKtxCli(
   argv = process.argv.slice(2),
   io: KtxCliIo = process,
@@ -98,7 +138,14 @@ export async function runKtxCli(
   profileMark('runtime:runKtxCli');
   const { runCommanderKtxCli } = await profileSpan('import ./cli-program.js', () => import('./cli-program.js'));
 
-  return await runCommanderKtxCli(argv, io, deps, info, {
-    runInit: runInitForCommander,
-  });
+  // Real-process entry only: flush telemetry if interrupted. Test/programmatic
+  // callers pass their own `io`, so they never install process-level handlers.
+  const removeSignalFlush = (io as unknown) === process ? installTelemetrySignalFlush(io, info) : undefined;
+  try {
+    return await runCommanderKtxCli(argv, io, deps, info, {
+      runInit: runInitForCommander,
+    });
+  } finally {
+    removeSignalFlush?.();
+  }
 }

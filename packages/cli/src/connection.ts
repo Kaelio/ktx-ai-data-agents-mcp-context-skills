@@ -17,7 +17,7 @@ import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitTelemetryEvent } from './telemetry/index.js';
-import { scrubErrorClass } from './telemetry/scrubber.js';
+import { formatErrorDetail, scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:connection');
 
@@ -304,6 +304,7 @@ async function emitConnectionTest(input: {
   io: KtxCliIo;
 }): Promise<void> {
   const errorClass = input.error ? scrubErrorClass(input.error) : undefined;
+  const errorDetail = input.error ? formatErrorDetail(input.error) : undefined;
   await emitTelemetryEvent({
     name: 'connection_test',
     projectDir: input.project.projectDir,
@@ -314,6 +315,7 @@ async function emitConnectionTest(input: {
       outcome: input.outcome,
       durationMs: input.durationMs,
       ...(errorClass ? { errorClass } : {}),
+      ...(errorDetail ? { errorDetail } : {}),
     },
   });
 }

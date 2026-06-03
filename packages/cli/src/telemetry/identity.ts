@@ -37,7 +37,6 @@ function styleNotice(notice: string, env: TelemetryIdentityEnv): string {
 export interface LoadTelemetryIdentityOptions {
   homeDir?: string;
   env?: TelemetryIdentityEnv;
-  stdoutIsTTY: boolean;
   stderr: { write(chunk: string): void };
   now?: () => Date;
 }
@@ -94,13 +93,12 @@ export async function loadTelemetryIdentity(options: LoadTelemetryIdentityOption
     };
   }
 
-  // No identity yet. Minting one means showing the one-time opt-out notice, so
-  // first-run creation requires an interactive surface; a headless first run
-  // stays disabled and defers enablement until the next interactive run.
-  if (options.stdoutIsTTY !== true) {
-    return { enabled: false, createdFile: false, noticeShown: false, path };
-  }
-
+  // No identity yet → mint one regardless of surface. Telemetry is opt-out, so
+  // a fresh install is counted even when its first run is headless (an
+  // IDE-launched `ktx mcp stdio`, a scripted invocation); otherwise those
+  // installs would be permanently invisible. Opt-out env vars are honored
+  // above. The one-time notice is written to stderr — safe even under MCP
+  // stdio, which reserves stdout for its JSON-RPC protocol.
   const timestamp = (options.now ?? (() => new Date()))().toISOString();
   const next = {
     installId: randomUUID(),

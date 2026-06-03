@@ -22,6 +22,7 @@ import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitProjectStackSnapshot, emitTelemetryEvent } from './telemetry/index.js';
+import { formatErrorDetail } from './telemetry/scrubber.js';
 
 profileMark('module:public-ingest');
 
@@ -635,6 +636,9 @@ async function emitIngestCompleted(input: {
   io: KtxCliIo;
 }): Promise<void> {
   const failed = resultFailed(input.result);
+  const failureDetail = failed
+    ? formatErrorDetail(input.result.steps.find((step) => step.status === 'failed')?.detail)
+    : undefined;
   await emitTelemetryEvent({
     name: 'ingest_completed',
     projectDir: input.args.projectDir,
@@ -651,6 +655,7 @@ async function emitIngestCompleted(input: {
       rowsBucket: rowsBucket(),
       durationMs: Math.max(0, performance.now() - input.startedAt),
       outcome: failed ? 'error' : 'ok',
+      ...(failureDetail ? { errorDetail: failureDetail } : {}),
     },
   });
 }
@@ -857,7 +862,30 @@ function capturedFailureMessage(output: string): string | undefined {
   return [firstLine, ...followupLines].join('\n');
 }
 
+/**
+ * Run one ingest target through its scan/ingest steps. The single per-target
+ * chokepoint reached by every entrypoint — standalone `ktx ingest` (plain/json
+ * and foreground) and `ktx setup` (via `runContextBuild`). The exported
+ * `executePublicIngestTarget` wraps this and emits the `ingest_completed`
+ * telemetry event exactly once, so every path is counted.
+ */
 export async function executePublicIngestTarget(
+  target: KtxPublicIngestPlanTarget,
+  args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
+  io: KtxCliIo,
+  deps: KtxPublicIngestDeps,
+  project: KtxPublicIngestProject,
+): Promise<KtxPublicIngestTargetResult> {
+  const startedAt = performance.now();
+  const result = await runIngestTargetSteps(target, args, io, deps);
+  // `io` may be a capture buffer for the scan/ingest step output; the telemetry
+  // debug echo belongs on the real user-facing stream, which callers expose as
+  // `deps.runtimeIo` (falling back to `io` when the step io is already real).
+  await emitIngestCompleted({ args, project, target, result, startedAt, io: deps.runtimeIo ?? io });
+  return result;
+}
+
+async function runIngestTargetSteps(
   target: KtxPublicIngestPlanTarget,
   args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
   io: KtxCliIo,
@@ -1081,11 +1109,8 @@ export async function runKtxPublicIngest(
   }
 
   for (const [index, target] of plan.targets.entries()) {
-    const startedAt = performance.now();
     if (args.json) {
-      const result = await executePublicIngestTarget(target, args, io, deps);
-      results.push(result);
-      await emitIngestCompleted({ args, project, target, result, startedAt, io });
+      results.push(await executePublicIngestTarget(target, args, io, deps, project));
       continue;
     }
 
@@ -1103,9 +1128,7 @@ export async function runKtxPublicIngest(
       onPhaseEnd: progress.onPhaseEnd,
       runtimeIo: deps.runtimeIo ?? io,
     };
-    const result = await executePublicIngestTarget(target, args, capture, targetDeps);
-    results.push(result);
-    await emitIngestCompleted({ args, project, target, result, startedAt, io });
+    results.push(await executePublicIngestTarget(target, args, capture, targetDeps, project));
   }
 
   if (args.json) {

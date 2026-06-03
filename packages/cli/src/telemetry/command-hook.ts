@@ -1,4 +1,4 @@
-import { scrubErrorClass } from './scrubber.js';
+import { formatErrorDetail, scrubErrorClass } from './scrubber.js';
 
 export type CommandOutcome = 'ok' | 'error' | 'aborted';
 
@@ -16,6 +16,7 @@ export interface CompletedCommandSpan {
   durationMs: number;
   outcome: CommandOutcome;
   errorClass?: string;
+  errorDetail?: string;
   flagsPresent: Record<string, boolean>;
   hasProject: boolean;
   projectDir?: string;
@@ -40,12 +41,14 @@ export function completeCommandSpan(input: {
   }
 
   const errorClass = input.error ? scrubErrorClass(input.error) : undefined;
+  const errorDetail = input.error ? formatErrorDetail(input.error) : undefined;
 
   return {
     commandPath: span.commandPath,
     durationMs: Math.max(0, input.completedAt - span.startedAt),
     outcome: input.outcome,
     ...(errorClass ? { errorClass } : {}),
+    ...(errorDetail ? { errorDetail } : {}),
     flagsPresent: span.flagsPresent,
     hasProject: span.hasProject,
     projectDir: span.projectDir,

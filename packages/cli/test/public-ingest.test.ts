@@ -6,11 +6,17 @@ import { initKtxProject } from '../src/context/project/project.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPublicIngestPlan,
+  executePublicIngestTarget,
   type KtxPublicIngestDeps,
   type KtxPublicIngestProject,
   publicProgressMessage,
   runKtxPublicIngest,
 } from '../src/public-ingest.js';
+
+/** Count non-overlapping occurrences of `needle` in `haystack`. */
+function occurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
 import type { ManagedPythonCommandRuntime } from '../src/managed-python-command.js';
 
 function makeIo(options: { isTTY?: boolean; interactive?: boolean } = {}) {
@@ -426,6 +432,118 @@ describe('runKtxPublicIngest', () => {
       expect(io.stderr()).toContain('"event":"ingest_completed"');
       expect(io.stderr()).toContain('"event":"project_stack_snapshot"');
       expect(io.stderr()).not.toContain(projectDir);
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it('records errorDetail in ingest_completed telemetry when a target fails', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-ingest-telemetry-fail-'));
+    try {
+      await initKtxProject({ projectDir });
+      const io = makeIo({ isTTY: true });
+      const project = deepReadyProject({
+        warehouse: { driver: 'sqlite', path: join(projectDir, 'warehouse.sqlite') },
+      });
+
+      const code = await runKtxPublicIngest(
+        { command: 'run', projectDir, targetConnectionId: 'warehouse', all: false, json: false, inputMode: 'disabled' },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan: vi.fn(async () => 1) },
+      );
+
+      expect(code).toBe(1);
+      expect(io.stderr()).toContain('"event":"ingest_completed"');
+      expect(io.stderr()).toContain('"outcome":"error"');
+      expect(io.stderr()).toContain('"errorDetail"');
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it('emits exactly one ingest_completed from the shared executePublicIngestTarget chokepoint', async () => {
+    // executePublicIngestTarget is the single per-target path reached by every
+    // entrypoint (plain/json ingest, foreground ingest via runContextBuild, and
+    // setup). Emitting here is what makes ingest_completed fire on every path.
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const io = makeIo({ isTTY: true });
+    const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
+    const [target] = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'warehouse',
+      all: false,
+    }).targets;
+
+    const runScan = vi.fn(async () => 0);
+    const result = await executePublicIngestTarget(
+      target,
+      { command: 'run', projectDir: '/tmp/project', targetConnectionId: 'warehouse', all: false, json: false, inputMode: 'disabled' },
+      io.io,
+      { runScan },
+      project,
+    );
+
+    expect(result.steps.some((step) => step.status === 'failed')).toBe(false);
+    expect(occurrences(io.stderr(), '"event":"ingest_completed"')).toBe(1);
+    expect(io.stderr()).toContain('"outcome":"ok"');
+    // A database-ingest target must run a scan — runKtxScan is what emits
+    // scan_completed, so this guards against the 0.7.0-style regression where a
+    // path stopped triggering the scan and the event silently went to zero.
+    expect(runScan).toHaveBeenCalledTimes(1);
+  });
+
+  it('still emits ingest_completed when a target fails preflight (early-return branch)', async () => {
+    // The chokepoint must emit on every internal branch, including the early
+    // preflight-failure return — otherwise failed-setup installs vanish.
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const io = makeIo({ isTTY: true });
+    // projectWithConnections leaves enrichment unconfigured → preflight failure.
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const [target] = buildPublicIngestPlan(project, {
+      projectDir: '/tmp/project',
+      targetConnectionId: 'warehouse',
+      all: false,
+    }).targets;
+    expect(target.preflightFailure).toBeTruthy();
+
+    const runScan = vi.fn(async () => 0);
+    await executePublicIngestTarget(
+      target,
+      { command: 'run', projectDir: '/tmp/project', targetConnectionId: 'warehouse', all: false, json: false, inputMode: 'disabled' },
+      io.io,
+      { runScan },
+      project,
+    );
+
+    expect(occurrences(io.stderr(), '"event":"ingest_completed"')).toBe(1);
+    expect(io.stderr()).toContain('"outcome":"error"');
+    expect(runScan).not.toHaveBeenCalled();
+  });
+
+  it('emits one ingest_completed per target and never double-emits across a multi-target run', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-ingest-no-double-'));
+    try {
+      await initKtxProject({ projectDir });
+      const io = makeIo({ isTTY: true });
+      const project = deepReadyProject({
+        first: { driver: 'sqlite', path: join(projectDir, 'first.sqlite') },
+        second: { driver: 'sqlite', path: join(projectDir, 'second.sqlite') },
+      });
+
+      const code = await runKtxPublicIngest(
+        { command: 'run', projectDir, all: true, json: false, inputMode: 'disabled' },
+        io.io,
+        { loadProject: vi.fn(async () => project), runScan: vi.fn(async () => 0) },
+      );
+
+      expect(code).toBe(0);
+      expect(occurrences(io.stderr(), '"event":"ingest_completed"')).toBe(2);
     } finally {
       await rm(projectDir, { recursive: true, force: true });
     }
