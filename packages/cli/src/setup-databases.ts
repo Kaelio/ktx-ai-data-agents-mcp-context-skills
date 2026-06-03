@@ -24,6 +24,12 @@ import {
 import { runKtxConnection } from './connection.js';
 import { createBufferedCommandIo } from './io/buffered-command-io.js';
 import {
+  runConnectionSetupWithRecovery,
+  type ConfigureResult,
+  type RecoveryOutcome,
+  type ValidateResult,
+} from './connection-recovery.js';
+import {
   pickDatabaseScope as defaultPickDatabaseScope,
   type DatabaseScopePickResult,
   type PickDatabaseScopeArgs,
@@ -228,7 +234,6 @@ const SCOPE_DISCOVERY_SPECS: Partial<Record<KtxSetupDatabaseDriver, ScopeDiscove
 };
 
 type UrlDriverType = Extract<KtxSetupDatabaseDriver, 'postgres' | 'mysql' | 'clickhouse' | 'sqlserver'>;
-type ConnectionSetupStatus = 'ready' | 'back' | 'failed' | 'failed-query-history-unavailable';
 
 const DRIVER_CONNECTION_DEFAULTS: Record<UrlDriverType, { port: string }> = {
   postgres: { port: '5432' },
@@ -1175,6 +1180,31 @@ async function disableConnectionQueryHistory(projectDir: string, connectionId: s
   });
 }
 
+function okValidateResult(): ValidateResult {
+  return { status: 'ok' };
+}
+
+function backValidateResult(): ValidateResult {
+  return { status: 'back' };
+}
+
+function failedValidateResult(): ValidateResult {
+  return { status: 'failed' };
+}
+
+function queryHistoryUnavailableResult(projectDir: string, connectionId: string): ValidateResult {
+  return {
+    status: 'failed',
+    extraActions: [
+      {
+        value: 'disable-query-history',
+        label: 'Disable query history and retry',
+        run: () => disableConnectionQueryHistory(projectDir, connectionId),
+      },
+    ],
+  };
+}
+
 async function createConnectionConfigRollback(projectDir: string, connectionId: string): Promise<() => Promise<void>> {
   const project = await loadKtxProject({ projectDir });
   const previousConnection = project.config.connections[connectionId];
@@ -1302,11 +1332,11 @@ async function maybeConfigureDatabaseScope(input: {
   io: KtxCliIo;
   prompts: KtxSetupDatabasesPromptAdapter;
   forcePrompt?: boolean;
-}): Promise<ConnectionSetupStatus> {
+}): Promise<ValidateResult> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
   const driver = normalizeDriver(connection?.driver);
-  if (!driver || driver === 'sqlite') return 'ready';
+  if (!driver || driver === 'sqlite') return okValidateResult();
 
   const spec = SCOPE_DISCOVERY_SPECS[driver];
   const existingTables = connection?.enabled_tables;
@@ -1315,7 +1345,7 @@ async function maybeConfigureDatabaseScope(input: {
   const hasExistingScope = !spec || existingScope.length > 0;
 
   if (hasExistingTables && hasExistingScope && input.forcePrompt !== true) {
-    return 'ready';
+    return okValidateResult();
   }
 
   const cliSchemas = input.args.databaseSchemas;
@@ -1333,7 +1363,7 @@ async function maybeConfigureDatabaseScope(input: {
           input.io.stderr.write(
             `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${detail}\n`,
           );
-          return 'ready';
+          return okValidateResult();
         }
       }
       if (scopeToWrite.length > 0) {
@@ -1349,7 +1379,7 @@ async function maybeConfigureDatabaseScope(input: {
         ]);
       }
     }
-    return 'ready';
+    return okValidateResult();
   }
 
   if (spec && cliSchemas.length > 0) {
@@ -1385,7 +1415,7 @@ async function maybeConfigureDatabaseScope(input: {
         connectionId: input.connectionId,
         spec,
       });
-      if (typed === undefined) return 'back';
+      if (typed === undefined) return backValidateResult();
       effectiveCliSchemas = typed;
       listedSchemas = typed;
       if (typed.length > 0) {
@@ -1400,7 +1430,7 @@ async function maybeConfigureDatabaseScope(input: {
   }
   const schemas = unique(listedSchemas);
   if (spec && schemas.length === 0) {
-    return 'ready';
+    return okValidateResult();
   }
   const schemaSuggestion =
     effectiveCliSchemas.length > 0
@@ -1437,10 +1467,10 @@ async function maybeConfigureDatabaseScope(input: {
         ? `Could not discover tables for ${input.connectionId}; edit was not saved. ${detail}`
         : `Could not discover tables for ${input.connectionId}; continuing without table filter. ${detail}`,
     );
-    return input.forcePrompt === true ? 'failed' : 'ready';
+    return input.forcePrompt === true ? failedValidateResult() : okValidateResult();
   }
   if (pickResult.kind === 'back') {
-    return 'back';
+    return backValidateResult();
   }
   const enabledTables = pickResult.enabledTables;
   const activeSchemas = pickResult.activeSchemas;
@@ -1455,7 +1485,7 @@ async function maybeConfigureDatabaseScope(input: {
   }
   const refreshedProject = await loadKtxProject({ projectDir: input.projectDir });
   const currentConnection = refreshedProject.config.connections[input.connectionId];
-  if (!currentConnection) return 'ready';
+  if (!currentConnection) return okValidateResult();
   await writeConnectionConfig({
     projectDir: input.projectDir,
     connectionId: input.connectionId,
@@ -1472,7 +1502,7 @@ async function maybeConfigureDatabaseScope(input: {
   writeSetupSection(input.io, `Tables enabled for ${input.connectionId}`, [
     `✓ ${enabledTables.length} tables enabled`,
   ]);
-  return 'ready';
+  return okValidateResult();
 }
 
 async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void> {
@@ -1600,7 +1630,7 @@ async function validateAndScanConnection(input: {
   args: KtxSetupDatabasesArgs;
   prompts: KtxSetupDatabasesPromptAdapter;
   forceScopeAndTables?: boolean;
-}): Promise<ConnectionSetupStatus> {
+}): Promise<ValidateResult> {
   const testConnection = input.deps.testConnection ?? defaultTestConnection;
   const scanConnection = input.deps.scanConnection ?? defaultScanConnection;
   const project = await loadKtxProject({ projectDir: input.projectDir });
@@ -1614,7 +1644,7 @@ async function validateAndScanConnection(input: {
       (chunk) => input.io.stderr.write(chunk),
       `Connection test failed for ${input.connectionId}.`,
     );
-    return 'failed';
+    return failedValidateResult();
   }
   const testOutput = testIo.stdoutText();
   const outputDriver = normalizeDriver(readOutputValue(testOutput, 'Driver'));
@@ -1623,7 +1653,7 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
 
   const scopeStatus = await maybeConfigureDatabaseScope({ ...input, forcePrompt: input.forceScopeAndTables });
-  if (scopeStatus !== 'ready') {
+  if (scopeStatus.status !== 'ok') {
     return scopeStatus;
   }
 
@@ -1684,7 +1714,9 @@ async function validateAndScanConnection(input: {
       );
     }
     if (scanCode !== 0) {
-      return queryHistoryAvailable ? 'failed' : 'failed-query-history-unavailable';
+      return queryHistoryAvailable
+        ? failedValidateResult()
+        : queryHistoryUnavailableResult(input.projectDir, input.connectionId);
     }
   }
   const scanOutput = scanIo.stdoutText();
@@ -1696,7 +1728,7 @@ async function validateAndScanConnection(input: {
   writeSetupSection(input.io, 'Database ready', [
     `${input.connectionId} · ${driverDisplay} · schema context complete`,
   ]);
-  return 'ready';
+  return okValidateResult();
 }
 
 async function chooseDrivers(
@@ -1819,6 +1851,130 @@ async function choosePrimarySourceToEdit(input: {
   return choice === 'back' ? 'back' : choice;
 }
 
+async function configureDatabaseConnection(input: {
+  projectDir: string;
+  connectionId: string;
+  driver: KtxSetupDatabaseDriver;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+  io: KtxCliIo;
+  canReturnToDriverSelection: boolean;
+  editBaseline?: KtxProjectConnectionConfig;
+}): Promise<ConfigureResult> {
+  const project = await loadKtxProject({ projectDir: input.projectDir });
+  const latestConnection = project.config.connections[input.connectionId];
+  let connection = await buildConnectionConfig({
+    driver: input.driver,
+    connectionId: input.connectionId,
+    args: input.args,
+    prompts: input.prompts,
+    existingConnection: latestConnection,
+  });
+
+  while (!connection && input.args.inputMode !== 'disabled') {
+    const action = await input.prompts.select(
+      missingConnectionDetailsPrompt(driverLabel(input.driver), input.canReturnToDriverSelection),
+    );
+    if (action === 'back') {
+      return 'back';
+    }
+    connection = await buildConnectionConfig({
+      driver: input.driver,
+      connectionId: input.connectionId,
+      args: input.args,
+      prompts: input.prompts,
+      existingConnection: latestConnection,
+    });
+  }
+
+  if (connection === 'back') {
+    return 'back';
+  }
+  if (!connection) {
+    input.io.stderr.write(`Missing connection details for ${driverLabel(input.driver)}.\n`);
+    return 'cancelled';
+  }
+
+  const withHistoricSql = await maybeApplyHistoricSqlConfig({
+    connection,
+    driver: input.driver,
+    args: input.args,
+    prompts: input.prompts,
+  });
+  if (withHistoricSql === 'back') {
+    return 'back';
+  }
+
+  await writeConnectionConfig({
+    projectDir: input.projectDir,
+    connectionId: input.connectionId,
+    connection: input.editBaseline
+      ? withExistingPrimaryEditPromptDefaults({
+          previous: input.editBaseline,
+          next: withHistoricSql,
+          driver: input.driver,
+        })
+      : withHistoricSql,
+    io: input.io,
+  });
+  return 'configured';
+}
+
+async function runDatabaseConnectionSetupWithRecovery(input: {
+  projectDir: string;
+  connectionId: string;
+  driver: KtxSetupDatabaseDriver;
+  args: KtxSetupDatabasesArgs;
+  prompts: KtxSetupDatabasesPromptAdapter;
+  io: KtxCliIo;
+  deps: KtxSetupDatabasesDeps;
+  canReturnToDriverSelection: boolean;
+  allowSkip: boolean;
+  forceScopeAndTables?: boolean;
+  editBaseline?: KtxProjectConnectionConfig;
+  configureExistingOnly?: boolean;
+}): Promise<RecoveryOutcome> {
+  return await runConnectionSetupWithRecovery({
+    label: input.connectionId,
+    interactive: input.args.inputMode !== 'disabled',
+    allowSkip: input.allowSkip,
+    io: input.io,
+    prompts: input.prompts,
+    snapshot: () => createConnectionConfigRollback(input.projectDir, input.connectionId),
+    configure: async () => {
+      if (input.configureExistingOnly) {
+        const historicSqlResult = await applyHistoricSqlConfigToExistingConnection({
+          projectDir: input.projectDir,
+          connectionId: input.connectionId,
+          args: input.args,
+          prompts: input.prompts,
+        });
+        return historicSqlResult === 'back' ? 'back' : 'configured';
+      }
+      return await configureDatabaseConnection({
+        projectDir: input.projectDir,
+        connectionId: input.connectionId,
+        driver: input.driver,
+        args: input.args,
+        prompts: input.prompts,
+        io: input.io,
+        canReturnToDriverSelection: input.canReturnToDriverSelection,
+        editBaseline: input.editBaseline,
+      });
+    },
+    validate: () =>
+      validateAndScanConnection({
+        projectDir: input.projectDir,
+        connectionId: input.connectionId,
+        io: input.io,
+        deps: input.deps,
+        args: input.args,
+        prompts: input.prompts,
+        forceScopeAndTables: input.forceScopeAndTables,
+      }),
+  });
+}
+
 async function runPrimarySourceFullEdit(input: {
   projectDir: string;
   connectionId: string;
@@ -1838,59 +1994,21 @@ async function runPrimarySourceFullEdit(input: {
     return 'failed';
   }
 
-  const rollback = await createConnectionConfigRollback(input.projectDir, input.connectionId);
-  const replacement = await buildConnectionConfig({
-    driver,
+  const outcome = await runDatabaseConnectionSetupWithRecovery({
+    projectDir: input.projectDir,
     connectionId: input.connectionId,
-    args: input.args,
-    prompts: input.prompts,
-    existingConnection: existing,
-  });
-  if (replacement === 'back') {
-    await rollback();
-    return 'back';
-  }
-  if (!replacement) {
-    await rollback();
-    return 'failed';
-  }
-
-  const withHistoricSql = await maybeApplyHistoricSqlConfig({
-    connection: replacement,
     driver,
     args: input.args,
     prompts: input.prompts,
-  });
-  if (withHistoricSql === 'back') {
-    await rollback();
-    return 'back';
-  }
-
-  await writeConnectionConfig({
-    projectDir: input.projectDir,
-    connectionId: input.connectionId,
-    connection: withExistingPrimaryEditPromptDefaults({
-      previous: existing,
-      next: withHistoricSql,
-      driver,
-    }),
-    io: input.io,
-  });
-
-  const validated = await validateAndScanConnection({
-    projectDir: input.projectDir,
-    connectionId: input.connectionId,
     io: input.io,
     deps: input.deps,
-    args: input.args,
-    prompts: input.prompts,
+    canReturnToDriverSelection: true,
+    allowSkip: false,
     forceScopeAndTables: true,
+    editBaseline: existing,
   });
-  if (validated !== 'ready') {
-    await rollback();
-    return validated === 'failed-query-history-unavailable' ? 'failed' : validated;
-  }
-  return 'ready';
+
+  return outcome === 'skip' ? 'back' : outcome;
 }
 
 export async function runKtxSetupDatabasesStep(
@@ -1908,28 +2026,33 @@ export async function runKtxSetupDatabasesStep(
   if (args.databaseConnectionIds && args.databaseConnectionIds.length > 0) {
     const selectedConnectionIds: string[] = [];
     for (const connectionId of unique(args.databaseConnectionIds)) {
-      const historicSqlResult = await applyHistoricSqlConfigToExistingConnection({
-        projectDir: args.projectDir,
-        connectionId,
-        args,
-        prompts,
-      });
-      if (historicSqlResult === 'back') return { status: 'back', projectDir: args.projectDir };
-      const setupStatus = await validateAndScanConnection({
-        projectDir: args.projectDir,
-        connectionId,
-        io,
-        deps,
-        args,
-        prompts,
-      });
-      if (setupStatus === 'back') {
-        return { status: 'back', projectDir: args.projectDir };
-      }
-      if (setupStatus === 'failed') {
+      const project = await loadKtxProject({ projectDir: args.projectDir });
+      const driver = normalizeDriver(project.config.connections[connectionId]?.driver);
+      if (!driver) {
+        writePrefixedLines((chunk) => io.stderr.write(chunk), `Connection "${connectionId}" is not configured.`);
         return { status: 'failed', projectDir: args.projectDir };
       }
-      selectedConnectionIds.push(connectionId);
+      const setupOutcome = await runDatabaseConnectionSetupWithRecovery({
+        projectDir: args.projectDir,
+        connectionId,
+        driver,
+        args,
+        prompts,
+        io,
+        deps,
+        canReturnToDriverSelection: false,
+        allowSkip: false,
+        configureExistingOnly: true,
+      });
+      if (setupOutcome === 'back') {
+        return { status: 'back', projectDir: args.projectDir };
+      }
+      if (setupOutcome === 'failed') {
+        return { status: 'failed', projectDir: args.projectDir };
+      }
+      if (setupOutcome === 'ready') {
+        selectedConnectionIds.push(connectionId);
+      }
     }
     await markDatabasesComplete(args.projectDir, selectedConnectionIds);
     return { status: 'ready', projectDir: args.projectDir, connectionIds: selectedConnectionIds };
@@ -2036,7 +2159,6 @@ export async function runKtxSetupDatabasesStep(
         return { status: 'missing-input', projectDir: args.projectDir };
       }
 
-      let connectionAlreadyValidated = false;
       if (connectionChoice.kind === 'edit') {
         const editResult = await runPrimarySourceFullEdit({
           projectDir: args.projectDir,
@@ -2054,173 +2176,32 @@ export async function runKtxSetupDatabasesStep(
         if (editResult === 'failed') {
           return { status: 'failed', projectDir: args.projectDir };
         }
-        connectionAlreadyValidated = true;
-      } else if (connectionChoice.kind === 'new') {
-        let connection = await buildConnectionConfig({
-          driver,
+      } else {
+        const setupOutcome = await runDatabaseConnectionSetupWithRecovery({
+          projectDir: args.projectDir,
           connectionId: connectionChoice.connectionId,
+          driver,
           args,
           prompts,
-        });
-        if (connection === 'back') {
-          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-          returnToDriverSelection = true;
-          break;
-        }
-        while (!connection && args.inputMode !== 'disabled') {
-          const label = driverLabel(driver);
-          const action = await prompts.select(missingConnectionDetailsPrompt(label, canReturnToDriverSelection));
-          if (action === 'back') {
-            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-            returnToDriverSelection = true;
-            break;
-          }
-          connection = await buildConnectionConfig({
-            driver,
-            connectionId: connectionChoice.connectionId,
-            args,
-            prompts,
-          });
-          if (connection === 'back') {
-            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-            returnToDriverSelection = true;
-            break;
-          }
-        }
-        if (returnToDriverSelection) {
-          break;
-        }
-        if (connection === 'back') {
-          break;
-        }
-        if (!connection) {
-          io.stderr.write(`Missing connection details for ${driverLabel(driver)}.\n`);
-          return { status: 'missing-input', projectDir: args.projectDir };
-        }
-        const withHistoricSql = await maybeApplyHistoricSqlConfig({ connection, driver, args, prompts });
-        if (withHistoricSql === 'back') {
-          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-          returnToDriverSelection = true;
-          break;
-        }
-        await writeConnectionConfig({
-          projectDir: args.projectDir,
-          connectionId: connectionChoice.connectionId,
-          connection: withHistoricSql,
           io,
+          deps,
+          canReturnToDriverSelection,
+          allowSkip: true,
+          configureExistingOnly: connectionChoice.kind === 'existing',
         });
-      } else {
-        const existing = project.config.connections[connectionChoice.connectionId];
-        const withHistoricSql = await maybeApplyHistoricSqlConfig({ connection: existing, driver, args, prompts });
-        if (withHistoricSql === 'back') {
+        if (setupOutcome === 'back') {
           if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
           returnToDriverSelection = true;
           break;
         }
-        await writeConnectionConfig({
-          projectDir: args.projectDir,
-          connectionId: connectionChoice.connectionId,
-          connection: withHistoricSql,
-          io,
-        });
-      }
-
-      let connectionSkipped = false;
-      let setupStatus: ConnectionSetupStatus = connectionAlreadyValidated
-        ? 'ready'
-        : await validateAndScanConnection({
-            projectDir: args.projectDir,
-            connectionId: connectionChoice.connectionId,
-            io,
-            deps,
-            args,
-            prompts,
-          });
-      while (!connectionAlreadyValidated && setupStatus !== 'ready') {
-        if (setupStatus === 'back') {
-          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-          returnToDriverSelection = true;
-          break;
+        if (setupOutcome === 'failed') {
+          return { status: 'failed', projectDir: args.projectDir };
         }
-        if (args.inputMode === 'disabled') return { status: 'failed', projectDir: args.projectDir };
-        const failureOptions = [
-          { value: 'retry', label: 'Retry connection test' },
-          { value: 're-enter', label: 'Re-enter connection details' },
-          ...(setupStatus === 'failed-query-history-unavailable'
-            ? [{ value: 'disable-query-history', label: 'Disable query history and retry' }]
-            : []),
-          { value: 'skip', label: 'Skip this database' },
-          { value: 'back', label: 'Back' },
-        ];
-        const action = await prompts.select({
-          message: `Database setup failed for ${connectionChoice.connectionId}`,
-          options: failureOptions,
-        });
-        if (action === 'back') {
-          if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-          returnToDriverSelection = true;
-          break;
-        }
-        if (action === 'skip') {
-          connectionSkipped = true;
-          break;
-        }
-        if (action === 'retry') {
-          setupStatus = await validateAndScanConnection({
-            projectDir: args.projectDir,
-            connectionId: connectionChoice.connectionId,
-            io,
-            deps,
-            args,
-            prompts,
-          });
-        } else if (action === 'disable-query-history') {
-          await disableConnectionQueryHistory(args.projectDir, connectionChoice.connectionId);
-          setupStatus = await validateAndScanConnection({
-            projectDir: args.projectDir,
-            connectionId: connectionChoice.connectionId,
-            io,
-            deps,
-            args,
-            prompts,
-          });
-        } else if (action === 're-enter') {
-          const connection = await buildConnectionConfig({
-            driver,
-            connectionId: connectionChoice.connectionId,
-            args,
-            prompts,
-          });
-          if (connection === 'back') {
-            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-            returnToDriverSelection = true;
-            break;
-          }
-          if (!connection) continue;
-          const withHistoricSql = await maybeApplyHistoricSqlConfig({ connection, driver, args, prompts });
-          if (withHistoricSql === 'back') {
-            if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
-            returnToDriverSelection = true;
-            break;
-          }
-          await writeConnectionConfig({
-            projectDir: args.projectDir,
-            connectionId: connectionChoice.connectionId,
-            connection: withHistoricSql,
-            io,
-          });
-          setupStatus = await validateAndScanConnection({
-            projectDir: args.projectDir,
-            connectionId: connectionChoice.connectionId,
-            io,
-            deps,
-            args,
-            prompts,
-          });
+        if (setupOutcome === 'skip') {
+          continue;
         }
       }
       if (returnToDriverSelection) break;
-      if (connectionSkipped) continue;
 
       pushUniqueConnectionId(selectedConnectionIds, connectionChoice.connectionId);
     }

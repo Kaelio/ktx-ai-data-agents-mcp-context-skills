@@ -1261,11 +1261,16 @@ describe('setup databases step', () => {
     const prompts = makePromptAdapter({
       textValues: ['env:DATABASE_URL'],
     });
+    let primaryMenuCount = 0;
     vi.mocked(prompts.select).mockImplementation(async (options) => {
-      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') return 'edit';
+      if (options.message === 'Databases configured: warehouse\nWhat would you like to do?') {
+        primaryMenuCount += 1;
+        return primaryMenuCount === 1 ? 'edit' : 'continue';
+      }
       if (options.message === 'Database to edit') return 'warehouse';
       if (options.message === 'How do you want to connect to PostgreSQL?') return 'url';
       if (options.message.startsWith('Enable query-history ingest')) return 'no';
+      if (options.message === 'Connection setup failed for warehouse') return 'back';
       return 'back';
     });
     const listTables = vi.fn(async () => [
@@ -1286,10 +1291,157 @@ describe('setup databases step', () => {
       },
     );
 
-    expect(result).toEqual({ status: 'failed', projectDir: tempDir });
+    expect(result).toEqual({ status: 'ready', projectDir: tempDir, connectionIds: ['warehouse'] });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
       enabled_tables: ['public.orders'],
+    });
+  });
+
+  it('recovers from an interactive database edit failure by re-entering details', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  analytics:',
+        '    driver: postgres',
+        '    url: env:OLD_DATABASE_URL',
+        'setup:',
+        '  database_connection_ids:',
+        '    - analytics',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['edit', 'analytics', 'url', 'no', 're-enter', 'url', 'no', 'continue'],
+      textValues: ['env:BAD_DATABASE_URL', 'env:FIXED_DATABASE_URL'],
+    });
+    let attempts = 0;
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => {
+          attempts += 1;
+          return attempts === 1 ? 1 : 0;
+        }),
+        scanConnection: vi.fn(async () => 0),
+        listSchemas: vi.fn(async () => ['public']),
+        listTables: vi.fn(async () => [{ catalog: null, schema: 'public', name: 'orders', kind: 'table' as const }]),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(vi.mocked(prompts.select)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Connection setup failed for analytics',
+        options: expect.arrayContaining([
+          { value: 'retry', label: 'Retry connection test' },
+          { value: 're-enter', label: 'Re-enter connection details' },
+          { value: 'back', label: 'Back' },
+        ]),
+      }),
+    );
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.analytics).toMatchObject({
+      driver: 'postgres',
+      url: 'env:FIXED_DATABASE_URL',
+    });
+  });
+
+  it('restores the previous database config when backing out of a failed edit', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  analytics:',
+        '    driver: postgres',
+        '    url: env:OLD_DATABASE_URL',
+        'setup:',
+        '  database_connection_ids:',
+        '    - analytics',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const prompts = makePromptAdapter({
+      selectValues: ['edit', 'analytics', 'url', 'no', 'back', 'continue'],
+      textValues: ['env:BAD_DATABASE_URL'],
+    });
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'auto',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        prompts,
+        testConnection: vi.fn(async () => 1),
+        scanConnection: vi.fn(async () => 0),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.analytics).toMatchObject({
+      driver: 'postgres',
+      url: 'env:OLD_DATABASE_URL',
+    });
+  });
+
+  it('keeps scripted database setup fail-fast without rolling back attempted config', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  analytics:',
+        '    driver: postgres',
+        '    url: env:OLD_DATABASE_URL',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseConnectionIds: ['analytics'],
+        databaseSchemas: [],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 1),
+        scanConnection: vi.fn(async () => 0),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections.analytics).toMatchObject({
+      driver: 'postgres',
+      url: 'env:OLD_DATABASE_URL',
+      context: {
+        queryHistory: {
+          enabled: true,
+        },
+      },
     });
   });
 
@@ -2517,7 +2669,7 @@ describe('setup databases step', () => {
     vi.mocked(prompts.select).mockImplementation(async ({ message, options }) => {
       if (message.startsWith('Enable query-history ingest')) return 'yes';
       if (message.includes('How much database context should KTX build?')) return 'fast';
-      if (message.startsWith('Database setup failed for analytics')) {
+      if (message.startsWith('Connection setup failed for analytics')) {
         failurePromptCount += 1;
         failurePromptOptions.push(options);
         if (failurePromptCount === 1) return 'disable-query-history';
