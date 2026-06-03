@@ -34,6 +34,36 @@ describe('local ingest adapters', () => {
     };
   }
 
+  async function seedLiveScanTable(
+    projectDir: string,
+    connectionId: string,
+    table: { catalog: string | null; db: string | null; name: string },
+  ): Promise<void> {
+    const rawRoot = join(projectDir, 'raw-sources', connectionId, 'live-database', 'sync-1');
+    await mkdir(join(rawRoot, 'tables'), { recursive: true });
+    await writeFile(
+      join(rawRoot, 'connection.json'),
+      `${JSON.stringify({ connectionId, driver: 'postgres' }, null, 2)}\n`,
+      'utf-8',
+    );
+    await writeFile(
+      join(rawRoot, 'tables', `${table.db ?? 'default'}-${table.name}.json`),
+      `${JSON.stringify(
+        {
+          ...table,
+          kind: 'table',
+          comment: null,
+          estimatedRows: null,
+          columns: [],
+          foreignKeys: [],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    );
+  }
+
   it('registers Metabase locally as a staged-bundle adapter', () => {
     const adapters = createDefaultLocalIngestAdapters(project);
 
@@ -212,6 +242,7 @@ describe('local ingest adapters', () => {
         dropTrivialProbes: true,
       },
       redactionPatterns: [],
+      scopeFloorWarnings: [],
       staleArchiveAfterDays: 90,
     });
   });
@@ -254,6 +285,11 @@ describe('local ingest adapters', () => {
       ].join('\n'),
       'utf-8',
     );
+    await seedLiveScanTable(project.projectDir, 'warehouse', {
+      catalog: null,
+      db: 'orbit_raw',
+      name: 'accounts',
+    });
     const projectWithQueryHistory = projectWithConnections({
       warehouse: {
         driver: 'postgres',
@@ -273,8 +309,30 @@ describe('local ingest adapters', () => {
       dialect: 'postgres',
       minExecutions: 7,
       enabledSchemas: ['orbit_analytics', 'orbit_raw'],
-      modeledTableCatalog: [{ catalog: null, db: 'orbit_analytics', name: 'mart_revenue' }],
+      modeledTableCatalog: [
+        { catalog: null, db: 'orbit_analytics', name: 'mart_revenue' },
+        { catalog: null, db: 'orbit_raw', name: 'accounts' },
+      ],
     });
+  });
+
+  it('passes query-history scope fail-open warnings to direct historic-sql pull config', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-local-qh-scope-warning-'));
+    const project = await initKtxProject({ projectDir });
+    project.config.connections.warehouse = {
+      driver: 'postgres',
+      schemas: ['orbit_raw'],
+      context: { queryHistory: { enabled: true } },
+    } as never;
+    const adapter = { source: 'historic-sql' } as never;
+
+    await expect(localPullConfigForAdapter(project, adapter, 'warehouse')).resolves.toMatchObject({
+      dialect: 'postgres',
+      enabledSchemas: ['*'],
+      scopeFloorWarnings: ['query_history_scope_floor_disabled:catalog_unavailable'],
+    });
+
+    await rm(projectDir, { recursive: true, force: true });
   });
 
   it('rejects local historic-sql pulls when the connection has not enabled historic SQL', async () => {

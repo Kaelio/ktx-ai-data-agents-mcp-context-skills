@@ -202,6 +202,7 @@ async function queryHistoryPullConfig(
     dialect: _dialect,
     enabledTables: _enabledTables,
     enabledSchemas: _enabledSchemas,
+    scopeFloorWarnings: _scopeFloorWarnings,
     ...stored
   } = queryHistory;
   return {
@@ -210,6 +211,7 @@ async function queryHistoryPullConfig(
     ...(scopeFloor.enabledTables.length > 0 ? { enabledTables: scopeFloor.enabledTables } : {}),
     ...(scopeFloor.enabledSchemas.length > 0 ? { enabledSchemas: scopeFloor.enabledSchemas } : {}),
     ...(scopeFloor.modeledTableCatalog.length > 0 ? { modeledTableCatalog: scopeFloor.modeledTableCatalog } : {}),
+    ...(scopeFloor.warnings.length > 0 ? { scopeFloorWarnings: scopeFloor.warnings } : {}),
   };
 }
 

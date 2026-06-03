@@ -290,12 +290,14 @@ function queryHistoryPullConfig(input: {
   enabledTables?: KtxTableRef[];
   enabledSchemas?: string[];
   modeledTableCatalog?: KtxTableRef[];
+  scopeFloorWarnings?: string[];
 }): Record<string, unknown> {
   const {
     enabled: _enabled,
     dialect: _dialect,
     enabledTables: _enabledTables,
     enabledSchemas: _enabledSchemas,
+    scopeFloorWarnings: _scopeFloorWarnings,
     ...storedConfig
   } = input.stored;
   return {
@@ -305,6 +307,9 @@ function queryHistoryPullConfig(input: {
     ...(input.enabledSchemas && input.enabledSchemas.length > 0 ? { enabledSchemas: input.enabledSchemas } : {}),
     ...(input.modeledTableCatalog && input.modeledTableCatalog.length > 0
       ? { modeledTableCatalog: input.modeledTableCatalog }
+      : {}),
+    ...(input.scopeFloorWarnings && input.scopeFloorWarnings.length > 0
+      ? { scopeFloorWarnings: input.scopeFloorWarnings }
       : {}),
     ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
   };
@@ -378,41 +383,41 @@ function resolveDatabaseTargetOptions(input: {
   };
 }
 
-async function withResolvedQueryHistoryScopeFloor(
-  plan: KtxPublicIngestPlan,
+async function resolvedQueryHistoryPullConfigForTarget(
+  target: KtxPublicIngestPlanTarget,
   project: KtxPublicIngestProject,
-): Promise<KtxPublicIngestPlan> {
-  const targets = await Promise.all(
-    plan.targets.map(async (target) => {
-      if (target.operation !== 'database-ingest' || target.queryHistory?.enabled !== true || !target.queryHistory.dialect) {
-        return target;
-      }
-      const connection = project.config.connections[target.connectionId];
-      if (!connection) return target;
-      const scopeFloor = await resolveQueryHistoryScopeFloor({
-        projectDir: project.projectDir,
-        connectionId: target.connectionId,
-        driver: target.driver,
-        connection: connection as Record<string, unknown>,
-        storedQueryHistory: storedQueryHistory(connection),
-      });
-      return {
-        ...target,
-        queryHistory: {
-          ...target.queryHistory,
-          pullConfig: queryHistoryPullConfig({
-            stored: storedQueryHistory(connection),
-            dialect: target.queryHistory.dialect,
-            windowDays: target.queryHistory.windowDays,
-            enabledTables: scopeFloor.enabledTables,
-            enabledSchemas: scopeFloor.enabledSchemas,
-            modeledTableCatalog: scopeFloor.modeledTableCatalog,
-          }),
-        },
-      };
-    }),
-  );
-  return { ...plan, targets };
+): Promise<Record<string, unknown> | null> {
+  if (target.operation !== 'database-ingest' || target.queryHistory?.enabled !== true || !target.queryHistory.dialect) {
+    return null;
+  }
+  const connection = project.config.connections[target.connectionId];
+  if (!connection) {
+    return (
+      target.queryHistory.pullConfig ??
+      queryHistoryPullConfig({
+        stored: {},
+        dialect: target.queryHistory.dialect,
+        windowDays: target.queryHistory.windowDays,
+      })
+    );
+  }
+  const stored = storedQueryHistory(connection);
+  const scopeFloor = await resolveQueryHistoryScopeFloor({
+    projectDir: project.projectDir,
+    connectionId: target.connectionId,
+    driver: target.driver,
+    connection: connection as Record<string, unknown>,
+    storedQueryHistory: stored,
+  });
+  return queryHistoryPullConfig({
+    stored,
+    dialect: target.queryHistory.dialect,
+    windowDays: target.queryHistory.windowDays,
+    enabledTables: scopeFloor.enabledTables,
+    enabledSchemas: scopeFloor.enabledSchemas,
+    modeledTableCatalog: scopeFloor.modeledTableCatalog,
+    scopeFloorWarnings: scopeFloor.warnings,
+  });
 }
 
 function enrichmentReadinessGaps(config: KtxProjectConfig): string[] {
@@ -918,7 +923,7 @@ export async function executePublicIngestTarget(
   project: KtxPublicIngestProject,
 ): Promise<KtxPublicIngestTargetResult> {
   const startedAt = performance.now();
-  const result = await runIngestTargetSteps(target, args, io, deps);
+  const result = await runIngestTargetSteps(target, args, io, deps, project);
   // `io` may be a capture buffer for the scan/ingest step output; the telemetry
   // debug echo belongs on the real user-facing stream, which callers expose as
   // `deps.runtimeIo` (falling back to `io` when the step io is already real).
@@ -931,6 +936,7 @@ async function runIngestTargetSteps(
   args: Extract<KtxPublicIngestArgs, { command: 'run' }>,
   io: KtxCliIo,
   deps: KtxPublicIngestDeps,
+  project: KtxPublicIngestProject,
 ): Promise<KtxPublicIngestTargetResult> {
   if (target.preflightFailure) {
     if (target.operation === 'database-ingest') {
@@ -1000,6 +1006,11 @@ async function runIngestTargetSteps(
     if (target.queryHistory?.enabled === true) {
       const { runKtxIngest } = await import('./ingest.js');
       const runIngest = deps.runIngest ?? runKtxIngest;
+      const historicSqlPullConfigOverride =
+        (await resolvedQueryHistoryPullConfigForTarget(target, project)) ?? {
+          dialect: target.queryHistory.dialect,
+          ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
+        };
       const ingestArgs: KtxIngestArgs = {
         command: 'run',
         projectDir: args.projectDir,
@@ -1010,11 +1021,7 @@ async function runIngestTargetSteps(
         ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
         ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
         allowImplicitAdapter: true,
-        historicSqlPullConfigOverride:
-          target.queryHistory.pullConfig ?? {
-            dialect: target.queryHistory.dialect,
-            ...(target.queryHistory.windowDays !== undefined ? { windowDays: target.queryHistory.windowDays } : {}),
-          },
+        historicSqlPullConfigOverride,
       };
       // Query history runs after the schema scan has already written its report
       // into the shared target io, so it needs a phase-local capture. Reusing
@@ -1096,7 +1103,7 @@ export async function runKtxPublicIngest(
     deps.loadProject ?? ((options: { projectDir: string }) => loadKtxProject({ projectDir: options.projectDir }));
   const project = await loadProject({ projectDir: args.projectDir });
   if (shouldUseForegroundContextBuildView(args, io)) {
-    const plan = await withResolvedQueryHistoryScopeFloor(buildPublicIngestPlan(project, args), project);
+    const plan = buildPublicIngestPlan(project, args);
     const requirements = resolvePublicIngestRuntimeRequirements(plan, {
       config: project.config,
       env: deps.env ?? process.env,
@@ -1137,7 +1144,7 @@ export async function runKtxPublicIngest(
     return result.exitCode;
   }
 
-  const plan = await withResolvedQueryHistoryScopeFloor(buildPublicIngestPlan(project, args), project);
+  const plan = buildPublicIngestPlan(project, args);
   const results: KtxPublicIngestTargetResult[] = [];
 
   if (!args.json) {

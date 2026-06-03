@@ -1,10 +1,11 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import YAML from 'yaml';
 import { getDriverRegistration } from '../../../connections/drivers.js';
 import { parseDottedTableEntry } from '../../../scan/enabled-tables.js';
 import { tableRefKey, tableRefSet, type KtxTableRefKey } from '../../../scan/table-ref.js';
 import type { KtxTableRef } from '../../../scan/types.js';
+import { readLiveDatabaseTableFiles } from '../live-database/stage.js';
 
 export interface QueryHistoryScopeFloorInput {
   projectDir: string;
@@ -61,6 +62,70 @@ function declaredSchemas(driver: string, connection: Record<string, unknown>): s
   return [...new Set(stringArray(connection[key]))].sort();
 }
 
+function uniqueSortedTableRefs(refs: readonly KtxTableRef[]): KtxTableRef[] {
+  const byKey = new Map<KtxTableRefKey, KtxTableRef>();
+  for (const ref of refs) {
+    byKey.set(tableRefKey(ref), ref);
+  }
+  return [...byKey.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, ref]) => ref);
+}
+
+async function latestLiveDatabaseScanDir(projectDir: string, connectionId: string): Promise<string | null> {
+  const root = join(projectDir, 'raw-sources', connectionId, 'live-database');
+  let entries: Awaited<ReturnType<typeof readdir>>;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+  const syncDirs = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+  for (const syncDir of syncDirs) {
+    const absolute = join(root, syncDir);
+    try {
+      await access(join(absolute, 'connection.json'));
+      return absolute;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function scannedTableRefs(
+  projectDir: string,
+  connectionId: string,
+): Promise<{ refs: KtxTableRef[]; catalogAvailable: boolean; warnings: string[] }> {
+  const scanDir = await latestLiveDatabaseScanDir(projectDir, connectionId);
+  if (!scanDir) {
+    return { refs: [], catalogAvailable: false, warnings: [] };
+  }
+  try {
+    const tableFiles = await readLiveDatabaseTableFiles(scanDir);
+    return {
+      refs: uniqueSortedTableRefs(
+        tableFiles.map(({ table }) => ({ catalog: table.catalog, db: table.db, name: table.name })),
+      ),
+      catalogAvailable: true,
+      warnings: [],
+    };
+  } catch (error) {
+    return {
+      refs: [],
+      catalogAvailable: false,
+      warnings: [
+        `query_history_scope_floor_catalog_read_failed:live_database_scan:${error instanceof Error ? error.message : String(error)}`,
+      ],
+    };
+  }
+}
+
 async function listYamlFiles(root: string): Promise<string[]> {
   try {
     const entries = await readdir(root, { withFileTypes: true, recursive: true });
@@ -91,7 +156,7 @@ function refsFromStandaloneSource(content: string): KtxTableRef[] {
   return ref ? [ref] : [];
 }
 
-async function modeledTableRefs(
+async function semanticTableRefs(
   projectDir: string,
   connectionId: string,
 ): Promise<{ refs: KtxTableRef[]; warnings: string[] }> {
@@ -109,15 +174,7 @@ async function modeledTableRefs(
       );
     }
   }
-  const seen = new Set<KtxTableRefKey>();
-  const unique: KtxTableRef[] = [];
-  for (const ref of refs) {
-    const key = tableRefKey(ref);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(ref);
-  }
-  return { refs: unique, warnings };
+  return { refs: uniqueSortedTableRefs(refs), warnings };
 }
 
 export async function resolveQueryHistoryScopeFloor(input: QueryHistoryScopeFloorInput): Promise<QueryHistoryScopeFloor> {
@@ -125,7 +182,15 @@ export async function resolveQueryHistoryScopeFloor(input: QueryHistoryScopeFloo
     ...tableRefsFromValues(input.storedQueryHistory.enabledTables),
     ...tableRefsFromValues(input.connection.enabled_tables),
   ];
-  const { refs: modeledTables, warnings } = await modeledTableRefs(input.projectDir, input.connectionId);
+  const semanticTables = await semanticTableRefs(input.projectDir, input.connectionId);
+  const scannedTables = await scannedTableRefs(input.projectDir, input.connectionId);
+  const modeledTables = uniqueSortedTableRefs([
+    ...semanticTables.refs,
+    ...scannedTables.refs,
+    ...explicitEnabledTables,
+  ]);
+  const warnings = [...semanticTables.warnings, ...scannedTables.warnings];
+
   if (explicitEnabledTables.length > 0) {
     return {
       enabledTables: explicitEnabledTables,
@@ -149,6 +214,16 @@ export async function resolveQueryHistoryScopeFloor(input: QueryHistoryScopeFloo
     };
   }
   if (explicitSchemas.length > 0) {
+    if (!scannedTables.catalogAvailable || modeledTables.length === 0) {
+      return {
+        enabledTables: [],
+        enabledTableKeys: null,
+        enabledSchemas: ['*'],
+        modeledTableCatalog: modeledTables,
+        floorDisabled: true,
+        warnings: [...warnings, 'query_history_scope_floor_disabled:catalog_unavailable'],
+      };
+    }
     return {
       enabledTables: [],
       enabledTableKeys: null,
@@ -160,8 +235,18 @@ export async function resolveQueryHistoryScopeFloor(input: QueryHistoryScopeFloo
   }
 
   const schemas = new Set(declaredSchemas(input.driver, input.connection));
-  for (const ref of modeledTables) {
+  for (const ref of semanticTables.refs) {
     if (ref.db) schemas.add(ref.db);
+  }
+  if (schemas.size > 0 && (!scannedTables.catalogAvailable || modeledTables.length === 0)) {
+    return {
+      enabledTables: [],
+      enabledTableKeys: null,
+      enabledSchemas: ['*'],
+      modeledTableCatalog: modeledTables,
+      floorDisabled: true,
+      warnings: [...warnings, 'query_history_scope_floor_disabled:catalog_unavailable'],
+    };
   }
   return {
     enabledTables: [],

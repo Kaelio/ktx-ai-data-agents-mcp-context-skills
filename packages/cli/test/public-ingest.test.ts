@@ -674,23 +674,9 @@ describe('runKtxPublicIngest', () => {
     expect(ingestArgs?.historicSqlPullConfigOverride).not.toHaveProperty('enabled');
   });
 
-  it('passes computed modeled schemas and table catalog to query-history ingest', async () => {
+  it('resolves query-history scope after the schema scan writes artifacts', async () => {
     const io = makeIo();
     const projectDir = await mkdtemp(join(tmpdir(), 'ktx-public-qh-scope-'));
-    await mkdir(join(projectDir, 'semantic-layer/warehouse'), { recursive: true });
-    await writeFile(
-      join(projectDir, 'semantic-layer/warehouse/revenue.yaml'),
-      [
-        'name: revenue',
-        'table: orbit_analytics.mart_revenue',
-        'grain: [id]',
-        'columns:',
-        '  - name: id',
-        '    type: string',
-        '',
-      ].join('\n'),
-      'utf-8',
-    );
     const project = deepReadyProject({
       warehouse: {
         driver: 'postgres',
@@ -698,7 +684,85 @@ describe('runKtxPublicIngest', () => {
         context: { queryHistory: { enabled: true } },
       },
     });
-    const runScan = vi.fn(async () => 0);
+    const runScan = vi.fn(async () => {
+      await mkdir(join(projectDir, 'semantic-layer/warehouse'), { recursive: true });
+      await writeFile(
+        join(projectDir, 'semantic-layer/warehouse/revenue.yaml'),
+        [
+          'name: revenue',
+          'table: orbit_analytics.mart_revenue',
+          'grain: [id]',
+          'columns:',
+          '  - name: id',
+          '    type: string',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      const rawRoot = join(projectDir, 'raw-sources/warehouse/live-database/sync-1');
+      await mkdir(join(rawRoot, 'tables'), { recursive: true });
+      await writeFile(
+        join(rawRoot, 'connection.json'),
+        `${JSON.stringify({ connectionId: 'warehouse', driver: 'postgres' }, null, 2)}\n`,
+        'utf-8',
+      );
+      await writeFile(
+        join(rawRoot, 'tables/accounts.json'),
+        `${JSON.stringify(
+          {
+            catalog: null,
+            db: 'orbit_raw',
+            name: 'accounts',
+            kind: 'table',
+            comment: null,
+            estimatedRows: null,
+            columns: [
+              {
+                name: 'id',
+                nativeType: 'integer',
+                normalizedType: 'integer',
+                dimensionType: 'number',
+                nullable: false,
+                primaryKey: true,
+                comment: null,
+              },
+            ],
+            foreignKeys: [],
+          },
+          null,
+          2,
+        )}\n`,
+        'utf-8',
+      );
+      await writeFile(
+        join(rawRoot, 'scan-report.json'),
+        `${JSON.stringify(
+          {
+            connectionId: 'warehouse',
+            driver: 'postgres',
+            syncId: 'sync-1',
+            runId: 'scan-sync-1',
+            trigger: 'cli',
+            mode: 'enriched',
+            dryRun: false,
+            artifactPaths: {
+              rawSourcesDir: 'raw-sources/warehouse/live-database/sync-1',
+              reportPath: 'raw-sources/warehouse/live-database/sync-1/scan-report.json',
+              manifestShards: [],
+              enrichmentArtifacts: [],
+            },
+            counts: {},
+            warnings: [],
+            enrichment: {},
+            enrichmentState: {},
+          },
+          null,
+          2,
+        )}\n`,
+        'utf-8',
+      );
+      return 0;
+    });
     const runIngest = vi.fn<NonNullable<KtxPublicIngestDeps['runIngest']>>(async () => 0);
 
     await expect(
@@ -723,8 +787,13 @@ describe('runKtxPublicIngest', () => {
     expect(ingestArgs?.historicSqlPullConfigOverride).toMatchObject({
       dialect: 'postgres',
       enabledSchemas: ['orbit_analytics', 'orbit_raw'],
-      modeledTableCatalog: [{ catalog: null, db: 'orbit_analytics', name: 'mart_revenue' }],
+      modeledTableCatalog: [
+        { catalog: null, db: 'orbit_analytics', name: 'mart_revenue' },
+        { catalog: null, db: 'orbit_raw', name: 'accounts' },
+      ],
     });
+
+    await rm(projectDir, { recursive: true, force: true });
   });
 
   it('prints the schema-first notice for explicit query-history runs', async () => {

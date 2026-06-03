@@ -23,6 +23,7 @@ const historicSqlCommonPullConfigSchema = z.object({
   enabledTables: z.array(ktxTableRefSchema).default([]),
   enabledSchemas: z.array(z.string().min(1)).default([]),
   modeledTableCatalog: z.array(ktxTableRefWithColumnsSchema).default([]),
+  scopeFloorWarnings: z.array(z.string()).default([]),
   filters: z.object({
     serviceAccounts: z.object({
       patterns: z.array(z.string()).default([]),
