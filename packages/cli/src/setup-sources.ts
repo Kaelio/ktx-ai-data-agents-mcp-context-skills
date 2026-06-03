@@ -20,6 +20,12 @@ import type { KtxCliIo } from './cli-runtime.js';
 import { errorMessage, writePrefixedLines } from './clack.js';
 import { pickNotionRootPages } from './notion-page-picker.js';
 import { runKtxSourceMapping } from './source-mapping.js';
+import {
+  runConnectionSetupWithRecovery,
+  type ConfigureResult,
+  type RecoveryOutcome,
+  type ValidateResult,
+} from './connection-recovery.js';
 import { withMultiselectNavigation, withTextInputNavigation } from './prompt-navigation.js';
 import { runKtxPublicIngest } from './public-ingest.js';
 import { writeProjectLocalSecretReference } from './setup-secrets.js';
@@ -866,8 +872,7 @@ type InteractiveSourceConnectionChoice =
 
 type SourceSetupChoiceResult =
   | { status: 'ready'; connectionId: string }
-  | { status: 'back' }
-  | { status: 'failed' };
+  | { status: Exclude<RecoveryOutcome, 'ready'> };
 
 async function runSourcePromptSteps(
   initialState: SourcePromptState,
@@ -1758,6 +1763,58 @@ async function validateSource(
   return await (deps.validateNotion ?? defaultValidateNotion)(args.connection);
 }
 
+async function createSourceSetupRollback(projectDir: string): Promise<() => Promise<void>> {
+  const project = await loadKtxProject({ projectDir });
+  const previousConfig = project.config;
+  const configPath = project.configPath;
+  return async () => {
+    await writeFile(configPath, serializeKtxProjectConfig(previousConfig), 'utf-8');
+  };
+}
+
+function sourceConnectionId(input: {
+  source: KtxSetupSourceType;
+  sourceChoice: Exclude<InteractiveSourceConnectionChoice, 'back'>;
+}): string {
+  return input.sourceChoice.kind === 'existing' || input.sourceChoice.kind === 'edited'
+    ? input.sourceChoice.connectionId
+    : (input.sourceChoice.args.sourceConnectionId ?? `${input.source}-main`);
+}
+
+async function validateSourceConnectionAndMapping(input: {
+  args: KtxSetupSourcesArgs;
+  source: KtxSetupSourceType;
+  connectionId: string;
+  connection: KtxProjectConnectionConfig;
+  prompts: KtxSetupSourcesPromptAdapter;
+  io: KtxCliIo;
+  deps: KtxSetupSourcesDeps;
+}): Promise<ValidateResult> {
+  const validation = await validateSource(
+    input.source,
+    { projectDir: input.args.projectDir, connectionId: input.connectionId, connection: input.connection },
+    input.deps,
+  );
+  if (!validation.ok) {
+    input.io.stderr.write(`${validation.message}\n`);
+    return { status: 'failed' };
+  }
+
+  if (input.source === 'metabase' || input.source === 'looker') {
+    input.prompts.log?.(`Validating ${sourceLabel(input.source)} mapping...`);
+    const mappingCode = await (input.deps.runMapping ?? defaultRunMapping)(
+      input.args.projectDir,
+      input.connectionId,
+      createSetupPrefixedIo(input.io),
+    );
+    if (mappingCode !== 0) {
+      return { status: 'failed' };
+    }
+  }
+
+  return { status: 'ok' };
+}
+
 async function saveValidateAndMaybeBuildSource(input: {
   args: KtxSetupSourcesArgs;
   source: KtxSetupSourceType;
@@ -1766,76 +1823,121 @@ async function saveValidateAndMaybeBuildSource(input: {
   io: KtxCliIo;
   deps: KtxSetupSourcesDeps;
 }): Promise<SourceSetupChoiceResult> {
-  const connectionId =
-    input.sourceChoice.kind === 'existing'
-      ? input.sourceChoice.connectionId
-      : input.sourceChoice.kind === 'edited'
-        ? input.sourceChoice.connectionId
-        : (input.sourceChoice.args.sourceConnectionId ?? `${input.source}-main`);
-  const connection =
-    input.sourceChoice.kind === 'existing'
-      ? input.sourceChoice.connection
-      : buildConnection(input.source, input.sourceChoice.args);
-  const rollback =
-    input.sourceChoice.kind === 'existing'
-      ? undefined
-      : await writeSourceConnection(
-          input.args.projectDir,
-          connectionId,
-          connection,
-          sourceAdapter(input.source),
-          input.io,
-        );
+  let latestChoice = input.sourceChoice;
+  let latestConnectionId = sourceConnectionId({ source: input.source, sourceChoice: latestChoice });
+  let latestConnection =
+    latestChoice.kind === 'existing'
+      ? latestChoice.connection
+      : buildConnection(input.source, latestChoice.args);
+  let configureCount = 0;
+  let rollbackAfterConfigure: (() => Promise<void>) | undefined;
 
-  if (input.sourceChoice.kind === 'existing') {
-    await ensureSourceAdapterEnabled(input.args.projectDir, input.source);
-  }
+  const outcome = await runConnectionSetupWithRecovery({
+    label: latestConnectionId,
+    interactive: input.args.inputMode !== 'disabled',
+    allowSkip: true,
+    io: input.io,
+    prompts: input.prompts,
+    snapshot: async () => {
+      rollbackAfterConfigure = await createSourceSetupRollback(input.args.projectDir);
+      return rollbackAfterConfigure;
+    },
+    configure: async (): Promise<ConfigureResult> => {
+      configureCount += 1;
+      if (latestChoice.kind === 'existing' && configureCount === 1) {
+        await ensureSourceAdapterEnabled(input.args.projectDir, input.source);
+        return 'configured';
+      }
 
-  const validation = await validateSource(
-    input.source,
-    { projectDir: input.args.projectDir, connectionId, connection },
-    input.deps,
-  );
-  if (!validation.ok) {
-    await rollback?.();
-    input.io.stderr.write(`${validation.message}\n`);
-    return { status: 'failed' };
-  }
+      const project = await loadKtxProject({ projectDir: input.args.projectDir });
+      const currentConnection = project.config.connections[latestConnectionId] ?? latestConnection;
+      const useAlreadyPromptedArgs = configureCount === 1 && latestChoice.kind !== 'existing';
+      const sourceArgs =
+        useAlreadyPromptedArgs && latestChoice.kind !== 'existing'
+          ? latestChoice.args
+          : input.args.inputMode === 'disabled'
+            ? sourceArgsFromExistingConnection({
+                args: input.args,
+                source: input.source,
+                connectionId: latestConnectionId,
+                connection: currentConnection,
+              })
+            : await promptForInteractiveSource(
+                sourceArgsFromExistingConnection({
+                  args: input.args,
+                  source: input.source,
+                  connectionId: latestConnectionId,
+                  connection: currentConnection,
+                }),
+                input.source,
+                input.prompts,
+                input.io,
+                {
+                  pickNotionRootPages: input.deps.pickNotionRootPages,
+                  discoverMetabaseDatabases: input.deps.discoverMetabaseDatabases,
+                },
+                latestConnectionId,
+                input.deps.testGitRepo,
+                input.deps.discoverMetabaseDatabases,
+              );
 
-  if (input.source === 'metabase' || input.source === 'looker') {
-    input.prompts.log?.(`Validating ${sourceLabel(input.source)} mapping…`);
-    const mappingCode = await (input.deps.runMapping ?? defaultRunMapping)(
-      input.args.projectDir,
-      connectionId,
-      createSetupPrefixedIo(input.io),
-    );
-    if (mappingCode !== 0) {
-      await rollback?.();
-      return { status: 'failed' };
-    }
+      if (sourceArgs === 'back') {
+        return 'back';
+      }
+
+      latestConnectionId = sourceArgs.sourceConnectionId ?? latestConnectionId;
+      latestConnection = buildConnection(input.source, sourceArgs);
+      latestChoice =
+        latestChoice.kind === 'new'
+          ? { kind: 'new', args: sourceArgs }
+          : { kind: 'edited', connectionId: latestConnectionId, args: sourceArgs };
+
+      await writeSourceConnection(
+        input.args.projectDir,
+        latestConnectionId,
+        latestConnection,
+        sourceAdapter(input.source),
+        input.io,
+      );
+      return 'configured';
+    },
+    validate: () =>
+      validateSourceConnectionAndMapping({
+        args: input.args,
+        source: input.source,
+        connectionId: latestConnectionId,
+        connection: latestConnection,
+        prompts: input.prompts,
+        io: input.io,
+        deps: input.deps,
+      }),
+  });
+
+  if (outcome !== 'ready') {
+    return { status: outcome };
   }
 
   if (input.args.runInitialSourceIngest) {
     const ingestResult = await runInitialSourceIngestWithRecovery({
       args: input.args,
-      connectionId,
+      connectionId: latestConnectionId,
       io: input.io,
       prompts: input.prompts,
       deps: input.deps,
     });
     if (ingestResult === 'failed') {
-      await rollback?.();
+      await rollbackAfterConfigure?.();
       return { status: 'failed' };
     }
     if (ingestResult === 'back') {
-      await rollback?.();
+      await rollbackAfterConfigure?.();
       return { status: 'back' };
     }
   } else {
-    input.io.stdout.write(`│  Context source ${connectionId} saved. It will be built during the context build step.\n`);
+    input.io.stdout.write(`│  Context source ${latestConnectionId} saved. It will be built during the context build step.\n`);
   }
 
-  return { status: 'ready', connectionId };
+  return { status: 'ready', connectionId: latestConnectionId };
 }
 
 export async function runKtxSetupSourcesStep(
@@ -1942,8 +2044,13 @@ export async function runKtxSetupSourcesStep(
           returnToSourceSelection = true;
           break;
         }
-        if (!readyConnectionIds.includes(choiceResult.connectionId)) {
-          readyConnectionIds.push(choiceResult.connectionId);
+        if (choiceResult.status === 'skip') {
+          continue;
+        }
+        if (choiceResult.status === 'ready') {
+          if (!readyConnectionIds.includes(choiceResult.connectionId)) {
+            readyConnectionIds.push(choiceResult.connectionId);
+          }
         }
       }
 
@@ -2005,8 +2112,13 @@ export async function runKtxSetupSourcesStep(
             if (choiceResult.status === 'back') {
               continue;
             }
-            if (!readyConnectionIds.includes(choiceResult.connectionId)) {
-              readyConnectionIds.push(choiceResult.connectionId);
+            if (choiceResult.status === 'skip') {
+              continue;
+            }
+            if (choiceResult.status === 'ready') {
+              if (!readyConnectionIds.includes(choiceResult.connectionId)) {
+                readyConnectionIds.push(choiceResult.connectionId);
+              }
             }
             continue;
           }

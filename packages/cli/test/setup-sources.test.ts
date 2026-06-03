@@ -706,7 +706,18 @@ describe('setup sources step', () => {
     );
     expect(io.stderr()).toContain('1: Metabase database does not match KTX connection database');
     expect(io.stderr()).not.toContain('Metabase mapping validation failed');
-    expect(testPrompts.log).toHaveBeenCalledWith('Edit the connection or pick a different source to continue.');
+    expect(testPrompts.log).toHaveBeenCalledWith('Validating Metabase mapping...');
+    expect(testPrompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Connection setup failed for metabase-main',
+        options: expect.arrayContaining([
+          { value: 'retry', label: 'Retry connection test' },
+          { value: 're-enter', label: 'Re-enter connection details' },
+          { value: 'skip', label: 'Skip this connection' },
+          { value: 'back', label: 'Back' },
+        ]),
+      }),
+    );
   });
 
   it('does not mark sources complete when validation fails', async () => {
@@ -961,7 +972,153 @@ describe('setup sources step', () => {
 
     expect(result.status).not.toBe('failed');
     expect(io.stderr()).toContain('Failed to clone https://github.com/acme/private-repo: Authentication failed');
-    expect(testPrompts.log).toHaveBeenCalledWith('Edit the connection or pick a different source to continue.');
+    expect(testPrompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Connection setup failed for dbt-main',
+        options: expect.arrayContaining([
+          { value: 'retry', label: 'Retry connection test' },
+          { value: 're-enter', label: 'Re-enter connection details' },
+          { value: 'skip', label: 'Skip this connection' },
+          { value: 'back', label: 'Back' },
+        ]),
+      }),
+    );
+  });
+
+  it('recovers from an existing context-source validation failure by re-entering details', async () => {
+    await addPrimarySource();
+    await addConnection('dbt-main', {
+      driver: 'dbt',
+      source_dir: '/repo/bad-dbt',
+      project_name: 'analytics',
+    });
+    let attempts = 0;
+    const validateDbt = vi.fn(async () => {
+      attempts += 1;
+      return attempts === 1
+        ? { ok: false as const, message: 'dbt project not found' }
+        : { ok: true as const, detail: 'project=analytics' };
+    });
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['existing:dbt-main', 're-enter', 'path', 'done'],
+      text: ['/repo/fixed-dbt', ''],
+    });
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+      io.io,
+      { prompts: testPrompts, validateDbt },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(validateDbt).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(testPrompts.select)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Connection setup failed for dbt-main',
+        options: expect.arrayContaining([
+          { value: 'retry', label: 'Retry connection test' },
+          { value: 're-enter', label: 'Re-enter connection details' },
+          { value: 'skip', label: 'Skip this connection' },
+          { value: 'back', label: 'Back' },
+        ]),
+      }),
+    );
+    expect((await readConfig()).connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: '/repo/fixed-dbt',
+    });
+  });
+
+  it('restores a context-source edit and adapter enablement when recovery goes back', async () => {
+    await addPrimarySource();
+    await addConnection('dbt-main', {
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    const testPrompts = prompts({
+      multiselect: [['dbt']],
+      select: ['edit:dbt-main', 'path', 'back'],
+      text: ['/repo/bad-dbt', ''],
+    });
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+      io.io,
+      {
+        prompts: testPrompts,
+        validateDbt: vi.fn(async () => ({ ok: false as const, message: 'dbt project not found' })),
+      },
+    );
+
+    expect(result.status).toBe('skipped');
+    const config = await readConfig();
+    expect(config.connections['dbt-main']).toMatchObject({
+      driver: 'dbt',
+      source_dir: '/repo/existing-dbt',
+      project_name: 'analytics',
+    });
+    expect(config.ingest.adapters).not.toContain('dbt');
+  });
+
+  it('lets Metabase mapping failure retry through source recovery', async () => {
+    await addPrimarySource();
+    let mappingAttempts = 0;
+    const runMapping = vi.fn(async () => {
+      mappingAttempts += 1;
+      return mappingAttempts === 1 ? 1 : 0;
+    });
+    const testPrompts = prompts({
+      multiselect: [['metabase']],
+      select: ['env', 'retry', 'done'],
+      text: ['metabase-main', 'https://metabase.example.com'],
+    });
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      { projectDir, inputMode: 'auto', runInitialSourceIngest: false, skipSources: false },
+      io.io,
+      {
+        prompts: testPrompts,
+        discoverMetabaseDatabases: vi.fn(async () => [
+          { id: 1, name: 'Analytics', engine: 'postgres', host: 'db.example.com', dbName: 'analytics' },
+        ]),
+        runMapping,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(runMapping).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps noninteractive source setup fail-fast without rolling back attempted config', async () => {
+    await addPrimarySource();
+    const io = makeIo();
+
+    const result = await runKtxSetupSourcesStep(
+      {
+        projectDir,
+        inputMode: 'disabled',
+        source: 'lookml',
+        sourceConnectionId: 'looker-repo',
+        sourceGitUrl: 'https://github.com/acme/lookml.git',
+        runInitialSourceIngest: false,
+        skipSources: false,
+      },
+      io.io,
+      {
+        validateLookml: vi.fn(async () => ({ ok: false as const, message: 'No LookML files found' })),
+      },
+    );
+
+    expect(result.status).toBe('failed');
+    expect((await readConfig()).connections['looker-repo']).toMatchObject({
+      driver: 'lookml',
+      repoUrl: 'https://github.com/acme/lookml.git',
+    });
   });
 
   it('adds a dbt source connection and enables its adapter', async () => {
@@ -1371,7 +1528,17 @@ describe('setup sources step', () => {
       source_dir: '/repo/new-dbt',
     }));
     expect(io.stderr()).toContain('dbt project not found');
-    expect(testPrompts.log).toHaveBeenCalledWith('Edit the connection or pick a different source to continue.');
+    expect(testPrompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Connection setup failed for dbt-main',
+        options: expect.arrayContaining([
+          { value: 'retry', label: 'Retry connection test' },
+          { value: 're-enter', label: 'Re-enter connection details' },
+          { value: 'skip', label: 'Skip this connection' },
+          { value: 'back', label: 'Back' },
+        ]),
+      }),
+    );
     const config = await readConfig();
     expect(config.connections['dbt-main']).toMatchObject({
       driver: 'dbt',
