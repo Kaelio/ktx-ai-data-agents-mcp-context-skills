@@ -1934,10 +1934,16 @@ async function runDatabaseConnectionSetupWithRecovery(input: {
   forceScopeAndTables?: boolean;
   editBaseline?: KtxProjectConnectionConfig;
   reuseExistingOnFirstConfigure?: boolean;
-}): Promise<RecoveryOutcome> {
+}): Promise<RecoveryOutcome | 'missing-input'> {
   let configureCalls = 0;
+  // `configureDatabaseConnection` returns 'cancelled' only when required
+  // connection details are absent in non-interactive mode. The recovery
+  // primitive collapses that into 'failed', so we track it here to restore the
+  // distinct 'missing-input' outcome the surrounding step reports for
+  // incomplete flags (vs. a real connection/probe failure).
+  let sawMissingInput = false;
 
-  return await runConnectionSetupWithRecovery({
+  const outcome = await runConnectionSetupWithRecovery({
     label: input.connectionId,
     interactive: input.interactive ?? input.args.inputMode !== 'disabled',
     allowSkip: input.allowSkip,
@@ -1955,7 +1961,7 @@ async function runDatabaseConnectionSetupWithRecovery(input: {
         });
         return historicSqlResult === 'back' ? 'back' : 'configured';
       }
-      return await configureDatabaseConnection({
+      const configured = await configureDatabaseConnection({
         projectDir: input.projectDir,
         connectionId: input.connectionId,
         driver: input.driver,
@@ -1965,6 +1971,10 @@ async function runDatabaseConnectionSetupWithRecovery(input: {
         canReturnToDriverSelection: input.canReturnToDriverSelection,
         editBaseline: input.editBaseline,
       });
+      if (configured === 'cancelled') {
+        sawMissingInput = true;
+      }
+      return configured;
     },
     validate: () =>
       validateAndScanConnection({
@@ -1977,6 +1987,11 @@ async function runDatabaseConnectionSetupWithRecovery(input: {
         forceScopeAndTables: input.forceScopeAndTables,
       }),
   });
+
+  if (outcome === 'failed' && sawMissingInput) {
+    return 'missing-input';
+  }
+  return outcome;
 }
 
 async function runPrimarySourceFullEdit(input: {
@@ -1986,7 +2001,7 @@ async function runPrimarySourceFullEdit(input: {
   prompts: KtxSetupDatabasesPromptAdapter;
   io: KtxCliIo;
   deps: KtxSetupDatabasesDeps;
-}): Promise<'ready' | 'back' | 'failed'> {
+}): Promise<'ready' | 'back' | 'failed' | 'missing-input'> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const existing = project.config.connections[input.connectionId];
   const driver = normalizeDriver(existing?.driver);
@@ -2052,6 +2067,9 @@ export async function runKtxSetupDatabasesStep(
       if (setupOutcome === 'back') {
         return { status: 'back', projectDir: args.projectDir };
       }
+      if (setupOutcome === 'missing-input') {
+        return { status: 'missing-input', projectDir: args.projectDir };
+      }
       if (setupOutcome === 'failed') {
         return { status: 'failed', projectDir: args.projectDir };
       }
@@ -2108,6 +2126,9 @@ export async function runKtxSetupDatabasesStep(
         if (editResult === 'back') {
           showConfiguredPrimaryMenu = true;
           continue;
+        }
+        if (editResult === 'missing-input') {
+          return { status: 'missing-input', projectDir: args.projectDir };
         }
         if (editResult === 'failed') {
           return { status: 'failed', projectDir: args.projectDir };
@@ -2178,6 +2199,9 @@ export async function runKtxSetupDatabasesStep(
           returnToDriverSelection = true;
           break;
         }
+        if (editResult === 'missing-input') {
+          return { status: 'missing-input', projectDir: args.projectDir };
+        }
         if (editResult === 'failed') {
           return { status: 'failed', projectDir: args.projectDir };
         }
@@ -2198,6 +2222,9 @@ export async function runKtxSetupDatabasesStep(
           if (!canReturnToDriverSelection) return { status: 'back', projectDir: args.projectDir };
           returnToDriverSelection = true;
           break;
+        }
+        if (setupOutcome === 'missing-input') {
+          return { status: 'missing-input', projectDir: args.projectDir };
         }
         if (setupOutcome === 'failed') {
           return { status: 'failed', projectDir: args.projectDir };

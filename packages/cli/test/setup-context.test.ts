@@ -562,6 +562,8 @@ describe('setup context build state', () => {
     // Names the failing connection by id + connector type, with remediation.
     expect(io.stderr()).toContain('warehouse (sqlite)');
     expect(io.stderr()).toContain('ktx connection test');
+    // The remediation command targets the project that just failed, not cwd.
+    expect(io.stderr()).toContain(`ktx connection test <id> --project-dir ${tempDir}`);
     // Never surfaces raw connection error text (or the database path) to the user.
     expect(io.stderr()).not.toContain('File not found');
     expect(io.stderr()).not.toContain(missingDbPath);

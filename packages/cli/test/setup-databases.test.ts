@@ -3149,6 +3149,25 @@ describe('setup databases step', () => {
     expect(io.stderr()).toContain('Missing database connection id');
   });
 
+  it('returns missing input when a non-interactive new connection is missing required details', async () => {
+    const io = makeIo();
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+    );
+
+    expect(result.status).toBe('missing-input');
+    expect(io.stderr()).toContain('Missing connection details');
+  });
+
   it('accepts former ingest subcommand names as non-interactive database connection ids', async () => {
     const io = makeIo();
 

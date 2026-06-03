@@ -361,14 +361,20 @@ async function prepareBuildTargets(args: KtxSetupContextStepArgs, io: KtxCliIo):
   return { kind: 'ready', project, targets };
 }
 
-function writeConnectionGateFailureLines(io: KtxCliIo, failures: ConnectionGateFailure[]): void {
+function writeConnectionGateFailureLines(
+  io: KtxCliIo,
+  projectDir: string,
+  failures: ConnectionGateFailure[],
+): void {
   io.stderr.write('KTX cannot build context: a required connection failed its live test.\n\n');
   io.stderr.write('Failed connections:\n');
   for (const failure of failures) {
     io.stderr.write(`  ${failure.connectionId} (${failure.driver})\n`);
   }
   io.stderr.write('\nEach connection must be reachable before KTX builds context.\n');
-  io.stderr.write('Run `ktx connection test <id>` to see the error, fix the connection, then retry.\n');
+  io.stderr.write(
+    `Run \`ktx connection test <id> --project-dir ${resolve(projectDir)}\` to see the error, fix the connection, then retry.\n`,
+  );
 }
 
 function connectionGateFailureReason(failures: ConnectionGateFailure[]): string {
@@ -825,7 +831,7 @@ export async function runKtxSetupContextStep(
       if (gate.ok) {
         return await runBuild(args, io, deps, project, targets);
       }
-      writeConnectionGateFailureLines(io, gate.failures);
+      writeConnectionGateFailureLines(io, args.projectDir, gate.failures);
       if (!interactive) {
         await writeConnectionGateFailedState(args, deps, targets, gate.failures);
         return { status: 'failed', projectDir: args.projectDir };
