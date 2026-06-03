@@ -202,7 +202,7 @@ export class BigQueryHistoricSqlQueryHistoryReader {
     const sql = `
 WITH filtered_jobs AS (
   SELECT
-    query_hash,
+    COALESCE(query_info.query_hashes.normalized_literals, TO_HEX(SHA256(query))) AS template_id,
     query,
     user_email,
     creation_time,
@@ -217,7 +217,7 @@ WITH filtered_jobs AS (
 ),
 template_stats AS (
   SELECT
-    query_hash AS template_id,
+    template_id,
     MIN(query) AS canonical_sql,
     COUNT(*) AS executions,
     COUNT(DISTINCT user_email) AS distinct_users,
@@ -228,17 +228,17 @@ template_stats AS (
     SAFE_DIVIDE(COUNTIF(error_result IS NOT NULL), COUNT(*)) AS error_rate,
     CAST(NULL AS INT64) AS rows_produced
   FROM filtered_jobs
-  GROUP BY query_hash
+  GROUP BY template_id
   HAVING COUNT(*) >= ${config.minExecutions}
 ),
 template_users AS (
   SELECT
-    query_hash AS template_id,
+    template_id,
     user_email AS user,
     COUNT(*) AS executions,
     MAX(creation_time) AS last_seen
   FROM filtered_jobs
-  GROUP BY query_hash, user_email
+  GROUP BY template_id, user_email
 )
 SELECT
   stats.template_id,

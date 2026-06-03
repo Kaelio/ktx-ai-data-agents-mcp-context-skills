@@ -113,12 +113,17 @@ describe('BigQueryHistoricSqlQueryHistoryReader', () => {
 
     const sql = firstQuery(client);
     expect(sql).toContain('WITH filtered_jobs AS');
+    expect(sql).toContain('query_info.query_hashes.normalized_literals');
+    expect(sql).toContain('TO_HEX(SHA256(query))');
+    expect(sql).toContain('AS template_id');
     expect(sql).toContain('template_stats AS');
     expect(sql).toContain('template_users AS');
     expect(sql).toContain('COUNT(*) AS executions');
     expect(sql).toContain('COUNT(DISTINCT user_email) AS distinct_users');
-    expect(sql).toContain('GROUP BY query_hash, user_email');
+    expect(sql).toContain('GROUP BY template_id');
+    expect(sql).toContain('GROUP BY template_id, user_email');
     expect(sql).toContain('ORDER BY users.executions DESC');
+    expect(sql).not.toMatch(/\bquery_hash\b/);
     expect(sql).not.toContain('LIMIT 5');
     expect(sql).toContain('HAVING COUNT(*) >= 5');
     expect(rows).toMatchObject([
