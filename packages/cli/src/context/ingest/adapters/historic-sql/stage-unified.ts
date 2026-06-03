@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
-import { tableRefKey, tableRefSet, type KtxTableRefKey } from '../../../scan/table-ref.js';
+import { tableRefKey, type KtxTableRefKey } from '../../../scan/table-ref.js';
 import type { KtxTableRef } from '../../../scan/types.js';
 import {
   bucketDistinctUsers,
@@ -17,6 +17,11 @@ import {
   redactHistoricSqlText,
   type HistoricSqlRedactionPattern,
 } from './redaction.js';
+import {
+  includedQueryHistoryTableRefs,
+  isQueryHistoryScopeFloorDisabled,
+  shouldFailOpenQueryHistoryScope,
+} from './scope-membership.js';
 import {
   HISTORIC_SQL_SOURCE_KEY,
   aggregatedTemplateSchema,
@@ -122,40 +127,6 @@ function shouldDropTemplate(template: AggregatedTemplate, config: HistoricSqlUni
 
 function displayTableRef(ref: KtxTableRef): string {
   return [ref.catalog, ref.db, ref.name].filter((part): part is string => !!part && part.length > 0).join('.');
-}
-
-function schemaNameForRef(ref: KtxTableRef): string | null {
-  return ref.db && ref.db.length > 0 ? ref.db : null;
-}
-
-function schemaNamesFromConfig(enabledSchemas: readonly string[]): Set<string> {
-  return new Set(enabledSchemas.filter((schema) => schema !== '*'));
-}
-
-function isScopeFloorDisabled(config: HistoricSqlUnifiedPullConfig): boolean {
-  return config.enabledSchemas.includes('*');
-}
-
-function shouldFailOpenScope(config: HistoricSqlUnifiedPullConfig): boolean {
-  return config.enabledTables.length === 0 && !isScopeFloorDisabled(config) && config.enabledSchemas.length === 0;
-}
-
-function includedTableRefs(
-  tablesTouched: readonly KtxTableRef[],
-  config: HistoricSqlUnifiedPullConfig,
-): KtxTableRef[] {
-  if (config.enabledTables.length > 0) {
-    const enabled = tableRefSet(config.enabledTables);
-    return tablesTouched.filter((ref) => enabled.has(tableRefKey(ref)));
-  }
-  if (isScopeFloorDisabled(config) || shouldFailOpenScope(config)) {
-    return [...tablesTouched];
-  }
-  const schemas = schemaNamesFromConfig(config.enabledSchemas);
-  return tablesTouched.filter((ref) => {
-    const schema = schemaNameForRef(ref);
-    return schema !== null && schemas.has(schema);
-  });
 }
 
 function historicSqlWindowDays(config: HistoricSqlUnifiedPullConfig): number {
@@ -312,14 +283,14 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
     config.modeledTableCatalog.length > 0 ? { catalog: { tables: config.modeledTableCatalog } } : undefined;
   const warnings: string[] = [
     ...config.scopeFloorWarnings,
-    ...(shouldFailOpenScope(config) ? ['query_history_scope_floor_disabled:empty_modeled_scope'] : []),
+    ...(shouldFailOpenQueryHistoryScope(config) ? ['query_history_scope_floor_disabled:empty_modeled_scope'] : []),
   ];
   let scopeDisabledByQualificationFailure = false;
   let analysis: Awaited<ReturnType<SqlAnalysisPort['analyzeBatch']>>;
   try {
     analysis = await input.sqlAnalysis.analyzeBatch(analysisItems, config.dialect, analysisOptions);
   } catch (error) {
-    if (!analysisOptions || config.enabledTables.length > 0 || isScopeFloorDisabled(config)) {
+    if (!analysisOptions || config.enabledTables.length > 0 || isQueryHistoryScopeFloorDisabled(config)) {
       throw error;
     }
     warnings.push('query_history_scope_floor_disabled:catalog_qualification_failed');
@@ -336,7 +307,9 @@ export async function stageHistoricSqlAggregatedSnapshot(input: StageHistoricSql
     const tablesTouched = [...new Map(parsed.tablesTouched.map((ref) => [tableRefKey(ref), ref])).values()]
       .filter((ref) => ref.name.length > 0)
       .sort((left, right) => tableRefKey(left).localeCompare(tableRefKey(right)));
-    const includedTables = scopeDisabledByQualificationFailure ? [...tablesTouched] : includedTableRefs(tablesTouched, config);
+    const includedTables = scopeDisabledByQualificationFailure
+      ? [...tablesTouched]
+      : includedQueryHistoryTableRefs(tablesTouched, config);
     if (includedTables.length === 0) {
       continue;
     }
