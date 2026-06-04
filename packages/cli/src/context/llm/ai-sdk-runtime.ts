@@ -5,7 +5,7 @@ import type { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import { isAbortError } from '../core/abort.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from './debug-request-recorder.js';
-import type { RateLimitGovernor, RateLimitProvider } from './rate-limit-governor.js';
+import type { RateLimitGovernor, RateLimitProvider, RateLimitSignal } from './rate-limit-governor.js';
 import { createAiSdkToolSet } from './runtime-tools.js';
 import type {
   KtxGenerateObjectInput,
@@ -54,6 +54,104 @@ function modelProviderName(model: unknown): RateLimitProvider {
   return provider.includes('vertex') || provider.includes('google') ? 'vertex' : 'anthropic-api';
 }
 
+interface HeaderLimitPair {
+  limit: string;
+  remaining: string;
+  rateLimitType: string;
+}
+
+const RATE_LIMIT_HEADER_PAIRS: HeaderLimitPair[] = [
+  {
+    limit: 'anthropic-ratelimit-requests-limit',
+    remaining: 'anthropic-ratelimit-requests-remaining',
+    rateLimitType: 'rpm',
+  },
+  {
+    limit: 'anthropic-ratelimit-tokens-limit',
+    remaining: 'anthropic-ratelimit-tokens-remaining',
+    rateLimitType: 'tpm',
+  },
+  {
+    limit: 'anthropic-ratelimit-input-tokens-limit',
+    remaining: 'anthropic-ratelimit-input-tokens-remaining',
+    rateLimitType: 'itpm',
+  },
+  {
+    limit: 'anthropic-ratelimit-output-tokens-limit',
+    remaining: 'anthropic-ratelimit-output-tokens-remaining',
+    rateLimitType: 'otpm',
+  },
+  {
+    limit: 'x-ratelimit-limit-requests',
+    remaining: 'x-ratelimit-remaining-requests',
+    rateLimitType: 'rpm',
+  },
+  {
+    limit: 'x-ratelimit-limit-tokens',
+    remaining: 'x-ratelimit-remaining-tokens',
+    rateLimitType: 'tpm',
+  },
+];
+
+function normalizeHeaders(headers: unknown): Record<string, string> {
+  if (!headers || typeof headers !== 'object') {
+    return {};
+  }
+  const get = (headers as { get?: unknown }).get;
+  if (typeof get === 'function') {
+    const out: Record<string, string> = {};
+    for (const pair of RATE_LIMIT_HEADER_PAIRS) {
+      const limit = get.call(headers, pair.limit);
+      const remaining = get.call(headers, pair.remaining);
+      if (typeof limit === 'string') out[pair.limit] = limit;
+      if (typeof remaining === 'string') out[pair.remaining] = remaining;
+    }
+    return out;
+  }
+  return Object.fromEntries(
+    Object.entries(headers as Record<string, unknown>)
+      .filter((entry): entry is [string, string | number] => typeof entry[1] === 'string' || typeof entry[1] === 'number')
+      .map(([key, value]) => [key.toLowerCase(), String(value)]),
+  );
+}
+
+function numericHeader(headers: Record<string, string>, key: string): number | undefined {
+  const value = Number(headers[key]);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function utilizationForPair(headers: Record<string, string>, pair: HeaderLimitPair): number | undefined {
+  const limit = numericHeader(headers, pair.limit);
+  const remaining = numericHeader(headers, pair.remaining);
+  if (limit === undefined || remaining === undefined || limit <= 0) {
+    return undefined;
+  }
+  return 1 - Math.min(limit, remaining) / limit;
+}
+
+function aiSdkHeaderRateLimitSignal(provider: RateLimitProvider, result: unknown): RateLimitSignal | undefined {
+  const headers = normalizeHeaders((result as { response?: { headers?: unknown } }).response?.headers);
+  let best: { utilization: number; rateLimitType: string } | undefined;
+  for (const pair of RATE_LIMIT_HEADER_PAIRS) {
+    const utilization = utilizationForPair(headers, pair);
+    if (utilization === undefined) {
+      continue;
+    }
+    if (!best || utilization > best.utilization) {
+      best = { utilization, rateLimitType: pair.rateLimitType };
+    }
+  }
+  if (!best) {
+    return undefined;
+  }
+  return {
+    provider,
+    status: 'allowed',
+    rateLimitType: best.rateLimitType,
+    utilization: Number(best.utilization.toFixed(4)),
+  };
+}
+
 function retryAfterMs(error: unknown): number | undefined {
   const value = (error as { retryAfter?: unknown }).retryAfter;
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
@@ -83,7 +181,12 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
     while (true) {
       await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
       try {
-        return await run();
+        const result = await run();
+        const signal = aiSdkHeaderRateLimitSignal(provider, result);
+        if (signal) {
+          this.deps.rateLimitGovernor?.report(signal);
+        }
+        return result;
       } catch (error) {
         if (isAbortError(error) || !isAiSdkRateLimitError(error) || attempt >= 5) {
           throw error;
