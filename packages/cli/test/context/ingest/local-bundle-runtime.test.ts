@@ -301,6 +301,7 @@ describe('createLocalBundleIngestRuntime', () => {
       'memoryIngestionModel',
       'probeRowCount',
       'profileIngest',
+      'rateLimitGovernor',
       'workUnitFailureMode',
       'workUnitMaxConcurrency',
       'workUnitStepBudget',

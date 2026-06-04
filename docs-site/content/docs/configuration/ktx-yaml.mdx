@@ -452,6 +452,16 @@ ingest:
     stepBudget: 40
     maxConcurrency: 2
     failureMode: continue
+  rateLimit:
+    enabled: true
+    throttleThreshold: 0.8
+    minConcurrencyUnderPressure: 1
+    maxWaitMs: 600000
+    retry:
+      maxAttempts: 6
+      baseDelayMs: 1000
+      maxDelayMs: 60000
+      jitter: true
 ```
 
 ### Adapters
@@ -497,6 +507,24 @@ handles failures.
 | `workUnits.stepBudget` | `int > 0` | `40` | Maximum agent steps allowed per work unit before it's force-terminated. |
 | `workUnits.maxConcurrency` | `int > 0` | `1` | How many work units run in parallel. |
 | `workUnits.failureMode` | `abort` \| `continue` | `continue` | `abort` stops the whole ingest run on the first failure; `continue` records it and keeps going. |
+
+### Rate limits
+
+`rateLimit` controls provider-neutral pacing for LLM calls during ingest. When a
+provider reports a subscription window, retry-after delay, or HTTP 429,
+**ktx** pauses new work-unit model calls, shows a transient wait in the CLI,
+and reduces work-unit concurrency while the provider is under pressure.
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `rateLimit.enabled` | `boolean` | `true` | Master switch for ingest LLM rate-limit pacing and visible waits. |
+| `rateLimit.throttleThreshold` | `number between 0 and 1` | `0.8` | Fraction of a known provider window at which **ktx** starts reducing concurrency. |
+| `rateLimit.minConcurrencyUnderPressure` | `int > 0` | `1` | Effective work-unit concurrency while a provider is under rate-limit pressure. |
+| `rateLimit.maxWaitMs` | `int > 0` | unset | Optional maximum wait before the run fails instead of continuing to pause. |
+| `rateLimit.retry.maxAttempts` | `int > 0` | `6` | Maximum retry attempts for opaque rate-limit responses that don't include a reset time or retry-after value. |
+| `rateLimit.retry.baseDelayMs` | `int > 0` | `1000` | Initial opaque retry delay in milliseconds. |
+| `rateLimit.retry.maxDelayMs` | `int > 0` | `60000` | Maximum opaque retry delay in milliseconds. |
+| `rateLimit.retry.jitter` | `boolean` | `true` | Add jitter to opaque retry delays. |
 
 ## `scan`
 

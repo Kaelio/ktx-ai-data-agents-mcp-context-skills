@@ -364,6 +364,12 @@ function plainIngestEventProgress(
         message: event.message,
         ...(event.transient !== undefined ? { transient: event.transient } : {}),
       };
+    case 'rate_limit_wait':
+      return {
+        percent: 50,
+        message: `Rate-limited (${event.provider}${event.rateLimitType ? ` ${event.rateLimitType}` : ''}); resuming in ${Math.ceil(event.remainingMs / 1_000)}s`,
+        transient: true,
+      };
     case 'work_unit_started': {
       const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
       const ordinal = workUnitOrdinalThrough(snapshot, eventIndex, event.unitKey);
