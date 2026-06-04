@@ -3,6 +3,7 @@ import type { KtxLlmProvider } from '../../llm/types.js';
 import { generateText, Output, stepCountIs, type FlexibleSchema, type TelemetrySettings, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
+import { isAbortError } from '../core/abort.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from './debug-request-recorder.js';
 import type { RateLimitGovernor, RateLimitProvider } from './rate-limit-governor.js';
 import { createAiSdkToolSet } from './runtime-tools.js';
@@ -73,14 +74,18 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
     this.logger = deps.logger ?? noopLogger;
   }
 
-  private async generateTextWithRateLimitRetry<T>(provider: RateLimitProvider, run: () => Promise<T>): Promise<T> {
+  private async generateTextWithRateLimitRetry<T>(
+    provider: RateLimitProvider,
+    abortSignal: AbortSignal | undefined,
+    run: () => Promise<T>,
+  ): Promise<T> {
     let attempt = 0;
     while (true) {
-      await this.deps.rateLimitGovernor?.waitForReady();
+      await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
       try {
         return await run();
       } catch (error) {
-        if (!isAiSdkRateLimitError(error) || attempt >= 5) {
+        if (isAbortError(error) || !isAiSdkRateLimitError(error) || attempt >= 5) {
           throw error;
         }
         attempt += 1;
@@ -115,6 +120,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
       ...(split.system ? { system: split.system } : {}),
       messages: split.messages,
       tools: built.tools as ToolSet,
+      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       ...(hasTools(tools)
         ? {
             experimental_repairToolCall: this.deps.llmProvider.repairToolCallHandler({
@@ -123,7 +129,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
           }
         : {}),
     };
-    const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), () => generateText(request));
+    const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), input.abortSignal, () => generateText(request));
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (typeof result.text !== 'string') {
       throw new Error('KTX LLM text generation returned no text');
@@ -150,6 +156,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
       ...(split.system ? { system: split.system } : {}),
       messages: split.messages,
       tools: built.tools as ToolSet,
+      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
       ...(hasTools(tools)
         ? {
             experimental_repairToolCall: this.deps.llmProvider.repairToolCallHandler({
@@ -159,7 +166,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         : {}),
       output: Output.object({ schema: input.schema as unknown as FlexibleSchema<TOutput> }),
     };
-    const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), () => generateText(request));
+    const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), input.abortSignal, () => generateText(request));
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (result.output == null) {
       throw new Error('KTX LLM object generation returned no output');
@@ -207,6 +214,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         ...(promptMessages.system ? { system: promptMessages.system } : {}),
         messages: promptMessages.messages,
         tools: built.tools as ToolSet,
+        ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
         onStepFinish: async () => {
           stepIndex += 1;
           stepBoundariesMs.push(Date.now() - startedAt);
@@ -224,7 +232,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
           }
         },
       };
-      const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), () => generateText(request));
+      const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), params.abortSignal, () => generateText(request));
       return {
         stopReason: 'natural',
         metrics: {
@@ -235,6 +243,9 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         },
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.warn(`[agent-runner] loop failed: ${err.message}`);
       return {

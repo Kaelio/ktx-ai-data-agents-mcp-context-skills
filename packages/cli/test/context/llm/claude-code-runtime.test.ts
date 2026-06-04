@@ -9,6 +9,14 @@ async function* stream(messages: SDKMessage[]): AsyncGenerator<SDKMessage, void>
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 function initMessage(overrides: Partial<Extract<SDKMessage, { type: 'system'; subtype: 'init' }>> = {}): Extract<
   SDKMessage,
   { type: 'system'; subtype: 'init' }
@@ -154,6 +162,53 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       retryAfterMs: 12_000,
       rateLimitType: 'api_retry',
     });
+  });
+
+  it('passes abort signals into Claude Code governor waits', async () => {
+    const controller = new AbortController();
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const query = vi.fn((_input: any) => stream([resultMessage({ result: 'ok' })]));
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady, report: vi.fn() } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal })).resolves.toBe('ok');
+
+    expect(waitForReady).toHaveBeenCalledWith(controller.signal);
+  });
+
+  it('interrupts an active Claude Code query when the abort signal fires', async () => {
+    const controller = new AbortController();
+    const streamStarted = deferred<void>();
+    const releaseStream = deferred<void>();
+    const interrupt = vi.fn(() => releaseStream.resolve());
+    const queryResult = {
+      async *[Symbol.asyncIterator]() {
+        streamStarted.resolve();
+        await releaseStream.promise;
+        yield resultMessage({ result: 'ok' });
+      },
+      interrupt,
+    };
+    const query = vi.fn(() => queryResult as never);
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn() } as never,
+    });
+
+    const pending = runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal });
+    await streamStarted.promise;
+    controller.abort();
+
+    await expect(pending).resolves.toBe('ok');
+    expect(interrupt).toHaveBeenCalledTimes(1);
   });
 
   it('validates structured output with the caller schema and whitelists the SDK StructuredOutput tool', async () => {

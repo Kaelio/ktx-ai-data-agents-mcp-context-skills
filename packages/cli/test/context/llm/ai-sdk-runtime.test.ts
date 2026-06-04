@@ -146,6 +146,30 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     expect(generateText).toHaveBeenCalledTimes(2);
   });
 
+  it('passes abort signals into governor waits and AI SDK generateText calls', async () => {
+    const controller = new AbortController();
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    (generateText as any).mockResolvedValue({ text: 'done', toolCalls: [], steps: [] });
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report: vi.fn() } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+      abortSignal: controller.signal,
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(waitForReady).toHaveBeenCalledWith(controller.signal);
+    expect((generateText as any).mock.calls[0][0].abortSignal).toBe(controller.signal);
+  });
+
   it('returns metrics with stepCount, per-step boundaries, and aggregate token usage', async () => {
     (generateText as any).mockImplementation(async (opts: any) => {
       await opts.onStepFinish({});

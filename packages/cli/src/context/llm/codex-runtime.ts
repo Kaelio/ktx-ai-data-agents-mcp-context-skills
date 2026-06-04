@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../core/config.js';
+import { isAbortError, linkAbortSignal } from '../core/abort.js';
 import { isCompletedAgentStep, summarizeCodexExecEvents, type CodexExecEventSummary } from './codex-exec-events.js';
 import {
   startCodexRuntimeMcpServer,
@@ -176,9 +177,13 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
     this.logger = deps.logger ?? noopLogger;
   }
 
-  private async runWithRateLimitRetry<T>(run: () => Promise<T>, getError: (result: T) => Error | undefined): Promise<T> {
+  private async runWithRateLimitRetry<T>(
+    abortSignal: AbortSignal | undefined,
+    run: () => Promise<T>,
+    getError: (result: T) => Error | undefined,
+  ): Promise<T> {
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      await this.deps.rateLimitGovernor?.waitForReady();
+      await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
       const result = await run();
       const error = getError(result);
       if (!isCodexRateLimitError(error)) {
@@ -186,6 +191,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
       }
       this.deps.rateLimitGovernor?.report({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
     }
+    await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
     return run();
   }
 
@@ -212,6 +218,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           : {}),
       });
       const result = await this.runWithRateLimitRetry(
+        input.abortSignal,
         async () => {
           const collected = await collectEvents(
             await this.runner.runStreamed({
@@ -220,6 +227,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
               prompt: promptWithSystem(input.system, input.prompt),
               configOverrides: config.configOverrides,
               env: config.env,
+              ...(input.abortSignal ? { signal: input.abortSignal } : {}),
             }),
           );
           const summary = summarizeCodexExecEvents(collected.events, { startedAt });
@@ -259,6 +267,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           : {}),
       });
       const result = await this.runWithRateLimitRetry(
+        input.abortSignal,
         async () => {
           const collected = await collectEvents(
             await this.runner.runStreamed({
@@ -268,6 +277,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
               configOverrides: config.configOverrides,
               env: config.env,
               outputSchema: z.toJSONSchema(input.schema, { target: 'draft-7' }) as Record<string, unknown>,
+              ...(input.abortSignal ? { signal: input.abortSignal } : {}),
             }),
           );
           const summary = summarizeCodexExecEvents(collected.events, { startedAt });
@@ -315,25 +325,34 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
         }
       };
       const result = await this.runWithRateLimitRetry(
+        params.abortSignal,
         async () => {
-          const abortController = new AbortController();
-          const collected = await collectEvents(
-            await this.runner.runStreamed({
-              projectDir: this.deps.projectDir,
-              model,
-              prompt: promptWithSystem(params.systemPrompt, params.userPrompt),
-              configOverrides: config.configOverrides,
-              env: config.env,
-              signal: abortController.signal,
-            }),
-            { stepBudget: params.stepBudget, abortController, onStep },
-          );
-          const summary = summarizeCodexExecEvents(collected.events, { startedAt });
-          return { collected, summary };
+          const linked = linkAbortSignal(params.abortSignal);
+          const abortController = linked.controller;
+          try {
+            const collected = await collectEvents(
+              await this.runner.runStreamed({
+                projectDir: this.deps.projectDir,
+                model,
+                prompt: promptWithSystem(params.systemPrompt, params.userPrompt),
+                configOverrides: config.configOverrides,
+                env: config.env,
+                signal: abortController.signal,
+              }),
+              { stepBudget: params.stepBudget, abortController, onStep },
+            );
+            const summary = summarizeCodexExecEvents(collected.events, { startedAt });
+            return { collected, summary };
+          } finally {
+            linked.dispose();
+          }
         },
         ({ collected, summary }) => summaryError(summary, collected.streamError),
       );
       const error = summaryError(result.summary, result.collected.streamError);
+      if (isAbortError(error)) {
+        throw error;
+      }
       const stopReason = result.collected.budgetExceeded ? 'budget' : error ? 'error' : result.summary.stopReason;
       return {
         stopReason,
@@ -346,6 +365,9 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
         },
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       return {
         stopReason: 'error',

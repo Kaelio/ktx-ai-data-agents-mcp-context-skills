@@ -7,6 +7,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
+import { isAbortError } from '../core/abort.js';
 import { createKtxClaudeCodeEnv } from './claude-code-env.js';
 import { resolveClaudeCodeModel } from './claude-code-models.js';
 import type { RateLimitGovernor, RateLimitSignal } from './rate-limit-governor.js';
@@ -22,7 +23,11 @@ import type {
   RunLoopStopReason,
 } from './runtime-port.js';
 
-type QueryFn = (params: Parameters<typeof defaultQuery>[0]) => AsyncIterable<SDKMessage>;
+type QueryResult = AsyncIterable<SDKMessage> & {
+  interrupt?: () => void | Promise<void>;
+};
+
+type QueryFn = (params: Parameters<typeof defaultQuery>[0]) => QueryResult;
 
 function claudeTokenUsage(result: SDKResultMessage): LlmTokenUsage {
   const usage = (result as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
@@ -247,21 +252,31 @@ async function collectResult(params: {
   expectedMcpServerNames: Set<string>;
   onAssistantTurn?: () => Promise<void>;
   rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
+  abortSignal?: AbortSignal;
 }): Promise<SDKResultMessage> {
   let result: SDKResultMessage | undefined;
-  await params.rateLimitGovernor?.waitForReady();
-  for await (const message of params.query({ prompt: params.prompt, options: params.options })) {
-    const rateLimitSignal = claudeRateLimitSignal(message);
-    if (rateLimitSignal) {
-      params.rateLimitGovernor?.report(rateLimitSignal);
+  await params.rateLimitGovernor?.waitForReady(params.abortSignal);
+  const queryResult = params.query({ prompt: params.prompt, options: params.options });
+  const onAbort = () => {
+    void Promise.resolve(queryResult.interrupt?.()).catch(() => undefined);
+  };
+  params.abortSignal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    for await (const message of queryResult) {
+      const rateLimitSignal = claudeRateLimitSignal(message);
+      if (rateLimitSignal) {
+        params.rateLimitGovernor?.report(rateLimitSignal);
+      }
+      assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
+      if (countsAsAssistantTurn(message)) {
+        await params.onAssistantTurn?.();
+      }
+      if (isResult(message)) {
+        result = message;
+      }
     }
-    assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
-    if (countsAsAssistantTurn(message)) {
-      await params.onAssistantTurn?.();
-    }
-    if (isResult(message)) {
-      result = message;
-    }
+  } finally {
+    params.abortSignal?.removeEventListener('abort', onAbort);
   }
   if (!result) {
     throw new Error('Claude Code query returned no result message');
@@ -294,6 +309,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
       rateLimitGovernor: this.deps.rateLimitGovernor,
+      abortSignal: input.abortSignal,
     });
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
@@ -332,6 +348,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       allowedToolIds: new Set([...mcpToolIds(input.tools ?? {}), STRUCTURED_OUTPUT_TOOL_NAME]),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
       rateLimitGovernor: this.deps.rateLimitGovernor,
+      abortSignal: input.abortSignal,
     });
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
@@ -363,6 +380,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         allowedToolIds: new Set(mcpToolIds(params.toolSet)),
         expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
         rateLimitGovernor: this.deps.rateLimitGovernor,
+        abortSignal: params.abortSignal,
         onAssistantTurn: async () => {
           stepIndex += 1;
           stepBoundariesMs.push(Date.now() - startedAt);
@@ -393,6 +411,9 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         },
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       return {
         stopReason: 'error',

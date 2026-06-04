@@ -158,6 +158,81 @@ describe('CodexKtxLlmRuntime', () => {
     expect(fakeRunner.runStreamed).toHaveBeenCalledTimes(2);
   });
 
+  it('passes abort signals into Codex text generation and governor waits', async () => {
+    const controller = new AbortController();
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    let observedSignal: AbortSignal | undefined;
+    const fakeRunner = {
+      runStreamed: vi.fn(async (input: { signal?: AbortSignal }) => {
+        observedSignal = input.signal;
+        return events([
+          { type: 'turn.started' },
+          { type: 'item.completed', item: { type: 'agent_message', text: 'ok' } },
+          { type: 'turn.completed' },
+        ]);
+      }),
+    };
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+      rateLimitGovernor: { waitForReady, report: vi.fn() } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal })).resolves.toBe('ok');
+
+    expect(waitForReady).toHaveBeenCalledWith(controller.signal);
+    expect(observedSignal).toBe(controller.signal);
+  });
+
+  it('links the parent abort signal into Codex agent-loop streamed runs', async () => {
+    const controller = new AbortController();
+    let releaseStream!: () => void;
+    const streamRelease = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    let markRunnerCalled!: () => void;
+    const runnerCalled = new Promise<void>((resolve) => {
+      markRunnerCalled = resolve;
+    });
+    let observedSignal: AbortSignal | undefined;
+    const fakeRunner = {
+      runStreamed: vi.fn(async (input: { signal?: AbortSignal }) => {
+        observedSignal = input.signal;
+        markRunnerCalled();
+        return (async function* () {
+          await streamRelease;
+          yield { type: 'turn.started' };
+          yield { type: 'item.completed', item: { type: 'agent_message', text: 'ok' } };
+          yield { type: 'turn.completed' };
+        })();
+      }),
+    };
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+    });
+
+    const pending = runtime.runAgentLoop({
+      modelRole: 'default',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+      abortSignal: controller.signal,
+    });
+
+    await runnerCalled;
+    expect(observedSignal).toBeDefined();
+    expect(observedSignal).not.toBe(controller.signal);
+    controller.abort();
+    expect(observedSignal?.aborted).toBe(true);
+    releaseStream();
+    await expect(pending).resolves.toMatchObject({ stopReason: 'natural' });
+  });
+
   it('starts and closes a temporary MCP server for tool-backed agent loops', async () => {
     const close = vi.fn(async () => undefined);
     const startMcpServer = vi.fn(async () => ({
