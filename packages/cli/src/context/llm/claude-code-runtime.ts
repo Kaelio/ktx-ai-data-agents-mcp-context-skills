@@ -194,7 +194,17 @@ function isClaudeRateLimitResult(result: SDKResultMessage, rejectedSignal: RateL
   if (rejectedSignal?.status === 'rejected') {
     return true;
   }
-  const details = [error.message, result.stop_reason, result.terminal_reason, ...result.errors]
+  const resultDetails = result as {
+    stop_reason?: unknown;
+    terminal_reason?: unknown;
+    errors?: unknown[];
+  };
+  const details = [
+    error.message,
+    resultDetails.stop_reason,
+    resultDetails.terminal_reason,
+    ...(resultDetails.errors ?? []),
+  ]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .join('\n');
   return CLAUDE_RATE_LIMIT_ERROR_MARKERS.test(details);
