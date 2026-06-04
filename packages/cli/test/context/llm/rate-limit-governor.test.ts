@@ -100,6 +100,29 @@ describe('RateLimitGovernor', () => {
     expect(governor.activeSlots()).toBe(0);
   });
 
+  it('rejects an already-aborted ready wait', async () => {
+    const governor = new RateLimitGovernor(
+      createRateLimitGovernorConfig({ maxConcurrency: 1 }),
+      { sleep: async () => undefined, random: () => 0 },
+    );
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(governor.waitForReady(controller.signal)).rejects.toThrow(/Aborted/);
+  });
+
+  it('rejects an already-aborted work slot without consuming capacity', async () => {
+    const governor = new RateLimitGovernor(
+      createRateLimitGovernorConfig({ maxConcurrency: 1 }),
+      { sleep: async () => undefined, random: () => 0 },
+    );
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(governor.acquireWorkSlot(controller.signal)).rejects.toThrow(/Aborted/);
+    expect(governor.activeSlots()).toBe(0);
+  });
+
   it('uses bounded opaque backoff for rejected signals without reset hints', async () => {
     const clock = testClock();
     const sleeps: number[] = [];

@@ -1,3 +1,5 @@
+import { createAbortError, throwIfAborted } from '../core/abort.js';
+
 export type RateLimitProvider = 'claude-subscription' | 'anthropic-api' | 'vertex' | 'codex';
 type RateLimitSignalStatus = 'allowed' | 'warning' | 'rejected';
 
@@ -66,7 +68,7 @@ type Subscriber = (state: RateLimitWaitState) => void;
 const defaultSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'));
+      reject(createAbortError());
       return;
     }
     const timeout = setTimeout(resolve, ms);
@@ -74,7 +76,7 @@ const defaultSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
       'abort',
       () => {
         clearTimeout(timeout);
-        reject(new DOMException('Aborted', 'AbortError'));
+        reject(createAbortError());
       },
       { once: true },
     );
@@ -167,13 +169,16 @@ export class RateLimitGovernor {
   }
 
   async waitForReady(signal?: AbortSignal): Promise<void> {
+    throwIfAborted(signal);
     if (!this.config.enabled) {
       return;
     }
     await this.waitForPause(signal);
+    throwIfAborted(signal);
   }
 
   async acquireWorkSlot(signal?: AbortSignal): Promise<RateLimitRelease> {
+    throwIfAborted(signal);
     if (!this.config.enabled) {
       this.active += 1;
       return () => {
@@ -182,7 +187,9 @@ export class RateLimitGovernor {
     }
 
     while (true) {
+      throwIfAborted(signal);
       await this.waitForPause(signal);
+      throwIfAborted(signal);
       if (this.active < this.effectiveLimit) {
         this.active += 1;
         let released = false;
@@ -249,6 +256,7 @@ export class RateLimitGovernor {
   }
 
   private async waitForPause(signal?: AbortSignal): Promise<void> {
+    throwIfAborted(signal);
     while (this.pausedUntilMs !== null) {
       const remainingMs = this.pausedUntilMs - this.now();
       if (remainingMs <= 0) {
@@ -262,12 +270,13 @@ export class RateLimitGovernor {
       }
       this.emitWait('wait_tick');
       await this.sleep(Math.min(this.pausedTickMs ?? this.config.waitStateTickMs, remainingMs), signal);
+      throwIfAborted(signal);
     }
   }
 
   private waitForSlot(signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) {
-      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+      return Promise.reject(createAbortError());
     }
     return new Promise((resolve, reject) => {
       const wake = () => {
@@ -276,7 +285,7 @@ export class RateLimitGovernor {
       };
       const onAbort = () => {
         cleanup();
-        reject(new DOMException('Aborted', 'AbortError'));
+        reject(createAbortError());
       };
       const cleanup = () => {
         this.waiters = this.waiters.filter((candidate) => candidate !== wake);
