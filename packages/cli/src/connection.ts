@@ -74,6 +74,12 @@ async function testNativeConnection(
     }
     const result = await connector.testConnection();
     if (!result.success) {
+      // Re-throw the driver's original error so connection_test telemetry records
+      // its real class (e.g. ConnectionError) and code (e.g. ELOGIN) instead of
+      // collapsing every native failure to a generic Error with no code.
+      if (result.cause instanceof Error) {
+        throw result.cause;
+      }
       throw new Error(result.error ?? 'connection test failed');
     }
     return { driver: connector.driver };

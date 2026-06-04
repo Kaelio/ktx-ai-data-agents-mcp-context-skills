@@ -38,7 +38,7 @@ function makeIo() {
 
 function nativeConnector(
   driver: KtxConnectionDriver,
-  testResult: { success: true } | { success: false; error: string } = { success: true },
+  testResult: { success: true } | { success: false; error: string; cause?: unknown } = { success: true },
 ) {
   const testConnection = vi.fn(async () => testResult);
   const cleanup = vi.fn(async () => undefined);
@@ -181,6 +181,34 @@ describe('runKtxConnection', () => {
     expect(io.stderr()).toContain('"event":"connection_test"');
     expect(io.stderr()).toContain('"outcome":"error"');
     expect(io.stderr()).toContain('"errorDetail":"database file is unreadable"');
+  });
+
+  it('preserves the driver error class and code in connection_test telemetry', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'sqlserver', host: 'db.example.test', database: 'analytics', username: 'svc_ro' },
+    });
+    class ConnectionError extends Error {
+      readonly code = 'ELOGIN';
+    }
+    const driverError = new ConnectionError("Login failed for user 'svc_ro'.");
+    const { connector } = nativeConnector('sqlserver', {
+      success: false,
+      error: driverError.message,
+      cause: driverError,
+    });
+    const io = makeIo();
+
+    const code = await runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
+      createScanConnector: vi.fn(async () => connector),
+    });
+
+    expect(code).toBe(1);
+    expect(io.stderr()).toContain('"errorClass":"ConnectionError"');
+    expect(io.stderr()).toContain('"errorDetail":"ELOGIN: Login failed for user \'svc_ro\'."');
   });
 
   it('reports the connector error and still cleans up when native testConnection fails', async () => {
