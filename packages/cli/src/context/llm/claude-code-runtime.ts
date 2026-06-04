@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import { createKtxClaudeCodeEnv } from './claude-code-env.js';
 import { resolveClaudeCodeModel } from './claude-code-models.js';
+import type { RateLimitGovernor, RateLimitSignal } from './rate-limit-governor.js';
 import { createClaudeSdkTools, mcpToolIds } from './runtime-tools.js';
 import type {
   KtxGenerateObjectInput,
@@ -43,6 +44,7 @@ export interface ClaudeCodeKtxLlmRuntimeDeps {
   query?: QueryFn;
   env?: NodeJS.ProcessEnv;
   logger?: KtxLogger;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
 }
 
 const BUILTIN_TOOLS = [
@@ -157,6 +159,33 @@ function expectedMcpServerNames(tools: KtxRuntimeToolSet | undefined): Set<strin
   return tools && Object.keys(tools).length > 0 ? new Set([KTX_MCP_SERVER_NAME]) : new Set();
 }
 
+function claudeRateLimitSignal(message: SDKMessage): RateLimitSignal | null {
+  const record = message as unknown as Record<string, unknown>;
+  if (record.type === 'rate_limit_event') {
+    const info = record.rate_limit_info as Record<string, unknown> | undefined;
+    if (!info) return null;
+    const rawStatus = typeof info.status === 'string' ? info.status : 'allowed';
+    const resetsAt = typeof info.resetsAt === 'string' ? Date.parse(info.resetsAt) : NaN;
+    return {
+      provider: 'claude-subscription',
+      status: rawStatus === 'rejected' ? 'rejected' : rawStatus === 'allowed_warning' ? 'warning' : 'allowed',
+      ...(Number.isFinite(resetsAt) ? { resetAtMs: resetsAt } : {}),
+      ...(typeof info.rateLimitType === 'string' ? { rateLimitType: info.rateLimitType } : {}),
+      ...(typeof info.utilization === 'number' ? { utilization: info.utilization } : {}),
+    };
+  }
+  if (record.subtype === 'api_retry' || record.type === 'api_retry') {
+    const retryDelayMs = typeof record.retry_delay_ms === 'number' ? record.retry_delay_ms : undefined;
+    return {
+      provider: 'claude-subscription',
+      status: 'warning',
+      ...(retryDelayMs !== undefined ? { retryAfterMs: retryDelayMs } : {}),
+      rateLimitType: 'api_retry',
+    };
+  }
+  return null;
+}
+
 function managedMcpSettings(serverNames: string[]): NonNullable<Options['managedSettings']> {
   return {
     allowManagedMcpServersOnly: true,
@@ -217,9 +246,15 @@ async function collectResult(params: {
   allowedToolIds: Set<string>;
   expectedMcpServerNames: Set<string>;
   onAssistantTurn?: () => Promise<void>;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
 }): Promise<SDKResultMessage> {
   let result: SDKResultMessage | undefined;
+  await params.rateLimitGovernor?.waitForReady();
   for await (const message of params.query({ prompt: params.prompt, options: params.options })) {
+    const rateLimitSignal = claudeRateLimitSignal(message);
+    if (rateLimitSignal) {
+      params.rateLimitGovernor?.report(rateLimitSignal);
+    }
     assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
     if (countsAsAssistantTurn(message)) {
       await params.onAssistantTurn?.();
@@ -258,6 +293,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       options,
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
+      rateLimitGovernor: this.deps.rateLimitGovernor,
     });
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
@@ -295,6 +331,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       options,
       allowedToolIds: new Set([...mcpToolIds(input.tools ?? {}), STRUCTURED_OUTPUT_TOOL_NAME]),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
+      rateLimitGovernor: this.deps.rateLimitGovernor,
     });
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
@@ -325,6 +362,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         options: { ...options, systemPrompt: params.systemPrompt },
         allowedToolIds: new Set(mcpToolIds(params.toolSet)),
         expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
+        rateLimitGovernor: this.deps.rateLimitGovernor,
         onAssistantTurn: async () => {
           stepIndex += 1;
           stepBoundariesMs.push(Date.now() - startedAt);

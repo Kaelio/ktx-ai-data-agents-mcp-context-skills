@@ -4,6 +4,7 @@ import { generateText, Output, stepCountIs, type FlexibleSchema, type TelemetryS
 import type { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import { summarizeKtxLlmDebugRequest, type KtxLlmDebugRequestRecorder } from './debug-request-recorder.js';
+import type { RateLimitGovernor, RateLimitProvider } from './rate-limit-governor.js';
 import { createAiSdkToolSet } from './runtime-tools.js';
 import type {
   KtxGenerateObjectInput,
@@ -40,10 +41,29 @@ export interface AiSdkKtxLlmRuntimeDeps {
   telemetry?: AgentTelemetryPort;
   logger?: KtxLogger;
   debugRequestRecorder?: KtxLlmDebugRequestRecorder;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
 }
 
 function hasTools(tools: Record<string, unknown>): boolean {
   return Object.keys(tools).length > 0;
+}
+
+function modelProviderName(model: unknown): RateLimitProvider {
+  const provider = (model as { provider?: string }).provider ?? '';
+  return provider.includes('vertex') || provider.includes('google') ? 'vertex' : 'anthropic-api';
+}
+
+function retryAfterMs(error: unknown): number | undefined {
+  const value = (error as { retryAfter?: unknown }).retryAfter;
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value < 1_000 ? value * 1_000 : value;
+  }
+  return undefined;
+}
+
+function isAiSdkRateLimitError(error: unknown): boolean {
+  const record = error as { name?: string; statusCode?: number; status?: number };
+  return record.name === 'TooManyRequestsError' || record.statusCode === 429 || record.status === 429;
 }
 
 export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
@@ -51,6 +71,28 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
 
   constructor(private readonly deps: AiSdkKtxLlmRuntimeDeps) {
     this.logger = deps.logger ?? noopLogger;
+  }
+
+  private async generateTextWithRateLimitRetry<T>(provider: RateLimitProvider, run: () => Promise<T>): Promise<T> {
+    let attempt = 0;
+    while (true) {
+      await this.deps.rateLimitGovernor?.waitForReady();
+      try {
+        return await run();
+      } catch (error) {
+        if (!isAiSdkRateLimitError(error) || attempt >= 5) {
+          throw error;
+        }
+        attempt += 1;
+        const retryAfter = retryAfterMs(error);
+        this.deps.rateLimitGovernor?.report({
+          provider,
+          status: 'rejected',
+          rateLimitType: 'http_429',
+          ...(retryAfter !== undefined ? { retryAfterMs: retryAfter } : {}),
+        });
+      }
+    }
   }
 
   async generateText(input: KtxGenerateTextInput): Promise<string> {
@@ -67,7 +109,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
     });
     const split = splitKtxSystemMessages(built.messages);
     const startedAt = Date.now();
-    const result = await generateText({
+    const request = {
       model,
       temperature: input.temperature ?? 0,
       ...(split.system ? { system: split.system } : {}),
@@ -80,7 +122,8 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
             }),
           }
         : {}),
-    });
+    };
+    const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), () => generateText(request));
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (typeof result.text !== 'string') {
       throw new Error('KTX LLM text generation returned no text');
@@ -101,7 +144,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
     });
     const split = splitKtxSystemMessages(built.messages);
     const startedAt = Date.now();
-    const result = await generateText({
+    const request = {
       model,
       temperature: input.temperature ?? 0,
       ...(split.system ? { system: split.system } : {}),
@@ -115,7 +158,8 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
           }
         : {}),
       output: Output.object({ schema: input.schema as unknown as FlexibleSchema<TOutput> }),
-    });
+    };
+    const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), () => generateText(request));
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (result.output == null) {
       throw new Error('KTX LLM object generation returned no output');
@@ -152,7 +196,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         }),
       );
 
-      const result = await generateText({
+      const request = {
         model,
         temperature: 0,
         stopWhen: stepCountIs(params.stepBudget),
@@ -179,7 +223,8 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
             );
           }
         },
-      });
+      };
+      const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), () => generateText(request));
       return {
         stopReason: 'natural',
         metrics: {

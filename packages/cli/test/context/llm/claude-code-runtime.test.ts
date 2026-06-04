@@ -91,6 +91,71 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
   });
 
+  it('waits before Claude Code text generation and reports rate-limit events', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const query = vi.fn((_input: any) =>
+      stream([
+        {
+          type: 'rate_limit_event',
+          rate_limit_info: {
+            status: 'allowed_warning',
+            resetsAt: new Date(2_000).toISOString(),
+            rateLimitType: 'five_hour',
+            utilization: 0.91,
+          },
+        } as unknown as SDKMessage,
+        resultMessage({ result: 'ok' }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady, report } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
+    expect(waitForReady).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith({
+      provider: 'claude-subscription',
+      status: 'warning',
+      resetAtMs: 2_000,
+      rateLimitType: 'five_hour',
+      utilization: 0.91,
+    });
+  });
+
+  it('reports Claude Code api retry messages as warning signals', async () => {
+    const report = vi.fn();
+    const query = vi.fn((_input: any) =>
+      stream([
+        {
+          type: 'system',
+          subtype: 'api_retry',
+          retry_delay_ms: 12_000,
+        } as unknown as SDKMessage,
+        resultMessage({ result: 'ok' }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report } as never,
+    });
+
+    await runtime.generateText({ role: 'default', prompt: 'hello' });
+    expect(report).toHaveBeenCalledWith({
+      provider: 'claude-subscription',
+      status: 'warning',
+      retryAfterMs: 12_000,
+      rateLimitType: 'api_retry',
+    });
+  });
+
   it('validates structured output with the caller schema and whitelists the SDK StructuredOutput tool', async () => {
     const schema = z.object({ answer: z.string() });
     const query = vi.fn((_input: any) =>

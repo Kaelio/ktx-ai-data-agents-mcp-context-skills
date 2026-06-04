@@ -130,6 +130,34 @@ describe('CodexKtxLlmRuntime', () => {
     ).rejects.toThrow('Codex structured output failed validation');
   });
 
+  it('reports Codex rate-limit failures and retries with opaque backoff', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const fakeRunner = {
+      runStreamed: vi
+        .fn()
+        .mockResolvedValueOnce(events([{ type: 'turn.failed', error: { message: '429 rate limit exceeded' } }]))
+        .mockResolvedValueOnce(
+          events([
+            { type: 'turn.started' },
+            { type: 'item.completed', item: { type: 'agent_message', text: 'ok' } },
+            { type: 'turn.completed' },
+          ]),
+        ),
+    };
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+      rateLimitGovernor: { waitForReady, report } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
+    expect(report).toHaveBeenCalledWith({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
+    expect(waitForReady).toHaveBeenCalledTimes(2);
+    expect(fakeRunner.runStreamed).toHaveBeenCalledTimes(2);
+  });
+
   it('starts and closes a temporary MCP server for tool-backed agent loops', async () => {
     const close = vi.fn(async () => undefined);
     const startMcpServer = vi.fn(async () => ({

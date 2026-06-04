@@ -107,6 +107,45 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     expect(result.error).toBe(err);
   });
 
+  it('reports AI SDK retry-after rate limits and retries through the governor', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const rateLimitError = Object.assign(new Error('too many requests'), {
+      name: 'TooManyRequestsError',
+      retryAfter: 2,
+      statusCode: 429,
+    });
+    (generateText as any).mockRejectedValueOnce(rateLimitError).mockResolvedValueOnce({
+      text: 'done',
+      toolCalls: [],
+      steps: [],
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    });
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(report).toHaveBeenCalledWith({
+      provider: 'anthropic-api',
+      status: 'rejected',
+      retryAfterMs: 2_000,
+      rateLimitType: 'http_429',
+    });
+    expect(waitForReady).toHaveBeenCalledTimes(2);
+    expect(generateText).toHaveBeenCalledTimes(2);
+  });
+
   it('returns metrics with stepCount, per-step boundaries, and aggregate token usage', async () => {
     (generateText as any).mockImplementation(async (opts: any) => {
       await opts.onStepFinish({});
