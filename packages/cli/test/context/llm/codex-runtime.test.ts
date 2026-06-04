@@ -158,6 +158,35 @@ describe('CodexKtxLlmRuntime', () => {
     expect(fakeRunner.runStreamed).toHaveBeenCalledTimes(2);
   });
 
+  it('reports thrown Codex rate-limit failures and retries with opaque backoff', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const fakeRunner = {
+      runStreamed: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('ThreadError: 429 rate limit exceeded'))
+        .mockResolvedValueOnce(
+          events([
+            { type: 'turn.started' },
+            { type: 'item.completed', item: { type: 'agent_message', text: 'ok' } },
+            { type: 'turn.completed' },
+          ]),
+        ),
+    };
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+      rateLimitGovernor: { waitForReady, report } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
+
+    expect(report).toHaveBeenCalledWith({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
+    expect(waitForReady).toHaveBeenCalledTimes(2);
+    expect(fakeRunner.runStreamed).toHaveBeenCalledTimes(2);
+  });
+
   it('passes abort signals into Codex text generation and governor waits', async () => {
     const controller = new AbortController();
     const waitForReady = vi.fn().mockResolvedValue(undefined);

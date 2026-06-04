@@ -184,10 +184,20 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
   ): Promise<T> {
     for (let attempt = 0; attempt < 6; attempt += 1) {
       await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
-      const result = await run();
-      const error = getError(result);
-      if (!isCodexRateLimitError(error)) {
-        return result;
+      try {
+        const result = await run();
+        const error = getError(result);
+        if (!isCodexRateLimitError(error)) {
+          return result;
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+        const err = error instanceof Error ? error : new Error(String(error));
+        if (!isCodexRateLimitError(err)) {
+          throw error;
+        }
       }
       this.deps.rateLimitGovernor?.report({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
     }
