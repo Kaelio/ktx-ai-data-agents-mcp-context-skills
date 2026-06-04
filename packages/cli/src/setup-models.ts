@@ -470,8 +470,8 @@ async function chooseCredentialRef(
     const choice = await prompts.select({
       message: `How should KTX find your Anthropic API key?\n\n${ANTHROPIC_CREDENTIAL_PROMPT_CONTEXT}`,
       options: [
-        { value: 'env', label: 'Use ANTHROPIC_API_KEY from the environment' },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'env', label: 'Use ANTHROPIC_API_KEY from the environment' },
         { value: 'back', label: 'Back' },
       ],
     });

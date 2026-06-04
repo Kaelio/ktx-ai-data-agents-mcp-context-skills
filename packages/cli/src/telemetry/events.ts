@@ -206,6 +206,16 @@ const sqlGenCompletedSchema = telemetryCommonEnvelopeSchema
   })
   .strict();
 
+const queryHistoryFilterCompletedSchema = telemetryCommonEnvelopeSchema
+  .extend({
+    dialect: z.string(),
+    consideredRoleCount: z.number().int().nonnegative(),
+    excludedRoleCount: z.number().int().nonnegative(),
+    parseFailedCount: z.number().int().nonnegative(),
+    outcome: outcomeSchema,
+  })
+  .strict();
+
 /** @internal */
 export const telemetryEventSchemas = {
   install_first_run: installFirstRunSchema,
@@ -225,6 +235,7 @@ export const telemetryEventSchemas = {
   daemon_stopped: daemonStoppedSchema,
   sl_plan_completed: slPlanCompletedSchema,
   sql_gen_completed: sqlGenCompletedSchema,
+  query_history_filter_completed: queryHistoryFilterCompletedSchema,
 } as const;
 
 /** @internal */
@@ -359,6 +370,11 @@ export const telemetryEventCatalog = [
     name: 'sql_gen_completed',
     description: 'Emitted after daemon SQL generation completes.',
     fields: ['outcome', 'dialect', 'errorClass', 'durationMs'],
+  },
+  {
+    name: 'query_history_filter_completed',
+    description: 'Emitted after the setup query-history service-account filter picker runs.',
+    fields: ['dialect', 'consideredRoleCount', 'excludedRoleCount', 'parseFailedCount', 'outcome'],
   },
 ] as const;
 

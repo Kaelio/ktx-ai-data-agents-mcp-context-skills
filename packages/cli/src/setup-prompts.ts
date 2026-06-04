@@ -9,12 +9,12 @@ import {
   log,
   multiselect,
   note,
-  password,
   select,
   text,
 } from '@clack/prompts';
 import type { KtxCliIo } from './cli-runtime.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
+import { revealPassword } from './reveal-password-prompt.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 
 export interface KtxSetupPromptOption<Value extends string = string> {
@@ -189,7 +189,7 @@ export function createKtxSetupPromptAdapter(options: KtxSetupPromptAdapterOption
     },
     async password(promptOptions) {
       const value = await withSetupInterruptConfirmation(() =>
-        password({ ...promptOptions, message: withTextInputNavigation(promptOptions.message) }),
+        revealPassword({ ...promptOptions, message: withTextInputNavigation(promptOptions.message) }),
       );
       return isCancel(value) ? undefined : String(value);
     },
