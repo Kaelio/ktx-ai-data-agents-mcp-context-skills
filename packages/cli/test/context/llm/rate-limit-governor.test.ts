@@ -15,6 +15,12 @@ function testClock(startMs = 1_000) {
   };
 }
 
+async function flushMicrotasks(turns = 10): Promise<void> {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe('RateLimitGovernor', () => {
   it('drops and restores the effective work-unit limit from warning signals', () => {
     const clock = testClock();
@@ -149,5 +155,115 @@ describe('RateLimitGovernor', () => {
     release2();
 
     expect(sleeps).toEqual([1_000, 2_000]);
+  });
+
+  it('emits visible wait ticks after a rejected report without a waiting caller', async () => {
+    const clock = testClock();
+    const states: RateLimitWaitState[] = [];
+    const sleeps: number[] = [];
+    const governor = new RateLimitGovernor(
+      createRateLimitGovernorConfig({ maxConcurrency: 4, minConcurrencyUnderPressure: 1, waitStateTickMs: 100 }),
+      {
+        now: clock.now,
+        random: () => 0,
+        sleep: async (ms, signal) => {
+          if (signal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          sleeps.push(ms);
+          clock.advance(ms);
+        },
+      },
+    );
+    governor.subscribe((state) => states.push(state));
+
+    governor.report({
+      provider: 'claude-subscription',
+      status: 'rejected',
+      resetAtMs: 1_250,
+      rateLimitType: 'five_hour',
+    });
+    await flushMicrotasks();
+
+    expect(sleeps).toEqual([100, 100, 50]);
+    expect(states).toContainEqual(
+      expect.objectContaining({
+        kind: 'wait_started',
+        provider: 'claude-subscription',
+        rateLimitType: 'five_hour',
+        remainingMs: 250,
+      }),
+    );
+    expect(states.filter((state) => state.kind === 'wait_tick')).toHaveLength(3);
+    expect(states).toContainEqual(
+      expect.objectContaining({
+        kind: 'wait_finished',
+        provider: 'claude-subscription',
+        rateLimitType: 'five_hour',
+        remainingMs: 0,
+      }),
+    );
+  });
+
+  it('does not duplicate countdown sleeps when a work slot waits during the same pause', async () => {
+    const clock = testClock();
+    const states: RateLimitWaitState[] = [];
+    const sleeps: number[] = [];
+    const governor = new RateLimitGovernor(
+      createRateLimitGovernorConfig({ maxConcurrency: 2, waitStateTickMs: 100 }),
+      {
+        now: clock.now,
+        random: () => 0,
+        sleep: async (ms, signal) => {
+          if (signal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+          sleeps.push(ms);
+          clock.advance(ms);
+        },
+      },
+    );
+    governor.subscribe((state) => states.push(state));
+
+    governor.report({ provider: 'anthropic-api', status: 'rejected', retryAfterMs: 250, rateLimitType: 'rpm' });
+    const pendingRelease = governor.acquireWorkSlot();
+    await flushMicrotasks();
+    const release = await pendingRelease;
+    release();
+
+    expect(sleeps).toEqual([100, 100, 50]);
+    expect(states.filter((state) => state.kind === 'wait_tick')).toHaveLength(3);
+    expect(governor.activeSlots()).toBe(0);
+  });
+
+  it('stops the visible wait ticker when the last subscriber unsubscribes', async () => {
+    const clock = testClock();
+    let abortCount = 0;
+    const governor = new RateLimitGovernor(
+      createRateLimitGovernorConfig({ maxConcurrency: 1, waitStateTickMs: 100 }),
+      {
+        now: clock.now,
+        random: () => 0,
+        sleep: async (_ms, signal) =>
+          new Promise<void>((_resolve, reject) => {
+            signal?.addEventListener(
+              'abort',
+              () => {
+                abortCount += 1;
+                reject(new DOMException('Aborted', 'AbortError'));
+              },
+              { once: true },
+            );
+          }),
+      },
+    );
+    const unsubscribe = governor.subscribe(() => undefined);
+
+    governor.report({ provider: 'claude-subscription', status: 'rejected', retryAfterMs: 1_000 });
+    await flushMicrotasks(1);
+    unsubscribe();
+    await flushMicrotasks(1);
+
+    expect(abortCount).toBe(1);
   });
 });

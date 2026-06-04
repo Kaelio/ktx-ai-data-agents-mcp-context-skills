@@ -114,6 +114,8 @@ export class RateLimitGovernor {
   private pausedRateLimitType: string | undefined;
   private pausedTickMs: number | null = null;
   private opaqueAttempts = new Map<RateLimitProvider, number>();
+  private pauseGeneration = 0;
+  private visibleWaitAbort: AbortController | null = null;
 
   constructor(
     private readonly config: RateLimitGovernorConfig,
@@ -135,7 +137,16 @@ export class RateLimitGovernor {
 
   subscribe(cb: Subscriber): () => void {
     this.subscribers.add(cb);
-    return () => this.subscribers.delete(cb);
+    if (this.pausedUntilMs !== null) {
+      this.startVisibleWaitTicker();
+    }
+    return () => {
+      this.subscribers.delete(cb);
+      if (this.subscribers.size === 0) {
+        this.stopVisibleWaitTicker();
+        this.wakeWaiters();
+      }
+    };
   }
 
   report(signal: RateLimitSignal): void {
@@ -214,6 +225,7 @@ export class RateLimitGovernor {
       this.pausedRateLimitType = signal.rateLimitType;
       this.pausedTickMs = signal.rateLimitType === 'opaque' ? Math.max(1, boundedResumeAtMs - this.now()) : null;
       this.emitWait('wait_started');
+      this.startVisibleWaitTicker();
       this.wakeWaiters();
     }
     this.adjustLimit(Math.max(1, this.config.minConcurrencyUnderPressure), signal, 'provider rejected');
@@ -255,21 +267,60 @@ export class RateLimitGovernor {
     this.wakeWaiters();
   }
 
+  private startVisibleWaitTicker(): void {
+    if (this.subscribers.size === 0 || this.pausedUntilMs === null) {
+      return;
+    }
+    this.stopVisibleWaitTicker();
+    const generation = (this.pauseGeneration += 1);
+    const controller = new AbortController();
+    this.visibleWaitAbort = controller;
+    void this.runVisibleWaitTicker(generation, controller.signal).catch(() => undefined);
+  }
+
+  private stopVisibleWaitTicker(): void {
+    this.visibleWaitAbort?.abort();
+    this.visibleWaitAbort = null;
+  }
+
+  private async runVisibleWaitTicker(generation: number, signal: AbortSignal): Promise<void> {
+    while (!signal.aborted && generation === this.pauseGeneration && this.pausedUntilMs !== null) {
+      const remainingMs = this.pausedUntilMs - this.now();
+      if (remainingMs <= 0) {
+        this.finishPause(generation);
+        return;
+      }
+      this.emitWait('wait_tick');
+      await this.sleep(Math.min(this.pausedTickMs ?? this.config.waitStateTickMs, remainingMs), signal);
+    }
+  }
+
+  private finishPause(generation?: number): void {
+    if (generation !== undefined && generation !== this.pauseGeneration) {
+      return;
+    }
+    this.emitWait('wait_finished');
+    this.pausedUntilMs = null;
+    this.pausedProvider = null;
+    this.pausedRateLimitType = undefined;
+    this.pausedTickMs = null;
+    this.stopVisibleWaitTicker();
+    this.wakeWaiters();
+  }
+
   private async waitForPause(signal?: AbortSignal): Promise<void> {
     throwIfAborted(signal);
     while (this.pausedUntilMs !== null) {
       const remainingMs = this.pausedUntilMs - this.now();
       if (remainingMs <= 0) {
-        this.emitWait('wait_finished');
-        this.pausedUntilMs = null;
-        this.pausedProvider = null;
-        this.pausedRateLimitType = undefined;
-        this.pausedTickMs = null;
-        this.wakeWaiters();
+        this.finishPause();
         return;
       }
-      this.emitWait('wait_tick');
-      await this.sleep(Math.min(this.pausedTickMs ?? this.config.waitStateTickMs, remainingMs), signal);
+      if (this.visibleWaitAbort !== null) {
+        await this.waitForSlot(signal);
+      } else {
+        await this.sleep(Math.min(this.pausedTickMs ?? this.config.waitStateTickMs, remainingMs), signal);
+      }
       throwIfAborted(signal);
     }
   }
