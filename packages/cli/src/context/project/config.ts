@@ -100,6 +100,42 @@ const workUnitsSchema = z
   })
   .describe('Concurrency and failure handling for ingest work units.');
 
+const ingestRateLimitRetrySchema = z
+  .strictObject({
+    maxAttempts: z
+      .int()
+      .positive()
+      .default(6)
+      .describe('Maximum opaque retry attempts for providers that do not expose a reset time.'),
+    baseDelayMs: z.int().positive().default(1_000).describe('Initial opaque retry delay in milliseconds.'),
+    maxDelayMs: z.int().positive().default(60_000).describe('Maximum opaque retry delay in milliseconds.'),
+    jitter: z.boolean().default(true).describe('When true, apply bounded jitter to opaque retry delays.'),
+  })
+  .describe('Retry policy for rate-limit responses that do not include a reset time or retry-after value.');
+
+const ingestRateLimitSchema = z
+  .strictObject({
+    enabled: z.boolean().default(true).describe('Master switch for ingest LLM rate-limit pacing and visible waits.'),
+    throttleThreshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.8)
+      .describe('Provider utilization at or above which ingest throttles new work-unit starts.'),
+    minConcurrencyUnderPressure: z
+      .int()
+      .positive()
+      .default(1)
+      .describe('Effective work-unit concurrency while a provider is under rate-limit pressure.'),
+    maxWaitMs: z
+      .int()
+      .positive()
+      .optional()
+      .describe('Optional cap on a single provider reset wait. Omit to wait indefinitely until the provider reset time.'),
+    retry: ingestRateLimitRetrySchema.prefault({}).describe('Opaque retry policy for providers without reset hints.'),
+  })
+  .describe('Rate-limit pacing and wait policy for ingest LLM calls.');
+
 const ingestSchema = z
   .strictObject({
     adapters: z
@@ -110,6 +146,7 @@ const ingestSchema = z
       .prefault({ backend: 'none' })
       .describe('Embedding configuration used when ingest adapters need to embed documents.'),
     workUnits: workUnitsSchema.prefault({}).describe('Concurrency and failure handling for ingest work units.'),
+    rateLimit: ingestRateLimitSchema.prefault({}).describe('LLM rate-limit pacing and visible-wait policy for ingest.'),
     profile: z
       .union([z.boolean(), z.literal('json')])
       .default(false)

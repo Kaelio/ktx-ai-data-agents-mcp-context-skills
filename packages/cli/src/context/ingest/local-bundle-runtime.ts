@@ -12,6 +12,7 @@ import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-
 import { createRuntimeToolDescriptorFromAiTool } from '../../context/llm/runtime-tools.js';
 import { createLocalKtxLlmRuntimeFromConfig } from '../../context/llm/local-config.js';
 import { KtxIngestEmbeddingPortAdapter } from '../../context/llm/embedding-port.js';
+import { createRateLimitGovernorConfig, RateLimitGovernor } from '../../context/llm/rate-limit-governor.js';
 import { RuntimeAgentRunner, type AgentRunnerPort, type KtxLlmRuntimePort, type KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
 import type { KtxEmbeddingProvider } from '../../llm/types.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
@@ -619,7 +620,7 @@ function localIngestLlmProviderGuardMessage(projectDir: string): string {
   ].join('\n');
 }
 
-function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
+function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions, rateLimitGovernor: RateLimitGovernor): {
   agentRunner: AgentRunnerPort;
   llmRuntime?: KtxLlmRuntimePort;
 } {
@@ -628,6 +629,7 @@ function resolveAgentRunner(options: CreateLocalBundleIngestRuntimeOptions): {
     (options.createLlmRuntime ?? createLocalKtxLlmRuntimeFromConfig)(options.project.config.llm, {
       projectDir: options.project.projectDir,
       env: process.env,
+      rateLimitGovernor,
     }) ??
     undefined;
 
@@ -677,7 +679,13 @@ export function createLocalBundleIngestRuntime(
   const knowledgeIndex = new LocalKnowledgeIndex(options.project, embedding);
   const knowledgeEvents = new NoopKnowledgeEventPort();
   const wikiService = new KnowledgeWikiService(rootFileStore, embedding, knowledgeIndex, options.project.git, logger);
-  const { agentRunner, llmRuntime } = resolveAgentRunner(options);
+  const rateLimitGovernor = new RateLimitGovernor(
+    createRateLimitGovernorConfig({
+      ...options.project.config.ingest.rateLimit,
+      maxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
+    }),
+  );
+  const { agentRunner, llmRuntime } = resolveAgentRunner(options, rateLimitGovernor);
   const promptService = new PromptService({ promptsDir, partials: [], logger });
   const storage = new LocalIngestStorage(options.project);
   const registry = registerAdapters(options.adapters);
@@ -717,6 +725,7 @@ export function createLocalBundleIngestRuntime(
       workUnitMaxConcurrency: options.project.config.ingest.workUnits.maxConcurrency,
       workUnitStepBudget: options.project.config.ingest.workUnits.stepBudget,
       workUnitFailureMode: options.project.config.ingest.workUnits.failureMode,
+      rateLimitGovernor,
       profileIngest: options.project.config.ingest.profile,
       ingestTraceLevel: ingestTraceLevelFromEnv(),
     },

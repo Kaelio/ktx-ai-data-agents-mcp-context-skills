@@ -5,6 +5,7 @@ import type { KtxFileStorePort } from '../../context/core/file-store.js';
 import type { KtxLogger } from '../../context/core/config.js';
 import type { SessionOutcome } from '../../context/core/session-worktree.service.js';
 import type { AgentRunnerPort, KtxLlmRuntimePort, KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { RateLimitGovernor } from '../llm/rate-limit-governor.js';
 import type { MemoryAction, MemoryKnowledgeSlRefsPort } from '../../context/memory/types.js';
 import type { PromptService } from '../../context/prompts/prompt.service.js';
 import type { SkillsRegistryService } from '../../context/skills/skills-registry.service.js';
@@ -144,6 +145,7 @@ interface IngestSettingsPort {
   workUnitMaxConcurrency?: number;
   workUnitStepBudget?: number;
   workUnitFailureMode?: 'abort' | 'continue';
+  rateLimitGovernor?: RateLimitGovernor;
   /** Print a timing breakdown to stderr at the end of each run (config-driven; see also KTX_PROFILE_INGEST). `'json'` emits the raw structured profile. */
   profileIngest?: boolean | 'json';
   ingestTraceLevel?: IngestTraceLevel;
