@@ -121,7 +121,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
@@ -157,7 +157,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report } as never,
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report, maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
@@ -203,7 +203,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
@@ -236,7 +236,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report } as never,
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report, maxRetryAttempts: () => 6 } as never,
     });
 
     await runtime.generateText({ role: 'default', prompt: 'hello' });
@@ -257,7 +257,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady, report: vi.fn() } as never,
+      rateLimitGovernor: { waitForReady, report: vi.fn(), maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal })).resolves.toBe('ok');
@@ -284,7 +284,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn() } as never,
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn(), maxRetryAttempts: () => 6 } as never,
     });
 
     const pending = runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal });
@@ -304,7 +304,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn() } as never,
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn(), maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal })).rejects.toThrow(/Aborted/);
@@ -329,7 +329,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       modelSlots: { default: 'sonnet' },
       query,
       env: {},
-      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn() } as never,
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn(), maxRetryAttempts: () => 6 } as never,
     });
 
     const pending = runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal });

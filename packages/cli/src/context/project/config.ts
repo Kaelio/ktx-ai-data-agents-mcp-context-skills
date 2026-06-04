@@ -106,7 +106,9 @@ const ingestRateLimitRetrySchema = z
       .int()
       .positive()
       .default(6)
-      .describe('Maximum opaque retry attempts for providers that do not expose a reset time.'),
+      .describe(
+        'Maximum attempts for a single rate-limited LLM call before the failure surfaces, counting the first try. Also bounds how far opaque backoff grows for providers that do not expose a reset time.',
+      ),
     baseDelayMs: z.int().positive().default(1_000).describe('Initial opaque retry delay in milliseconds.'),
     maxDelayMs: z.int().positive().default(60_000).describe('Maximum opaque retry delay in milliseconds.'),
     jitter: z.boolean().default(true).describe('When true, apply bounded jitter to opaque retry delays.'),

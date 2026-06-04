@@ -520,8 +520,8 @@ and reduces work-unit concurrency while the provider is under pressure.
 | `rateLimit.enabled` | `boolean` | `true` | Master switch for ingest LLM rate-limit pacing and visible waits. |
 | `rateLimit.throttleThreshold` | `number between 0 and 1` | `0.8` | Fraction of a known provider window at which **ktx** starts reducing concurrency. |
 | `rateLimit.minConcurrencyUnderPressure` | `int > 0` | `1` | Effective work-unit concurrency while a provider is under rate-limit pressure. |
-| `rateLimit.maxWaitMs` | `int > 0` | unset | Optional maximum wait before the run fails instead of continuing to pause. |
-| `rateLimit.retry.maxAttempts` | `int > 0` | `6` | Maximum retry attempts for opaque rate-limit responses that don't include a reset time or retry-after value. |
+| `rateLimit.maxWaitMs` | `int > 0` | unset | Caps how long a single provider-reset wait can last. This bounds each wait, not the whole run: after a capped wait elapses **ktx** retries and may pause again. Omit to wait until the provider's reset time. |
+| `rateLimit.retry.maxAttempts` | `int > 0` | `6` | Maximum attempts for a single rate-limited LLM call before the failure surfaces (counts the first try). Also bounds how far opaque backoff grows for responses without a reset time or retry-after value. |
 | `rateLimit.retry.baseDelayMs` | `int > 0` | `1000` | Initial opaque retry delay in milliseconds. |
 | `rateLimit.retry.maxDelayMs` | `int > 0` | `60000` | Maximum opaque retry delay in milliseconds. |
 | `rateLimit.retry.jitter` | `boolean` | `true` | Add jitter to opaque retry delays. |

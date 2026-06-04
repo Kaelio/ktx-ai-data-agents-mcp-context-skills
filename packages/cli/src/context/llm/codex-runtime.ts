@@ -26,7 +26,7 @@ export interface CodexKtxLlmRuntimeDeps {
   runner?: CodexSdkRunner;
   startMcpServer?: (input: { projectDir: string; toolSet: KtxRuntimeToolSet }) => Promise<CodexRuntimeMcpServerHandle>;
   logger?: KtxLogger;
-  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
 function modelForRole(modelSlots: CodexKtxLlmRuntimeDeps['modelSlots'], role: string): string {
@@ -182,12 +182,17 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
     run: () => Promise<T>,
     getError: (result: T) => Error | undefined,
   ): Promise<T> {
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    // maxRetryAttempts() returns 1 when no governor is present or pacing is
+    // disabled, so an opaque rate-limit failure surfaces on the first attempt
+    // instead of being retried with no backoff.
+    const maxAttempts = this.deps.rateLimitGovernor?.maxRetryAttempts() ?? 1;
+    for (let attempt = 0; ; attempt += 1) {
       await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
+      const lastAttempt = attempt >= maxAttempts - 1;
       try {
         const result = await run();
         const error = getError(result);
-        if (!isCodexRateLimitError(error)) {
+        if (!isCodexRateLimitError(error) || lastAttempt) {
           return result;
         }
       } catch (error) {
@@ -195,14 +200,12 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           throw error;
         }
         const err = error instanceof Error ? error : new Error(String(error));
-        if (!isCodexRateLimitError(err)) {
+        if (!isCodexRateLimitError(err) || lastAttempt) {
           throw error;
         }
       }
       this.deps.rateLimitGovernor?.report({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
     }
-    await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
-    return run();
   }
 
   async generateText(input: KtxGenerateTextInput): Promise<string> {

@@ -54,7 +54,7 @@ export interface ClaudeCodeKtxLlmRuntimeDeps {
   query?: QueryFn;
   env?: NodeJS.ProcessEnv;
   logger?: KtxLogger;
-  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
 const BUILTIN_TOOLS = [
@@ -297,7 +297,7 @@ async function collectResult(params: {
   allowedToolIds: Set<string>;
   expectedMcpServerNames: Set<string>;
   onAssistantTurn?: () => Promise<void>;
-  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
   abortSignal?: AbortSignal;
 }): Promise<ClaudeQueryOutcome> {
   let result: SDKResultMessage | undefined;
@@ -344,13 +344,16 @@ async function collectResult(params: {
 }
 
 async function collectResultWithRateLimitRetry(params: Parameters<typeof collectResult>[0]): Promise<SDKResultMessage> {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  // maxRetryAttempts() returns 1 when no governor is present or pacing is
+  // disabled, so a rate-limited result surfaces without an extra query; the
+  // Claude Code SDK applies its own backoff for transient rejections.
+  const maxAttempts = params.rateLimitGovernor?.maxRetryAttempts() ?? 1;
+  for (let attempt = 0; ; attempt += 1) {
     const outcome = await collectResult(params);
-    if (!params.rateLimitGovernor || !isClaudeRateLimitResult(outcome.result, outcome.rejectedRateLimitSignal) || attempt >= 5) {
+    if (!isClaudeRateLimitResult(outcome.result, outcome.rejectedRateLimitSignal) || attempt >= maxAttempts - 1) {
       return outcome.result;
     }
   }
-  throw new Error('Unreachable Claude Code rate-limit retry state');
 }
 
 export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {

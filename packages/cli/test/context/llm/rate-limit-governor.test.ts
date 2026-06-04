@@ -157,6 +157,15 @@ describe('RateLimitGovernor', () => {
     expect(sleeps).toEqual([1_000, 2_000]);
   });
 
+  it('exposes the configured retry budget and disables outer retries when pacing is off', () => {
+    const retry = { maxAttempts: 3, baseDelayMs: 1_000, maxDelayMs: 60_000, jitter: false };
+    const enabled = new RateLimitGovernor(createRateLimitGovernorConfig({ retry }));
+    expect(enabled.maxRetryAttempts()).toBe(3);
+
+    const disabled = new RateLimitGovernor(createRateLimitGovernorConfig({ enabled: false, retry }));
+    expect(disabled.maxRetryAttempts()).toBe(1);
+  });
+
   it('emits visible wait ticks after a rejected report without a waiting caller', async () => {
     const clock = testClock();
     const states: RateLimitWaitState[] = [];

@@ -131,6 +131,17 @@ export class RateLimitGovernor {
     return this.config.enabled ? this.effectiveLimit : this.config.maxConcurrency;
   }
 
+  /**
+   * Total attempts a runtime should make for a single rate-limited LLM call,
+   * including the first try. Returns 1 (no outer retry) when pacing is disabled:
+   * the outer retry loop only exists to cooperate with this governor's pause, so
+   * without active pacing there is no backoff to apply and the backend's own
+   * retry handles transient rejections.
+   */
+  maxRetryAttempts(): number {
+    return this.config.enabled ? Math.max(1, this.config.retry.maxAttempts) : 1;
+  }
+
   activeSlots(): number {
     return this.active;
   }

@@ -123,7 +123,7 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     });
     const runtime = new AiSdkKtxLlmRuntime({
       llmProvider: llmProvider as any,
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     const result = await runtime.runAgentLoop({
@@ -146,6 +146,54 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     expect(generateText).toHaveBeenCalledTimes(2);
   });
 
+  it('does not retry AI SDK rate limits without a governor', async () => {
+    const rateLimitError = Object.assign(new Error('too many requests'), {
+      name: 'TooManyRequestsError',
+      statusCode: 429,
+    });
+    (generateText as any).mockRejectedValue(rateLimitError);
+    // The beforeEach runtime is constructed without a rateLimitGovernor.
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors a governor retry budget of one attempt without retrying', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const rateLimitError = Object.assign(new Error('too many requests'), {
+      name: 'TooManyRequestsError',
+      statusCode: 429,
+    });
+    (generateText as any).mockRejectedValue(rateLimitError);
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 1 } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(report).not.toHaveBeenCalled();
+  });
+
   it('reports Anthropic API response-header utilization to the governor', async () => {
     const waitForReady = vi.fn().mockResolvedValue(undefined);
     const report = vi.fn();
@@ -164,7 +212,7 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     });
     const runtime = new AiSdkKtxLlmRuntime({
       llmProvider: llmProvider as any,
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     const result = await runtime.runAgentLoop({
@@ -207,7 +255,7 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     });
     const runtime = new AiSdkKtxLlmRuntime({
       llmProvider: vertexProvider as any,
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     const result = await runtime.runAgentLoop({
@@ -234,7 +282,7 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     (generateText as any).mockResolvedValue({ text: 'done', toolCalls: [], steps: [] });
     const runtime = new AiSdkKtxLlmRuntime({
       llmProvider: llmProvider as any,
-      rateLimitGovernor: { waitForReady, report: vi.fn() } as never,
+      rateLimitGovernor: { waitForReady, report: vi.fn(), maxRetryAttempts: () => 6 } as never,
     });
 
     const result = await runtime.runAgentLoop({

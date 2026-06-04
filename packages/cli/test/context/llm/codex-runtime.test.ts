@@ -149,7 +149,7 @@ describe('CodexKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'codex' },
       runner: fakeRunner,
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
@@ -177,7 +177,7 @@ describe('CodexKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'codex' },
       runner: fakeRunner,
-      rateLimitGovernor: { waitForReady, report } as never,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
@@ -185,6 +185,18 @@ describe('CodexKtxLlmRuntime', () => {
     expect(report).toHaveBeenCalledWith({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
     expect(waitForReady).toHaveBeenCalledTimes(2);
     expect(fakeRunner.runStreamed).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces Codex rate-limit failures without retrying when no governor is present', async () => {
+    const fakeRunner = runner([{ type: 'turn.failed', error: { message: '429 rate limit exceeded' } }]);
+    const runtime = new CodexKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'codex' },
+      runner: fakeRunner,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).rejects.toThrow(/rate limit/i);
+    expect(fakeRunner.runStreamed).toHaveBeenCalledTimes(1);
   });
 
   it('passes abort signals into Codex text generation and governor waits', async () => {
@@ -205,7 +217,7 @@ describe('CodexKtxLlmRuntime', () => {
       projectDir: '/tmp/project',
       modelSlots: { default: 'codex' },
       runner: fakeRunner,
-      rateLimitGovernor: { waitForReady, report: vi.fn() } as never,
+      rateLimitGovernor: { waitForReady, report: vi.fn(), maxRetryAttempts: () => 6 } as never,
     });
 
     await expect(runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal })).resolves.toBe('ok');

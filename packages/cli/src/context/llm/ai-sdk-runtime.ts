@@ -42,7 +42,7 @@ export interface AiSdkKtxLlmRuntimeDeps {
   telemetry?: AgentTelemetryPort;
   logger?: KtxLogger;
   debugRequestRecorder?: KtxLlmDebugRequestRecorder;
-  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
 function hasTools(tools: Record<string, unknown>): boolean {
@@ -177,6 +177,10 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
     abortSignal: AbortSignal | undefined,
     run: () => Promise<T>,
   ): Promise<T> {
+    // maxRetryAttempts() returns 1 when no governor is present or pacing is
+    // disabled, so a 429 throws immediately instead of hammering the provider
+    // with no backoff; the AI SDK's own maxRetries still handles transient 429s.
+    const maxAttempts = this.deps.rateLimitGovernor?.maxRetryAttempts() ?? 1;
     let attempt = 0;
     while (true) {
       await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
@@ -188,7 +192,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         }
         return result;
       } catch (error) {
-        if (isAbortError(error) || !isAiSdkRateLimitError(error) || attempt >= 5) {
+        if (isAbortError(error) || !isAiSdkRateLimitError(error) || attempt >= maxAttempts - 1) {
           throw error;
         }
         attempt += 1;
