@@ -71,6 +71,13 @@ const memoryFlowEventSchema = z.discriminatedUnion('type', [
     transient: z.boolean().optional(),
   }),
   eventSchema({
+    type: z.literal('rate_limit_wait'),
+    provider: z.string(),
+    rateLimitType: z.string().optional(),
+    resumeAtMs: z.number().int().nonnegative(),
+    remainingMs: z.number().int().nonnegative(),
+  }),
+  eventSchema({
     type: z.literal('work_unit_started'),
     unitKey: z.string().min(1),
     skills: z.array(z.string().min(1)),

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../../context/core/config.js';
+import type { RateLimitWaitState } from '../../context/llm/rate-limit-governor.js';
 import { createRuntimeToolDescriptorFromAiTool } from '../../context/llm/runtime-tools.js';
 import type { KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../context/memory/types.js';
@@ -219,6 +220,10 @@ export class IngestBundleRunner {
   }
 
   async run(job: IngestBundleJob, ctx?: IngestJobContext): Promise<IngestBundleResult> {
+    const unsubscribeRateLimitGovernor = this.subscribeRateLimitGovernor({
+      trace: this.createTrace(job),
+      memoryFlow: ctx?.memoryFlow,
+    });
     const key = job.connectionId;
     const previous = this.chainByConnection.get(key);
     if (previous) {
@@ -241,7 +246,69 @@ export class IngestBundleRunner {
       ctx?.memoryFlow?.finish('error', [sanitizeMemoryFlowError(error)]);
       throw error;
     } finally {
+      unsubscribeRateLimitGovernor();
       await this.maybeEmitIngestProfile(job.jobId);
+    }
+  }
+
+  private formatRateLimitWait(
+    state: Extract<RateLimitWaitState, { kind: 'wait_tick' | 'wait_started' | 'wait_finished' }>,
+  ): string {
+    const seconds = Math.ceil(state.remainingMs / 1_000);
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    const duration = minutes > 0 ? `${minutes}m${String(remainder).padStart(2, '0')}s` : `${seconds}s`;
+    const type = state.rateLimitType ? ` ${state.rateLimitType}` : '';
+    return `Rate-limited (${state.provider}${type}); resuming in ${duration}; Ctrl+C to stop`;
+  }
+
+  private subscribeRateLimitGovernor(input: {
+    trace: IngestTraceWriter;
+    memoryFlow?: MemoryFlowEventSink;
+  }): () => void {
+    const governor = this.deps.settings.rateLimitGovernor;
+    if (!governor) {
+      return () => undefined;
+    }
+    return governor.subscribe((state: RateLimitWaitState) => {
+      if (state.kind === 'rate_limit_observed') {
+        void input.trace.event('info', 'rate_limit', 'rate_limit_observed', { ...state });
+        return;
+      }
+      if (state.kind === 'concurrency_adjusted') {
+        void input.trace.event('info', 'rate_limit', 'concurrency_adjusted', { ...state });
+        return;
+      }
+      void input.trace.event('info', 'rate_limit', state.kind, { ...state });
+      if (state.kind === 'wait_tick' || state.kind === 'wait_started') {
+        input.memoryFlow?.emit({
+          type: 'rate_limit_wait',
+          provider: state.provider,
+          ...(state.rateLimitType ? { rateLimitType: state.rateLimitType } : {}),
+          resumeAtMs: state.resumeAtMs,
+          remainingMs: state.remainingMs,
+        });
+        input.memoryFlow?.emit({
+          type: 'stage_progress',
+          stage: 'integration',
+          percent: 50,
+          message: this.formatRateLimitWait(state),
+          transient: true,
+        });
+      }
+    });
+  }
+
+  private async withRateLimitWorkSlot<T>(fn: () => Promise<T>): Promise<T> {
+    const governor = this.deps.settings.rateLimitGovernor;
+    if (!governor) {
+      return fn();
+    }
+    const release = await governor.acquireWorkSlot();
+    try {
+      return await fn();
+    } finally {
+      release();
     }
   }
 
@@ -1524,7 +1591,8 @@ export class IngestBundleRunner {
         try {
           await Promise.all(
             workUnits.map((wu, index) =>
-              limitWorkUnit(async () => {
+              limitWorkUnit(() =>
+                this.withRateLimitWorkSlot(async () => {
                 const outcome = await runIsolatedWorkUnit({
                   unitIndex: index,
                   ingestionBaseSha,
@@ -1594,7 +1662,8 @@ export class IngestBundleRunner {
                   completedWorkUnits / workUnits.length,
                   `${completedWorkUnits} of ${workUnits.length} work units complete`,
                 );
-              }),
+                }),
+              ),
             ),
           );
         } catch (error) {

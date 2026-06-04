@@ -426,6 +426,102 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     );
   });
 
+  it('uses the rate-limit governor for work-unit start slots', async () => {
+    const deps = makeDeps();
+    const acquireWorkSlot = vi.fn(async () => vi.fn());
+    const runner = buildRunner(deps, {
+      settings: {
+        probeRowCount: 1,
+        memoryIngestionModel: 'test-model',
+        workUnitMaxConcurrency: 2,
+        rateLimitGovernor: { acquireWorkSlot, subscribe: vi.fn(() => vi.fn()) } as never,
+      },
+    });
+    deps.adapter.chunk.mockResolvedValue({
+      workUnits: [
+        { unitKey: 'u1', rawFiles: ['a.yml'], peerFileIndex: [], dependencyPaths: [] },
+        { unitKey: 'u2', rawFiles: ['b.yml'], peerFileIndex: [], dependencyPaths: [] },
+      ],
+    });
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([
+        ['a.yml', 'h1'],
+        ['b.yml', 'h2'],
+      ]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run({
+      jobId: 'j1',
+      connectionId: 'c1',
+      sourceKey: 'fake',
+      trigger: 'upload',
+      bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+    });
+
+    expect(acquireWorkSlot).toHaveBeenCalledTimes(2);
+  });
+
+  it('emits trace and memory-flow status for rate-limit waits', async () => {
+    const deps = makeDeps();
+    let subscriber: ((state: any) => void) | undefined;
+    const memoryFlow = createMemoryFlowLiveBuffer(bundleReplayInput());
+    const runner = buildRunner(deps, {
+      settings: {
+        probeRowCount: 1,
+        memoryIngestionModel: 'test-model',
+        rateLimitGovernor: {
+          acquireWorkSlot: vi.fn(async () => vi.fn()),
+          subscribe: vi.fn((cb: (state: any) => void) => {
+            subscriber = cb;
+            return vi.fn();
+          }),
+        } as never,
+      },
+    });
+    (runner as any).runInner = async (_job: any, ctx: any) => {
+      subscriber?.({
+        kind: 'wait_tick',
+        provider: 'claude-subscription',
+        rateLimitType: 'five_hour',
+        resumeAtMs: 2_000,
+        remainingMs: 1_000,
+      });
+      ctx.memoryFlow.emit({ type: 'report_created', runId: 'run-1' });
+      return {
+        runId: 'run-1',
+        syncId: 'sync-1',
+        diffSummary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
+        workUnitCount: 0,
+        failedWorkUnits: [],
+        artifactsWritten: 0,
+        commitSha: null,
+      };
+    };
+
+    await runner.run(
+      {
+        jobId: 'j1',
+        connectionId: 'c1',
+        sourceKey: 'fake',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+      },
+      { memoryFlow } as any,
+    );
+
+    expect(memoryFlow.snapshot().events).toContainEqual(
+      expect.objectContaining({
+        type: 'rate_limit_wait',
+        provider: 'claude-subscription',
+        rateLimitType: 'five_hour',
+        resumeAtMs: 2_000,
+        remainingMs: 1_000,
+      }),
+    );
+  });
+
   it('fails before squash when reconciliation leaves a touched wiki page with dangling refs', async () => {
     const deps = makeDeps();
     let currentToolSession: any = null;
