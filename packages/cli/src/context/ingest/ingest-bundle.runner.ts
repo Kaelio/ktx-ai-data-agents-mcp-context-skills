@@ -299,12 +299,12 @@ export class IngestBundleRunner {
     });
   }
 
-  private async withRateLimitWorkSlot<T>(fn: () => Promise<T>): Promise<T> {
+  private async withRateLimitWorkSlot<T>(abortSignal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
     const governor = this.deps.settings.rateLimitGovernor;
     if (!governor) {
       return fn();
     }
-    const release = await governor.acquireWorkSlot();
+    const release = await governor.acquireWorkSlot(abortSignal);
     try {
       return await fn();
     } finally {
@@ -944,6 +944,7 @@ export class IngestBundleRunner {
     includeContextEvidenceTools: boolean;
     currentTableExists(tableRef: string): Promise<boolean>;
     memoryFlow?: MemoryFlowEventSink;
+    abortSignal?: AbortSignal;
     wuSkillNames: string[];
     onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
   }): Promise<WorkUnitOutcome> {
@@ -1096,6 +1097,7 @@ export class IngestBundleRunner {
         jobId: input.job.jobId,
         toolFailureCount: (unitKey) => input.transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
         onStepFinish: input.onStepFinish,
+        abortSignal: input.abortSignal,
       },
       input.wu,
     );
@@ -1592,7 +1594,7 @@ export class IngestBundleRunner {
           await Promise.all(
             workUnits.map((wu, index) =>
               limitWorkUnit(() =>
-                this.withRateLimitWorkSlot(async () => {
+                this.withRateLimitWorkSlot(ctx?.abortSignal, async () => {
                 const outcome = await runIsolatedWorkUnit({
                   unitIndex: index,
                   ingestionBaseSha,
@@ -1600,6 +1602,7 @@ export class IngestBundleRunner {
                   patchDir,
                   trace: runTrace,
                   workUnit: wu,
+                  abortSignal: ctx?.abortSignal,
                   afterSuccess: (child) => copyTransientIngestEvidence(child.workdir, sessionWorktree.workdir),
                   run: async (child) => {
                     const scopedWikiService = this.deps.wikiService.forWorktree(child.workdir);
@@ -1633,6 +1636,7 @@ export class IngestBundleRunner {
                       includeContextEvidenceTools: adapter.evidenceIndexing === 'documents' && !!contextReport,
                       currentTableExists: (tableRef) =>
                         this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
+                      abortSignal: ctx?.abortSignal,
                       memoryFlow,
                       wuSkillNames,
                       onStepFinish: ({ stepIndex, stepBudget }) => {
@@ -1762,6 +1766,7 @@ export class IngestBundleRunner {
                 reason: context.reason,
                 maxAttempts: 1,
                 stepBudget: 12,
+                abortSignal: ctx?.abortSignal,
               });
               emitStageProgress(
                 'integration',
@@ -1783,6 +1788,7 @@ export class IngestBundleRunner {
                 repairKind: 'patch_semantic_gate',
                 maxAttempts: 1,
                 stepBudget: 16,
+                abortSignal: ctx?.abortSignal,
               });
               emitStageProgress(
                 'integration',
@@ -2062,6 +2068,7 @@ export class IngestBundleRunner {
                 );
               }
             : undefined,
+          abortSignal: ctx?.abortSignal,
         });
         curatorReport = curatorOutcome.report;
         curatorWarnings = curatorOutcome.warnings;
@@ -2107,6 +2114,7 @@ export class IngestBundleRunner {
           sourceKey: job.sourceKey,
           jobId: job.jobId,
           force: !!overrideReport,
+          abortSignal: ctx?.abortSignal,
           onStepFinish: stage4
             ? ({ stepIndex, stepBudget }) => {
                 emitStageProgress('reconciliation', 85, `Reconciling results: step ${stepIndex}/${stepBudget}`, {
@@ -2539,6 +2547,7 @@ export class IngestBundleRunner {
           repairKind: 'final_artifact_gate',
           maxAttempts: 1,
           stepBudget: 16,
+          abortSignal: ctx?.abortSignal,
         });
 
         isolatedDiffSummary.gateRepairAttempts += gateRepair.attempts;

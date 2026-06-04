@@ -19,6 +19,7 @@ export interface ResolveTextualConflictInput {
   reason: string;
   maxAttempts?: number;
   stepBudget?: number;
+  abortSignal?: AbortSignal;
 }
 
 const readIntegrationFileSchema = z.object({
@@ -208,6 +209,7 @@ export async function resolveTextualConflict(
           jobId: input.trace.context.jobId,
           unitKey: input.unitKey,
         },
+        abortSignal: input.abortSignal,
       }),
     );
 

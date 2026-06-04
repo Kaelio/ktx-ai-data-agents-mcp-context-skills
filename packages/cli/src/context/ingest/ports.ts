@@ -325,6 +325,7 @@ export interface CuratorPaginationPort {
     buildToolSet: (passNumber: number) => KtxRuntimeToolSet;
     getReconciliationActions: () => MemoryAction[];
     onStepFinish?: (info: { passNumber: number; stepIndex: number; stepBudget: number }) => void;
+    abortSignal?: AbortSignal;
   }): Promise<ReconciliationOutcome & { report: CuratorPaginationReport; warnings: string[] }>;
 }
 

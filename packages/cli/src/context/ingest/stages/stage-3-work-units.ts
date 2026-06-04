@@ -1,4 +1,5 @@
 import type { KtxModelRole } from '../../../llm/types.js';
+import { isAbortError } from '../../core/abort.js';
 import type { AgentRunnerPort, KtxRuntimeToolSet, RunLoopMetrics } from '../../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../../context/memory/types.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
@@ -28,6 +29,7 @@ export interface WorkUnitExecutionDeps {
   connectionId: string;
   jobId: string;
   onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
+  abortSignal?: AbortSignal;
   toolFailureCount?: (unitKey: string) => number;
 }
 
@@ -106,8 +108,12 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
         jobId: deps.jobId,
       },
       onStepFinish: deps.onStepFinish,
+      abortSignal: deps.abortSignal,
     });
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return failWithResetFromCurrentHead(error instanceof Error ? error.message : String(error));
   }
 

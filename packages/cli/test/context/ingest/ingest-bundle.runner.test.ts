@@ -463,6 +463,81 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     expect(acquireWorkSlot).toHaveBeenCalledTimes(2);
   });
 
+  it('passes the job abort signal into rate-limit work-unit slots', async () => {
+    const deps = makeDeps();
+    const controller = new AbortController();
+    const acquireWorkSlot = vi.fn(async () => vi.fn());
+    const runner = buildRunner(deps, {
+      settings: {
+        probeRowCount: 1,
+        memoryIngestionModel: 'test-model',
+        workUnitMaxConcurrency: 1,
+        rateLimitGovernor: { acquireWorkSlot, subscribe: vi.fn(() => vi.fn()) } as never,
+      },
+    });
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await runner.run(
+      {
+        jobId: 'j1',
+        connectionId: 'c1',
+        sourceKey: 'fake',
+        trigger: 'upload',
+        bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+      },
+      { jobId: 'j1', abortSignal: controller.signal, startPhase: () => new TestJobContext('j1', null, async () => undefined, async () => undefined) } as any,
+    );
+
+    expect(acquireWorkSlot).toHaveBeenCalledWith(controller.signal);
+  });
+
+  it('does not convert aborted work-unit agent loops into failed work units', async () => {
+    const deps = makeDeps();
+    const controller = new AbortController();
+    deps.agentRunner.runLoop.mockImplementation(async () => {
+      controller.abort();
+      throw new DOMException('Aborted', 'AbortError');
+    });
+    const runner = buildRunner(deps, {
+      settings: {
+        probeRowCount: 1,
+        memoryIngestionModel: 'test-model',
+        workUnitMaxConcurrency: 1,
+      },
+    });
+    (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({
+      currentHashes: new Map([['a.yml', 'h1']]),
+      rawDirInWorktree: 'raw-sources/c1/fake/s',
+    });
+    (runner as any).resolveStagedDir = vi.fn().mockResolvedValue('/tmp/stage/upload-x');
+
+    await expect(
+      runner.run(
+        {
+          jobId: 'j1',
+          connectionId: 'c1',
+          sourceKey: 'fake',
+          trigger: 'upload',
+          bundleRef: { kind: 'upload', uploadId: 'upload-x' },
+        },
+        { jobId: 'j1', abortSignal: controller.signal, startPhase: () => new TestJobContext('j1', null, async () => undefined, async () => undefined) } as any,
+      ),
+    ).rejects.toThrow(/Aborted/);
+
+    expect(deps.runsRepo.markFailed).toHaveBeenCalledWith('run-1');
+    expect(deps.reportsRepo.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          failedWorkUnits: expect.arrayContaining(['u1']),
+        }),
+      }),
+    );
+  });
+
   it('emits trace and memory-flow status for rate-limit waits', async () => {
     const deps = makeDeps();
     let subscriber: ((state: any) => void) | undefined;
