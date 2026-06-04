@@ -7,7 +7,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
-import { isAbortError } from '../core/abort.js';
+import { createAbortError, isAbortError, throwIfAborted } from '../core/abort.js';
 import { createKtxClaudeCodeEnv } from './claude-code-env.js';
 import { resolveClaudeCodeModel } from './claude-code-models.js';
 import type { RateLimitGovernor, RateLimitSignal } from './rate-limit-governor.js';
@@ -28,6 +28,11 @@ type QueryResult = AsyncIterable<SDKMessage> & {
 };
 
 type QueryFn = (params: Parameters<typeof defaultQuery>[0]) => QueryResult;
+
+interface ClaudeQueryOutcome {
+  result: SDKResultMessage;
+  rejectedRateLimitSignal?: RateLimitSignal;
+}
 
 function claudeTokenUsage(result: SDKResultMessage): LlmTokenUsage {
   const usage = (result as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
@@ -164,17 +169,48 @@ function expectedMcpServerNames(tools: KtxRuntimeToolSet | undefined): Set<strin
   return tools && Object.keys(tools).length > 0 ? new Set([KTX_MCP_SERVER_NAME]) : new Set();
 }
 
+const CLAUDE_RATE_LIMIT_ERROR_MARKERS = /\b429\b|rate limit|too many requests|quota exceeded|overloaded|max_retries/i;
+
+function normalizeClaudeResetAtMs(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.round(value < 10_000_000_000 ? value * 1_000 : value);
+  }
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return normalizeClaudeResetAtMs(numeric);
+    }
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function isClaudeRateLimitResult(result: SDKResultMessage, rejectedSignal: RateLimitSignal | undefined): boolean {
+  const error = resultError(result);
+  if (!error) {
+    return false;
+  }
+  if (rejectedSignal?.status === 'rejected') {
+    return true;
+  }
+  const details = [error.message, result.stop_reason, result.terminal_reason, ...result.errors]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join('\n');
+  return CLAUDE_RATE_LIMIT_ERROR_MARKERS.test(details);
+}
+
 function claudeRateLimitSignal(message: SDKMessage): RateLimitSignal | null {
   const record = message as unknown as Record<string, unknown>;
   if (record.type === 'rate_limit_event') {
     const info = record.rate_limit_info as Record<string, unknown> | undefined;
     if (!info) return null;
     const rawStatus = typeof info.status === 'string' ? info.status : 'allowed';
-    const resetsAt = typeof info.resetsAt === 'string' ? Date.parse(info.resetsAt) : NaN;
+    const resetAtMs = normalizeClaudeResetAtMs(info.resetsAt);
     return {
       provider: 'claude-subscription',
       status: rawStatus === 'rejected' ? 'rejected' : rawStatus === 'allowed_warning' ? 'warning' : 'allowed',
-      ...(Number.isFinite(resetsAt) ? { resetAtMs: resetsAt } : {}),
+      ...(resetAtMs !== undefined ? { resetAtMs } : {}),
       ...(typeof info.rateLimitType === 'string' ? { rateLimitType: info.rateLimitType } : {}),
       ...(typeof info.utilization === 'number' ? { utilization: info.utilization } : {}),
     };
@@ -253,9 +289,12 @@ async function collectResult(params: {
   onAssistantTurn?: () => Promise<void>;
   rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report'>;
   abortSignal?: AbortSignal;
-}): Promise<SDKResultMessage> {
+}): Promise<ClaudeQueryOutcome> {
   let result: SDKResultMessage | undefined;
+  let rejectedRateLimitSignal: RateLimitSignal | undefined;
+  throwIfAborted(params.abortSignal);
   await params.rateLimitGovernor?.waitForReady(params.abortSignal);
+  throwIfAborted(params.abortSignal);
   const queryResult = params.query({ prompt: params.prompt, options: params.options });
   const onAbort = () => {
     void Promise.resolve(queryResult.interrupt?.()).catch(() => undefined);
@@ -263,8 +302,12 @@ async function collectResult(params: {
   params.abortSignal?.addEventListener('abort', onAbort, { once: true });
   try {
     for await (const message of queryResult) {
+      throwIfAborted(params.abortSignal);
       const rateLimitSignal = claudeRateLimitSignal(message);
       if (rateLimitSignal) {
+        if (rateLimitSignal.status === 'rejected') {
+          rejectedRateLimitSignal = rateLimitSignal;
+        }
         params.rateLimitGovernor?.report(rateLimitSignal);
       }
       assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
@@ -278,10 +321,26 @@ async function collectResult(params: {
   } finally {
     params.abortSignal?.removeEventListener('abort', onAbort);
   }
+  if (params.abortSignal?.aborted) {
+    throw createAbortError();
+  }
   if (!result) {
     throw new Error('Claude Code query returned no result message');
   }
-  return result;
+  return {
+    result,
+    ...(rejectedRateLimitSignal ? { rejectedRateLimitSignal } : {}),
+  };
+}
+
+async function collectResultWithRateLimitRetry(params: Parameters<typeof collectResult>[0]): Promise<SDKResultMessage> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const outcome = await collectResult(params);
+    if (!params.rateLimitGovernor || !isClaudeRateLimitResult(outcome.result, outcome.rejectedRateLimitSignal) || attempt >= 5) {
+      return outcome.result;
+    }
+  }
+  throw new Error('Unreachable Claude Code rate-limit retry state');
 }
 
 export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
@@ -302,7 +361,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       tools: input.tools,
     });
     const startedAt = Date.now();
-    const result = await collectResult({
+    const result = await collectResultWithRateLimitRetry({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
@@ -341,7 +400,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       outputFormat: { type: 'json_schema' as const, schema: jsonSchema(input.schema as z.ZodType) },
     };
     const startedAt = Date.now();
-    const result = await collectResult({
+    const result = await collectResultWithRateLimitRetry({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
@@ -373,7 +432,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         maxTurns: params.stepBudget,
         tools: params.toolSet,
       });
-      const result = await collectResult({
+      const result = await collectResultWithRateLimitRetry({
         query: this.runQuery,
         prompt: params.userPrompt,
         options: { ...options, systemPrompt: params.systemPrompt },
@@ -447,7 +506,7 @@ export async function runClaudeCodeAuthProbe(input: {
       env: input.env,
       maxTurns: 1,
     });
-    const result = await collectResult({
+    const result = await collectResultWithRateLimitRetry({
       query: input.query ?? defaultQuery,
       prompt: 'Reply with exactly: ok',
       options,

@@ -135,6 +135,90 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
   });
 
+  it('maps numeric Claude Code reset times from SDK rate-limit events', async () => {
+    const report = vi.fn();
+    const resetAtMs = 1_700_000_000_000;
+    const query = vi.fn((_input: any) =>
+      stream([
+        {
+          type: 'rate_limit_event',
+          rate_limit_info: {
+            status: 'rejected',
+            resetsAt: resetAtMs,
+            rateLimitType: 'five_hour',
+            utilization: 1,
+          },
+        } as unknown as SDKMessage,
+        resultMessage({ result: 'ok' }),
+      ]),
+    );
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
+
+    expect(report).toHaveBeenCalledWith({
+      provider: 'claude-subscription',
+      status: 'rejected',
+      resetAtMs,
+      rateLimitType: 'five_hour',
+      utilization: 1,
+    });
+  });
+
+  it('retries a Claude Code query after an SDK rate-limit result error', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const resetAtMs = 1_700_000_000_000;
+    const query = vi
+      .fn()
+      .mockReturnValueOnce(
+        stream([
+          {
+            type: 'rate_limit_event',
+            rate_limit_info: {
+              status: 'rejected',
+              resetsAt: resetAtMs,
+              rateLimitType: 'five_hour',
+              utilization: 1,
+            },
+          } as unknown as SDKMessage,
+          resultMessage({
+            subtype: 'error_during_execution',
+            is_error: true,
+            result: '',
+            errors: ['rate limit retry budget exhausted'],
+            terminal_reason: 'model_error',
+          } as never),
+        ]),
+      )
+      .mockReturnValueOnce(stream([resultMessage({ result: 'ok' })]));
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady, report } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello' })).resolves.toBe('ok');
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(waitForReady).toHaveBeenCalledTimes(2);
+    expect(report).toHaveBeenCalledWith({
+      provider: 'claude-subscription',
+      status: 'rejected',
+      resetAtMs,
+      rateLimitType: 'five_hour',
+      utilization: 1,
+    });
+  });
+
   it('reports Claude Code api retry messages as warning signals', async () => {
     const report = vi.fn();
     const query = vi.fn((_input: any) =>
@@ -207,7 +291,52 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     await streamStarted.promise;
     controller.abort();
 
-    await expect(pending).resolves.toBe('ok');
+    await expect(pending).rejects.toThrow(/Aborted/);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws abort before starting Claude Code query when the signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const query = vi.fn((_input: any) => stream([resultMessage({ result: 'ok' })]));
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn() } as never,
+    });
+
+    await expect(runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal })).rejects.toThrow(/Aborted/);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('treats an interrupted Claude Code stream with no result as abort', async () => {
+    const controller = new AbortController();
+    const streamStarted = deferred<void>();
+    const releaseStream = deferred<void>();
+    const interrupt = vi.fn(() => releaseStream.resolve());
+    const queryResult = {
+      async *[Symbol.asyncIterator]() {
+        streamStarted.resolve();
+        await releaseStream.promise;
+      },
+      interrupt,
+    };
+    const query = vi.fn(() => queryResult as never);
+    const runtime = new ClaudeCodeKtxLlmRuntime({
+      projectDir: '/tmp/project',
+      modelSlots: { default: 'sonnet' },
+      query,
+      env: {},
+      rateLimitGovernor: { waitForReady: vi.fn().mockResolvedValue(undefined), report: vi.fn() } as never,
+    });
+
+    const pending = runtime.generateText({ role: 'default', prompt: 'hello', abortSignal: controller.signal });
+    await streamStarted.promise;
+    controller.abort();
+
+    await expect(pending).rejects.toThrow(/Aborted/);
     expect(interrupt).toHaveBeenCalledTimes(1);
   });
 
