@@ -62,8 +62,9 @@ function escapeRegExp(value: string): string {
 
 function redactStaticPatterns(value: string): string {
   return value
+    .replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)([^@\s/]+)(@)/gi, '$1[redacted]$3')
     .replace(/\b(password|pwd)=([^;&\s]+)/gi, '$1=[redacted]')
-    .replace(/\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Authorization: Bearer [redacted]')
+    .replace(/\bAuthorization\s*:\s*[^\r\n,;]+/gi, 'Authorization: [redacted]')
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
     .replace(/\b(api[_-]?key)\s*[:=]\s*([^\s,;]+)/gi, '$1=[redacted]')
     .replace(/\b(KTX_[A-Z0-9_]*|[A-Z0-9_]*(?:TOKEN|SECRET))\s*[:=]\s*([^\s,;]+)/g, '$1=[redacted]')

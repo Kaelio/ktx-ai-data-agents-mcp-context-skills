@@ -24,6 +24,7 @@ import type { KtxTableRef } from './context/scan/types.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitProjectStackSnapshot, emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { formatErrorDetail } from './telemetry/scrubber.js';
 
 profileMark('module:public-ingest');
@@ -1124,6 +1125,14 @@ export async function runKtxPublicIngest(
           context: { source: 'ingest runtime', handled: true, fatal: false },
           projectDir: args.projectDir,
           io,
+          redactionSecrets: await collectTelemetryRedactionSecrets({
+            project,
+            projectDir: args.projectDir,
+            connectionId: args.targetConnectionId,
+            includeLlm: true,
+            includeEmbeddings: true,
+            env: deps.env ?? process.env,
+          }),
         });
         io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
         return 1;
@@ -1156,6 +1165,14 @@ export async function runKtxPublicIngest(
         context: { source: 'ingest context-build', handled: true, fatal: false },
         projectDir: args.projectDir,
         io,
+        redactionSecrets: await collectTelemetryRedactionSecrets({
+          project,
+          projectDir: args.projectDir,
+          connectionId: args.targetConnectionId,
+          includeLlm: true,
+          includeEmbeddings: true,
+          env: deps.env ?? process.env,
+        }),
       });
       io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;

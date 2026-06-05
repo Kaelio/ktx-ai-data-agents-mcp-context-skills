@@ -185,6 +185,26 @@ describe('reportException', () => {
     expect(sent.error.cause?.message).not.toContain('token-123');
   });
 
+  it('redacts URL userinfo credentials and non-bearer authorization values', async () => {
+    const { io } = makeIo();
+    const error = new Error(
+      'connect postgres://svc:db-url-secret@db.example.test/analytics Authorization: Basic abc123', // pragma: allowlist secret
+    );
+
+    await reportException({
+      error,
+      context: { source: 'connection test', handled: true, fatal: false },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+    });
+
+    const sent = captures[0] as { error: Error };
+    expect(sent.error.message).toContain('postgres://svc:[redacted]@db.example.test/analytics');
+    expect(sent.error.message).toContain('Authorization: [redacted]');
+    expect(sent.error.message).not.toContain('db-url-secret');
+    expect(sent.error.message).not.toContain('abc123');
+  });
+
   it('does not use process-global secret discovery when no snapshot is supplied', async () => {
     vi.stubEnv('KTX_FAKE_SECRET', 'plain-secret-without-pattern');
     const { io } = makeIo();

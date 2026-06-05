@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SourceAdapter } from '../src/context/ingest/types.js';
+import { parseKtxProjectConfig, serializeKtxProjectConfig } from '../src/context/project/config.js';
 import { initKtxProject } from '../src/context/project/project.js';
 import type { KtxScanReport } from '../src/context/scan/types.js';
 import type { LocalScanRunResult, RunLocalScanOptions } from '../src/context/scan/local-scan.js';
@@ -433,7 +434,28 @@ describe('runKtxScan', () => {
   it('records the raw errorDetail in scan_completed telemetry when the scan throws', async () => {
     vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
     vi.stubEnv('CI', '');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'anthropic-callsite-secret'); // pragma: allowlist secret
+    vi.stubEnv('DATABASE_URL', 'postgres://svc:scan-db-password@db.example.test/analytics'); // pragma: allowlist secret
     await initKtxProject({ projectDir: tempDir });
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      serializeKtxProjectConfig({
+        ...config,
+        connections: {
+          warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
+        },
+        llm: {
+          ...config.llm,
+          provider: {
+            backend: 'anthropic',
+            anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+          },
+          models: { default: 'claude-sonnet-4-6' },
+        },
+      }),
+      'utf-8',
+    );
     const runLocalScan = vi.fn(async (): Promise<LocalScanRunResult> => {
       const error = new Error('introspection timed out');
       (error as { code?: unknown }).code = 'ETIMEDOUT';
@@ -463,6 +485,11 @@ describe('runKtxScan', () => {
       expect.objectContaining({
         context: expect.objectContaining({ source: 'scan run', handled: true, fatal: false }),
         projectDir: tempDir,
+        redactionSecrets: expect.arrayContaining([
+          'anthropic-callsite-secret',
+          'postgres://svc:scan-db-password@db.example.test/analytics', // pragma: allowlist secret
+          'scan-db-password',
+        ]),
       }),
     );
   });

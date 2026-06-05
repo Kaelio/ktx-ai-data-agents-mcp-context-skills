@@ -243,9 +243,10 @@ describe('runKtxSql', () => {
   });
 
   it('rejects non-read-only SQL before executing connector SQL', async () => {
+    vi.stubEnv('SQL_DB_PASSWORD', 'sql-db-password'); // pragma: allowlist secret
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
-    await writeConnections(projectDir, { warehouse: { driver: 'sqlite', path: 'warehouse.db' } });
+    await writeConnections(projectDir, { warehouse: { driver: 'postgres', password: 'env:SQL_DB_PASSWORD' } }); // pragma: allowlist secret
     const connector = makeConnector();
     const io = makeIo();
 
@@ -276,6 +277,7 @@ describe('runKtxSql', () => {
       expect.objectContaining({
         context: expect.objectContaining({ source: 'sql run', handled: true, fatal: false }),
         projectDir,
+        redactionSecrets: expect.arrayContaining(['sql-db-password']),
       }),
     );
   });

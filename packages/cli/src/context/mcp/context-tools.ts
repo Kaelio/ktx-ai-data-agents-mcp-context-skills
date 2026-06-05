@@ -9,6 +9,7 @@ import {
   reportException,
   shouldEmitMcpTelemetry,
 } from '../../telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from '../../telemetry/redaction-secrets.js';
 import { scrubErrorClass } from '../../telemetry/scrubber.js';
 import type {
   KtxMcpClientInfo,
@@ -535,6 +536,12 @@ function registerParsedTool<TSchema extends z.ZodType>(
           context: { source: `mcp:${name}`, handled: true, fatal: false },
           projectDir: telemetry.projectDir,
           io: telemetry.io,
+          redactionSecrets: await collectTelemetryRedactionSecrets({
+            projectDir: telemetry.projectDir,
+            includeLlm: true,
+            includeEmbeddings: true,
+            env: process.env,
+          }),
         });
       }
       return jsonErrorToolResult(formatToolError(error));
@@ -591,6 +598,12 @@ function instrumentMcpServer(
               context: { source: `mcp:${name}`, handled: true, fatal: false },
               projectDir: telemetry.projectDir,
               io: telemetry.io,
+              redactionSecrets: await collectTelemetryRedactionSecrets({
+                projectDir: telemetry.projectDir,
+                includeLlm: true,
+                includeEmbeddings: true,
+                env: process.env,
+              }),
             });
           }
           if (telemetry.io && telemetry.projectDir && shouldEmitMcpTelemetry()) {

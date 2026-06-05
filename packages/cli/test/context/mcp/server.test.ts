@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLocalProjectMemoryIngest } from '../../../src/context/memory/local-memory.js';
 import { detectCaptureSignals } from '../../../src/context/memory/capture-signals.js';
 import type { MemoryAgentInput } from '../../../src/context/memory/types.js';
+import { parseKtxProjectConfig, serializeKtxProjectConfig } from '../../../src/context/project/config.js';
 import { initKtxProject } from '../../../src/context/project/project.js';
 import { jsonToolResult } from '../../../src/context/mcp/context-tools.js';
 import { createDefaultKtxMcpServer, createKtxMcpServer } from '../../../src/context/mcp/server.js';
@@ -288,33 +289,56 @@ describe('createKtxMcpServer', () => {
 
   it('reports MCP tool exceptions with a tool-derived source', async () => {
     reportExceptionMock.mockClear();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'mcp-anthropic-secret'); // pragma: allowlist secret
     const fake = makeFakeServer();
     const io = makeIo();
-    const projectDir = '/tmp/ktx-mcp-exception';
+    const projectDir = await mkdtemp(join(tmpdir(), 'ktx-mcp-exception-'));
+    try {
+      await initKtxProject({ projectDir });
+      const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+      await writeFile(
+        join(projectDir, 'ktx.yaml'),
+        serializeKtxProjectConfig({
+          ...config,
+          llm: {
+            ...config.llm,
+            provider: {
+              backend: 'anthropic',
+              anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+            },
+            models: { default: 'claude-sonnet-4-6' },
+          },
+        }),
+        'utf-8',
+      );
 
-    createKtxMcpServer({
-      server: fake.server,
-      userContext: { userId: 'local-user' },
-      projectDir,
-      io,
-      contextTools: {
-        knowledge: {
-          search: vi.fn<KtxKnowledgeMcpPort['search']>().mockRejectedValue(new Error('wiki failed')),
-          read: vi.fn<KtxKnowledgeMcpPort['read']>().mockResolvedValue(null),
-        },
-      },
-    });
-
-    await expect(getTool(fake.tools, 'wiki_search').handler({ query: 'revenue recognition', limit: 5 })).resolves.toMatchObject({
-      isError: true,
-    });
-
-    expect(reportExceptionMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({ source: 'mcp:wiki_search', handled: true, fatal: false }),
+      createKtxMcpServer({
+        server: fake.server,
+        userContext: { userId: 'local-user' },
         projectDir,
-      }),
-    );
+        io,
+        contextTools: {
+          knowledge: {
+            search: vi.fn<KtxKnowledgeMcpPort['search']>().mockRejectedValue(new Error('wiki failed')),
+            read: vi.fn<KtxKnowledgeMcpPort['read']>().mockResolvedValue(null),
+          },
+        },
+      });
+
+      await expect(getTool(fake.tools, 'wiki_search').handler({ query: 'revenue recognition', limit: 5 })).resolves.toMatchObject({
+        isError: true,
+      });
+
+      expect(reportExceptionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({ source: 'mcp:wiki_search', handled: true, fatal: false }),
+          projectDir,
+          redactionSecrets: expect.arrayContaining(['mcp-anthropic-secret']),
+        }),
+      );
+    } finally {
+      await rm(projectDir, { recursive: true, force: true });
+    }
   });
 
   it('captures the connecting MCP client name and version', async () => {

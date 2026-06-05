@@ -17,6 +17,7 @@ import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
 import { emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { formatErrorDetail, scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:connection');
@@ -330,6 +331,13 @@ async function emitConnectionTest(input: {
       context: { source: 'connection test', handled: true, fatal: false },
       projectDir: input.project.projectDir,
       io: input.io,
+      redactionSecrets: await collectTelemetryRedactionSecrets({
+        project: input.project,
+        connectionId: input.connectionId,
+        includeLlm: false,
+        includeEmbeddings: false,
+        env: process.env,
+      }),
     });
   }
 }

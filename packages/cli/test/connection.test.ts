@@ -172,12 +172,13 @@ describe('runKtxConnection', () => {
   it('records the raw errorDetail in connection_test telemetry when a native test fails', async () => {
     vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
     vi.stubEnv('CI', '');
+    vi.stubEnv('DATABASE_URL', 'postgres://svc:db-url-password@db.example.test/analytics'); // pragma: allowlist secret
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
-      warehouse: { driver: 'sqlite' },
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
     });
-    const { connector } = nativeConnector('sqlite', { success: false, error: 'database file is unreadable' });
+    const { connector } = nativeConnector('postgres', { success: false, error: 'database file is unreadable' });
     const io = makeIo();
 
     const code = await runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
@@ -192,6 +193,10 @@ describe('runKtxConnection', () => {
       expect.objectContaining({
         context: expect.objectContaining({ source: 'connection test', handled: true, fatal: false }),
         projectDir,
+        redactionSecrets: expect.arrayContaining([
+          'postgres://svc:db-url-password@db.example.test/analytics', // pragma: allowlist secret
+          'db-url-password',
+        ]),
       }),
     );
   });

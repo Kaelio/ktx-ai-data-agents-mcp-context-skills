@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import Database from 'better-sqlite3';
+import { parseKtxProjectConfig, serializeKtxProjectConfig } from '../src/context/project/config.js';
 import { initKtxProject } from '../src/context/project/project.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSl } from '../src/sl.js';
@@ -566,8 +567,25 @@ joins: []
   });
 
   it('reports sl query exceptions at the query catch boundary', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sl-anthropic-secret'); // pragma: allowlist secret
     const projectDir = join(tempDir, 'missing-query-input');
     await seedSlSource({ projectDir });
+    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      serializeKtxProjectConfig({
+        ...config,
+        llm: {
+          ...config.llm,
+          provider: {
+            backend: 'anthropic',
+            anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+          },
+          models: { default: 'claude-sonnet-4-6' },
+        },
+      }),
+      'utf-8',
+    );
     const io = makeIo();
 
     await expect(
@@ -590,6 +608,7 @@ joins: []
       expect.objectContaining({
         context: expect.objectContaining({ source: 'sl query', handled: true, fatal: false }),
         projectDir,
+        redactionSecrets: expect.arrayContaining(['sl-anthropic-secret']),
       }),
     );
   });

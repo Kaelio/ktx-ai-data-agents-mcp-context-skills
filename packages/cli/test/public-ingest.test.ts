@@ -1262,7 +1262,22 @@ describe('runKtxPublicIngest', () => {
 
   it('reports foreground context-build exceptions', async () => {
     const io = makeIo({ isTTY: true, interactive: true });
-    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const config = buildDefaultKtxProjectConfig();
+    const project: KtxPublicIngestProject = {
+      projectDir: '/tmp/project',
+      config: {
+        ...config,
+        connections: { warehouse: { driver: 'postgres', password: 'env:INGEST_DB_PASSWORD' } }, // pragma: allowlist secret
+        llm: {
+          ...config.llm,
+          provider: {
+            backend: 'anthropic',
+            anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+          },
+          models: { default: 'claude-sonnet-4-6' },
+        },
+      },
+    };
     const runContextBuild = vi.fn(async () => {
       throw new Error('context build failed');
     });
@@ -1279,7 +1294,15 @@ describe('runKtxPublicIngest', () => {
           queryHistory: 'default',
         },
         io.io,
-        { loadProject: vi.fn(async () => project), runContextBuild },
+        {
+          loadProject: vi.fn(async () => project),
+          runContextBuild,
+          env: {
+            ...process.env,
+            ANTHROPIC_API_KEY: 'ingest-anthropic-secret', // pragma: allowlist secret
+            INGEST_DB_PASSWORD: 'ingest-db-password', // pragma: allowlist secret
+          },
+        },
       ),
     ).resolves.toBe(1);
 
@@ -1288,6 +1311,7 @@ describe('runKtxPublicIngest', () => {
       expect.objectContaining({
         context: expect.objectContaining({ source: 'ingest context-build', handled: true, fatal: false }),
         projectDir: '/tmp/project',
+        redactionSecrets: expect.arrayContaining(['ingest-anthropic-secret', 'ingest-db-password']),
       }),
     );
   });
