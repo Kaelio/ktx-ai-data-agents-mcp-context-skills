@@ -13,6 +13,8 @@ from ktx_daemon.telemetry.emitter import POSTHOG_HOST, POSTHOG_PROJECT_API_KEY
 from ktx_daemon.telemetry.events import _common_envelope
 from ktx_daemon.telemetry.identity import load_telemetry_identity
 
+_KTX_REPORTED_ATTR = "__ktx_posthog_exception_reported"
+
 
 def _debug_enabled(env: Mapping[str, str]) -> bool:
     return env.get("KTX_TELEMETRY_DEBUG") == "1"
@@ -24,11 +26,12 @@ def _host(env: Mapping[str, str]) -> str:
 
 def _redact_static(value: str) -> str:
     patterns = [
-        (r"\b(password|pwd)=([^;&\s]+)", r"\1=[redacted]"),
         (
-            r"\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/=-]+",
-            "Authorization: Bearer [redacted]",
+            r"([a-z][a-z0-9+.-]*://[^:\s/@]+:)([^@\s/]+)(@)",
+            r"\1[redacted]\3",
         ),
+        (r"\b(password|pwd)=([^;&\s]+)", r"\1=[redacted]"),
+        (r"\bAuthorization\s*:\s*[^\r\n,;]+", "Authorization: [redacted]"),
         (r"\bBearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [redacted]"),
         (r"\b(api[_-]?key)\s*[:=]\s*([^\s,;]+)", r"\1=[redacted]"),
         (
@@ -67,6 +70,16 @@ def _clone_exception(exception: BaseException, secrets: Sequence[str]) -> BaseEx
     return cloned
 
 
+def _should_skip_as_reported(exception: BaseException) -> bool:
+    if getattr(exception, _KTX_REPORTED_ATTR, False):
+        return True
+    try:
+        setattr(exception, _KTX_REPORTED_ATTR, True)
+    except Exception:
+        return False
+    return False
+
+
 def _properties(*, source: str, handled: bool, fatal: bool) -> dict[str, Any]:
     return {
         **_common_envelope(),
@@ -92,6 +105,9 @@ def report_exception(
     try:
         identity = load_telemetry_identity(home_dir=home_dir, env=source_env)
         if not identity.enabled or not identity.install_id:
+            return
+
+        if _should_skip_as_reported(exception):
             return
 
         properties = _properties(source=source, handled=handled, fatal=fatal)

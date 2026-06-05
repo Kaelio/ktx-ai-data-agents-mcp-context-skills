@@ -150,6 +150,7 @@ def create_app(
 
     @app.middleware("http")
     async def report_unhandled_exceptions(request: Request, call_next):
+        redaction_secrets = await _request_secret_snapshot(request)
         try:
             return await call_next(request)
         except Exception as error:
@@ -159,7 +160,7 @@ def create_app(
                 source=_route_source(request),
                 handled=True,
                 fatal=False,
-                redaction_secrets=await _request_secret_snapshot(request),
+                redaction_secrets=redaction_secrets,
             )
             return JSONResponse(
                 status_code=500,

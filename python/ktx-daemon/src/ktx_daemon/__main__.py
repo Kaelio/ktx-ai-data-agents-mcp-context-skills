@@ -93,9 +93,6 @@ def _read_stdin_json() -> dict[str, Any]:
 
 
 def install_serve_http_exception_hooks(started_at: float) -> Callable[[], None]:
-    from ktx_daemon.telemetry import report_exception
-    from ktx_daemon.telemetry.daemon_lifecycle import emit_daemon_stopped_once
-
     original_hook = sys.excepthook
 
     def hook(
@@ -103,16 +100,7 @@ def install_serve_http_exception_hooks(started_at: float) -> Callable[[], None]:
         exc: BaseException,
         tb: TracebackType | None,
     ) -> None:
-        report_exception(
-            exc,
-            source="sys.excepthook",
-            handled=False,
-            fatal=True,
-        )
-        emit_daemon_stopped_once(
-            reason="crash",
-            uptime_ms=max(0, (time.perf_counter() - started_at) * 1000),
-        )
+        report_serve_http_crash(exc, started_at=started_at)
         original_hook(exc_type, exc, tb)
 
     sys.excepthook = hook
@@ -121,6 +109,22 @@ def install_serve_http_exception_hooks(started_at: float) -> Callable[[], None]:
         sys.excepthook = original_hook
 
     return dispose
+
+
+def report_serve_http_crash(error: BaseException, *, started_at: float) -> None:
+    from ktx_daemon.telemetry import report_exception
+    from ktx_daemon.telemetry.daemon_lifecycle import emit_daemon_stopped_once
+
+    report_exception(
+        error,
+        source="serve-http",
+        handled=False,
+        fatal=True,
+    )
+    emit_daemon_stopped_once(
+        reason="crash",
+        uptime_ms=max(0, (time.perf_counter() - started_at) * 1000),
+    )
 
 
 def run_http_server(
@@ -137,15 +141,19 @@ def run_http_server(
     started_at = time.perf_counter()
     dispose_hooks = install_serve_http_exception_hooks(started_at)
     try:
-        uvicorn.run(
-            create_app(
-                enable_code_execution=enable_code_execution,
-                telemetry_started_at=started_at,
-            ),
-            host=host,
-            port=port,
-            log_level=log_level,
-        )
+        try:
+            uvicorn.run(
+                create_app(
+                    enable_code_execution=enable_code_execution,
+                    telemetry_started_at=started_at,
+                ),
+                host=host,
+                port=port,
+                log_level=log_level,
+            )
+        except Exception as error:
+            report_serve_http_crash(error, started_at=started_at)
+            raise
     finally:
         dispose_hooks()
 
