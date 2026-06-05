@@ -8,7 +8,7 @@ import { fetchDistTags as defaultFetchDistTags } from './registry.js';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** @internal */
-export interface UpdateCheckEnv extends CliStyleEnv {
+export interface UpdateCheckEnv extends NodeJS.ProcessEnv, CliStyleEnv {
   CI?: string;
   DO_NOT_TRACK?: string;
   KTX_NO_UPDATE_CHECK?: string;
