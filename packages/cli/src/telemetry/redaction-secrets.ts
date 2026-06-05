@@ -4,6 +4,8 @@ import { loadKtxProject, type KtxLocalProject } from '../context/project/project
 const SENSITIVE_KEY =
   /(password|secret|token|api[_-]?key|auth[_-]?token|auth_token_ref|private[_-]?key|passphrase|credential|authorization|url)$/i;
 
+type TelemetryRedactionProject = Pick<KtxLocalProject, 'config' | 'projectDir'>;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -61,17 +63,17 @@ function collectFromRecord(input: unknown, env: NodeJS.ProcessEnv, values: strin
   }
 }
 
-function collectLlmSecrets(project: KtxLocalProject, env: NodeJS.ProcessEnv, values: string[]): void {
+function collectLlmSecrets(project: TelemetryRedactionProject, env: NodeJS.ProcessEnv, values: string[]): void {
   collectFromRecord(project.config.llm.provider, env, values);
 }
 
-function collectEmbeddingSecrets(project: KtxLocalProject, env: NodeJS.ProcessEnv, values: string[]): void {
+function collectEmbeddingSecrets(project: TelemetryRedactionProject, env: NodeJS.ProcessEnv, values: string[]): void {
   collectFromRecord(project.config.ingest.embeddings, env, values);
   collectFromRecord(project.config.scan.enrichment.embeddings, env, values);
 }
 
 function collectConnectionSecrets(
-  project: KtxLocalProject,
+  project: TelemetryRedactionProject,
   connectionId: string | undefined,
   env: NodeJS.ProcessEnv,
   values: string[],
@@ -83,7 +85,7 @@ function collectConnectionSecrets(
 }
 
 export async function collectTelemetryRedactionSecrets(input: {
-  project?: KtxLocalProject;
+  project?: TelemetryRedactionProject;
   projectDir?: string;
   connectionId?: string;
   includeLlm?: boolean;
