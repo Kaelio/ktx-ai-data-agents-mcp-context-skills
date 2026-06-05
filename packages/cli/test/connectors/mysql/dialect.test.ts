@@ -48,6 +48,11 @@ describe('KtxMysqlDialect', () => {
     expect(sql).toContain('estimated_cardinality');
   });
 
+  it('filters to leading index columns only (SEQ_IN_INDEX = 1) to avoid inflated cardinality from composite indexes', () => {
+    const sql = dialect.generateColumnStatisticsQuery('analytics', 'orders');
+    expect(sql).toContain('SEQ_IN_INDEX = 1');
+  });
+
   it('escapes single quotes in schema and table names for statistics query', () => {
     const sql = dialect.generateColumnStatisticsQuery("andy's_db", "o'rders");
     expect(sql).toContain("TABLE_SCHEMA = 'andy''s_db'");

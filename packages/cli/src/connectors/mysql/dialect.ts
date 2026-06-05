@@ -180,6 +180,7 @@ export class KtxMysqlDialect implements KtxDialect {
       WHERE TABLE_SCHEMA = '${schemaName.replace(/'/g, "''")}'
         AND TABLE_NAME = '${tableName.replace(/'/g, "''")}'
         AND CARDINALITY IS NOT NULL
+        AND SEQ_IN_INDEX = 1
       GROUP BY COLUMN_NAME
     `;
   }

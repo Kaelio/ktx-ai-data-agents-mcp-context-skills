@@ -75,6 +75,7 @@ function fakePoolFactory(): KtxMysqlPoolFactory {
       return mysqlResult([{ '1': 1 }], [{ name: '1', type: 8 }]);
     }
     if (sql.includes('INFORMATION_SCHEMA.STATISTICS')) {
+      expect(sql).toContain('SEQ_IN_INDEX = 1');
       return mysqlResult(
         [
           { column_name: 'id', estimated_cardinality: 2 },
