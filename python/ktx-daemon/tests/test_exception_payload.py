@@ -95,3 +95,24 @@ def test_prepared_python_exception_payload_groups_and_redacts(tmp_path: Path) ->
     assert snapshot_secret not in serialized
     assert db_password not in serialized
     assert auth_token not in serialized
+    forbidden_keys = {
+        "argv",
+        "args",
+        "env",
+        "environment",
+        "sql",
+        "query",
+        "prompt",
+        "mcpArguments",
+        "tableName",
+        "schemaName",
+        "columnName",
+        "databaseUrl",
+        "connectionString",
+        "url",
+        "password",
+        "token",
+        "apiKey",
+        "authorization",
+    }
+    assert forbidden_keys.isdisjoint(properties.keys())

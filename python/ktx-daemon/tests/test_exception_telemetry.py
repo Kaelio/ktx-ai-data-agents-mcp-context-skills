@@ -336,6 +336,112 @@ def test_report_exception_redacts_url_userinfo_and_authorization(
     assert "".join(auth_token) not in sent
 
 
+def test_report_exception_falls_back_when_exception_type_cannot_be_reconstructed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from ktx_daemon.telemetry.exception import report_exception
+
+    class KeywordOnlyException(Exception):
+        def __init__(self, *, message: str) -> None:
+            super().__init__(message)
+
+    reset_identity_cache()
+    write_identity(tmp_path)
+    FakePosthog.captures.clear()
+    monkeypatch.setattr("posthog.Posthog", FakePosthog)
+
+    report_exception(
+        KeywordOnlyException(message="custom secret-value"),
+        source="app:/custom",
+        handled=True,
+        fatal=False,
+        home_dir=tmp_path,
+        env={},
+        redaction_secrets=["secret-value"],
+    )
+
+    assert len(FakePosthog.captures) == 1
+    sent = FakePosthog.captures[0]["exception"]
+    assert "[redacted]" in str(sent)
+    assert "secret-value" not in str(sent)
+
+
+def test_report_exception_redacts_every_static_pattern_and_leaves_benign_text(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from ktx_daemon.telemetry.exception import report_exception
+
+    reset_identity_cache()
+    write_identity(tmp_path)
+    FakePosthog.captures.clear()
+    monkeypatch.setattr("posthog.Posthog", FakePosthog)
+
+    cases = [
+        ("dsn password=hunter2", "hunter2", "password=[redacted]"),
+        ("dsn pwd=swordfish", "swordfish", "pwd=[redacted]"),
+        ("Authorization: Basic abc123", "abc123", "Authorization: [redacted]"),
+        ("Authorization: Bearer token-123", "token-123", "Authorization: [redacted]"),
+        ("Bearer standalone-token", "standalone-token", "Bearer [redacted]"),
+        ("api_key=sk-live-secret", "sk-live-secret", "api_key=[redacted]"),
+        ("api-key: sk-dash-secret", "sk-dash-secret", "api-key=[redacted]"),
+        (
+            "KTX_PROVIDER_TOKEN=ktx-secret",
+            "ktx-secret",
+            "KTX_PROVIDER_TOKEN=[redacted]",
+        ),
+        (
+            "REFRESH_SECRET: refresh-secret",
+            "refresh-secret",
+            "REFRESH_SECRET=[redacted]",
+        ),
+        (
+            "https://s3.example.test/file?X-Amz-Signature=aws-secret&ok=1",
+            "aws-secret",
+            "X-Amz-Signature=[redacted]",
+        ),
+        (
+            "https://storage.example.test/file?X-Goog-Signature=goog-secret&ok=1",
+            "goog-secret",
+            "X-Goog-Signature=[redacted]",
+        ),
+        (
+            "https://cdn.example.test/file?sig=signed-secret&ok=1",
+            "signed-secret",
+            "sig=[redacted]",
+        ),
+        (
+            "postgres://svc:url-password@db.example.test/analytics",  # pragma: allowlist secret
+            "url-password",
+            "postgres://svc:[redacted]@db.example.test/analytics",
+        ),
+    ]
+
+    for message, leaked, expected in cases:
+        report_exception(
+            RuntimeError(message),
+            source="database-introspect",
+            handled=True,
+            fatal=False,
+            home_dir=tmp_path,
+            env={},
+        )
+        sent = str(FakePosthog.captures[-1]["exception"])
+        assert expected in sent
+        assert leaked not in sent
+
+    report_exception(
+        RuntimeError("token bucket metrics and passwordless auth are benign"),
+        source="database-introspect",
+        handled=True,
+        fatal=False,
+        home_dir=tmp_path,
+        env={},
+    )
+    assert str(FakePosthog.captures[-1]["exception"]) == (
+        "token bucket metrics and passwordless auth are benign"
+    )
+
+
 def test_route_derived_boundary_covers_existing_health_route(monkeypatch) -> None:
     from fastapi.testclient import TestClient
     from ktx_daemon import app as app_module
@@ -445,3 +551,51 @@ def test_serve_http_run_crash_reports_exception_and_crash_stop(monkeypatch) -> N
     assert reports[0]["handled"] is False
     assert reports[0]["fatal"] is True
     assert stops and stops[0]["reason"] == "crash"
+
+
+def test_one_shot_command_reports_without_excepthook_or_daemon_stopped(
+    monkeypatch,
+) -> None:
+    import sys
+
+    from ktx_daemon import __main__ as daemon_main
+
+    original_hook = sys.excepthook
+    reports: list[dict[str, object]] = []
+    stops: list[dict[str, object]] = []
+
+    def fake_report(exception: BaseException, **kwargs: object) -> None:
+        reports.append({"exception": exception, **kwargs})
+
+    def fake_stop(*, reason: str, uptime_ms: float) -> bool:
+        stops.append({"reason": reason, "uptimeMs": uptime_ms})
+        return True
+
+    monkeypatch.setattr(
+        daemon_main,
+        "_read_stdin_json",
+        lambda: {
+            "connection_id": "warehouse",
+            "driver": "postgres",
+            "url": "postgresql://readonly@example.test/warehouse",
+            "schemas": ["public"],
+        },
+    )
+    monkeypatch.setattr(
+        daemon_main,
+        "introspect_database_response",
+        lambda _request: (_ for _ in ()).throw(RuntimeError("one-shot boom")),
+    )
+    monkeypatch.setattr("ktx_daemon.telemetry.report_exception", fake_report)
+    monkeypatch.setattr(
+        "ktx_daemon.telemetry.daemon_lifecycle.emit_daemon_stopped_once",
+        fake_stop,
+    )
+
+    assert daemon_main.main(["database-introspect"]) == 1
+    assert sys.excepthook is original_hook
+    assert stops == []
+    assert reports
+    assert reports[0]["source"] == "database-introspect"
+    assert reports[0]["handled"] is True
+    assert reports[0]["fatal"] is False

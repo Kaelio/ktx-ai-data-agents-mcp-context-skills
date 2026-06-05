@@ -81,6 +81,41 @@ function redactText(value: string, secrets: ReadonlyArray<string>): string {
   return redactStaticPatterns(redacted);
 }
 
+const FORBIDDEN_EXTRA_PROPERTY_KEYS = new Set([
+  'argv',
+  'args',
+  'env',
+  'environment',
+  'sql',
+  'query',
+  'prompt',
+  'mcparguments',
+  'mcpargs',
+  'tablename',
+  'schemaname',
+  'columnname',
+  'databaseurl',
+  'connectionstring',
+  'url',
+  'password',
+  'token',
+  'apikey',
+  'api_key',
+  'authorization',
+]);
+
+function safeExtraProperties(
+  extra: Record<string, string | number | boolean> | undefined,
+): Record<string, string | number | boolean> {
+  const safe: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (!FORBIDDEN_EXTRA_PROPERTY_KEYS.has(key.replace(/[^a-z0-9_]/gi, '').toLowerCase())) {
+      safe[key] = value;
+    }
+  }
+  return safe;
+}
+
 function toMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -143,7 +178,7 @@ export async function reportException(input: {
       handled: input.context.handled,
       fatal: input.context.fatal,
       ...(projectId ? { projectId } : {}),
-      ...(input.context.extra ?? {}),
+      ...safeExtraProperties(input.context.extra),
     };
 
     delete properties.$groups;

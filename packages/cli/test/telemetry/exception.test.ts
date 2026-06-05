@@ -318,4 +318,139 @@ describe('reportException', () => {
 
     expect(captures).toHaveLength(2);
   });
+
+  it('drops forbidden caller-supplied extra property keys', async () => {
+    const { io } = makeIo();
+
+    await reportException({
+      error: new Error('extra property boom'),
+      context: {
+        source: 'sql run',
+        handled: true,
+        fatal: false,
+        extra: {
+          sql: 'select * from private_table',
+          tableName: 'private_table',
+          schemaName: 'private_schema',
+          columnName: 'private_column',
+          argv: '--password secret',
+          env: 'KTX_TOKEN=secret',
+          password: 'secret-password', // pragma: allowlist secret
+          token: 'secret-token',
+          prompt: 'user prompt',
+          safeCount: 3,
+        },
+      },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+    });
+
+    const sent = captures[0] as { properties: Record<string, unknown> };
+    expect(sent.properties.safeCount).toBe(3);
+    for (const key of [
+      'sql',
+      'tableName',
+      'schemaName',
+      'columnName',
+      'argv',
+      'env',
+      'password',
+      'token',
+      'prompt',
+    ]) {
+      expect(sent.properties).not.toHaveProperty(key);
+    }
+  });
+
+  it('redacts every required static credential pattern and leaves benign text intact', async () => {
+    const { io } = makeIo();
+    const cases: Array<{ message: string; leaked: string; expected: string }> = [
+      {
+        message: 'dsn password=hunter2',
+        leaked: 'hunter2',
+        expected: 'password=[redacted]',
+      },
+      {
+        message: 'dsn pwd=swordfish',
+        leaked: 'swordfish',
+        expected: 'pwd=[redacted]',
+      },
+      {
+        message: 'Authorization: Basic abc123',
+        leaked: 'abc123',
+        expected: 'Authorization: [redacted]',
+      },
+      {
+        message: 'Authorization: Bearer token-123',
+        leaked: 'token-123',
+        expected: 'Authorization: [redacted]',
+      },
+      {
+        message: 'Bearer standalone-token',
+        leaked: 'standalone-token',
+        expected: 'Bearer [redacted]',
+      },
+      {
+        message: 'api_key=sk-live-secret',
+        leaked: 'sk-live-secret',
+        expected: 'api_key=[redacted]',
+      },
+      {
+        message: 'api-key: sk-dash-secret',
+        leaked: 'sk-dash-secret',
+        expected: 'api-key=[redacted]',
+      },
+      {
+        message: 'KTX_PROVIDER_TOKEN=ktx-secret',
+        leaked: 'ktx-secret',
+        expected: 'KTX_PROVIDER_TOKEN=[redacted]',
+      },
+      {
+        message: 'REFRESH_SECRET: refresh-secret',
+        leaked: 'refresh-secret',
+        expected: 'REFRESH_SECRET=[redacted]',
+      },
+      {
+        message: 'https://s3.example.test/file?X-Amz-Signature=aws-secret&ok=1',
+        leaked: 'aws-secret',
+        expected: 'X-Amz-Signature=[redacted]',
+      },
+      {
+        message: 'https://storage.example.test/file?X-Goog-Signature=goog-secret&ok=1',
+        leaked: 'goog-secret',
+        expected: 'X-Goog-Signature=[redacted]',
+      },
+      {
+        message: 'https://cdn.example.test/file?sig=signed-secret&ok=1',
+        leaked: 'signed-secret',
+        expected: 'sig=[redacted]',
+      },
+      {
+        message: 'postgres://svc:url-password@db.example.test/analytics', // pragma: allowlist secret
+        leaked: 'url-password',
+        expected: 'postgres://svc:[redacted]@db.example.test/analytics',
+      },
+    ];
+
+    for (const item of cases) {
+      await reportException({
+        error: new Error(item.message),
+        context: { source: 'connection test', handled: true, fatal: false },
+        io,
+        packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+      });
+      const sent = captures[captures.length - 1] as { error: Error };
+      expect(sent.error.message).toContain(item.expected);
+      expect(sent.error.message).not.toContain(item.leaked);
+    }
+
+    await reportException({
+      error: new Error('token bucket metrics and passwordless auth are benign'),
+      context: { source: 'connection test', handled: true, fatal: false },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+    });
+    const benign = captures[captures.length - 1] as { error: Error };
+    expect(benign.error.message).toBe('token bucket metrics and passwordless auth are benign');
+  });
 });

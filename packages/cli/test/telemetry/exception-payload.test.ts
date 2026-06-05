@@ -123,6 +123,28 @@ describe('prepared Node exception payload', () => {
       expect(JSON.stringify(properties.$exception_list)).not.toContain(snapshotSecret);
       expect(JSON.stringify(properties.$exception_list)).not.toContain(dbPassword);
       expect(JSON.stringify(properties.$exception_list)).not.toContain(authToken);
+      for (const key of [
+        'argv',
+        'args',
+        'env',
+        'environment',
+        'sql',
+        'query',
+        'prompt',
+        'mcpArguments',
+        'tableName',
+        'schemaName',
+        'columnName',
+        'databaseUrl',
+        'connectionString',
+        'url',
+        'password',
+        'token',
+        'apiKey',
+        'authorization',
+      ]) {
+        expect(properties).not.toHaveProperty(key);
+      }
     });
   });
 });

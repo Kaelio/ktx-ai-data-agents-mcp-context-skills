@@ -55,9 +55,11 @@ def _redact_text(value: str, secrets: Sequence[str]) -> str:
 
 
 def _clone_exception(exception: BaseException, secrets: Sequence[str]) -> BaseException:
-    cloned = type(exception)(
-        *[_redact_text(str(arg), secrets) for arg in exception.args]
-    )
+    redacted_args = [_redact_text(str(arg), secrets) for arg in exception.args]
+    try:
+        cloned = type(exception)(*redacted_args)
+    except Exception:
+        cloned = RuntimeError(_redact_text(str(exception), secrets))
     cloned.__traceback__ = exception.__traceback__
     cloned.__cause__ = (
         _clone_exception(exception.__cause__, secrets) if exception.__cause__ else None
