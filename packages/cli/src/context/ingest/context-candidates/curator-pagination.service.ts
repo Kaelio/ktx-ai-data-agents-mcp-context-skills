@@ -40,6 +40,7 @@ export interface CuratorPaginationInput {
   buildToolSet: (passNumber: number) => KtxRuntimeToolSet;
   getReconciliationActions: () => MemoryAction[];
   onStepFinish?: (info: { passNumber: number; stepIndex: number; stepBudget: number }) => void;
+  abortSignal?: AbortSignal;
 }
 
 interface CuratorPaginationResult extends ReconciliationOutcome {
@@ -243,6 +244,7 @@ export class CuratorPaginationService implements CuratorPaginationPort {
       sourceKey: params.input.sourceKey,
       jobId: params.input.jobId,
       forceRun: params.forceRun,
+      abortSignal: params.input.abortSignal,
       onStepFinish: params.input.onStepFinish
         ? ({ stepIndex, stepBudget }) =>
             params.input.onStepFinish?.({ passNumber: params.passNumber, stepIndex, stepBudget })

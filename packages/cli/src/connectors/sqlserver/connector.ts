@@ -3,7 +3,9 @@ import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 import {
+  connectorTestFailure,
   createKtxConnectorCapabilities,
+  type KtxConnectorTestResult,
   type KtxColumnSampleInput,
   type KtxColumnSampleResult,
   type KtxColumnStatsInput,
@@ -384,12 +386,12 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
     this.id = `sqlserver:${options.connectionId}`;
   }
 
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
+  async testConnection(): Promise<KtxConnectorTestResult> {
     try {
       await this.query('SELECT 1');
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+      return connectorTestFailure(error);
     }
   }
 

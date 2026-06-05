@@ -11,7 +11,9 @@ import {
 } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 import {
+  connectorTestFailure,
   createKtxConnectorCapabilities,
+  type KtxConnectorTestResult,
   type KtxColumnSampleInput,
   type KtxColumnSampleResult,
   type KtxColumnStatsInput,
@@ -413,12 +415,12 @@ export class KtxMysqlScanConnector implements KtxScanConnector {
     this.id = `mysql:${options.connectionId}`;
   }
 
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
+  async testConnection(): Promise<KtxConnectorTestResult> {
     try {
       await this.query('SELECT 1');
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+      return connectorTestFailure(error);
     }
   }
 

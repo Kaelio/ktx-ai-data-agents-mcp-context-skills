@@ -80,6 +80,7 @@ export type KtxSetupArgs =
       agentScope?: KtxAgentScope;
       skipAgents?: boolean;
       inputMode: 'auto' | 'disabled';
+      debug?: boolean;
       yes: boolean;
       cliVersion: string;
       llmBackend?: KtxSetupLlmBackend;
@@ -735,6 +736,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
           {
             projectDir: projectResult.projectDir,
             inputMode: args.inputMode,
+            ...(args.debug !== undefined ? { debug: args.debug } : {}),
             yes: args.yes,
             cliVersion: args.cliVersion,
             runtimeInstallPolicy: setupRuntimeInstallPolicy(args),

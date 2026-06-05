@@ -21,6 +21,7 @@ export interface RepairFinalGateFailureInput {
   repairKind: FinalGateRepairKind;
   maxAttempts?: number;
   stepBudget?: number;
+  abortSignal?: AbortSignal;
 }
 
 const readRepairFileSchema = z.object({
@@ -200,6 +201,7 @@ export async function repairFinalGateFailure(
           jobId: input.trace.context.jobId,
           repairKind: input.repairKind,
         },
+        abortSignal: input.abortSignal,
       }),
     );
 

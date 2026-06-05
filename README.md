@@ -247,11 +247,17 @@ uv run pytest -q
 
 ## Telemetry
 
-**ktx** collects anonymous usage telemetry from interactive CLI runs to
-improve setup, command reliability, and data-agent workflows. No file paths,
-hostnames, SQL, schema names, error messages, or argv are recorded. See
-[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the
-event catalog and opt-out options.
+**ktx** collects privacy-conscious usage telemetry to understand installs and
+improve setup, command reliability, and data-agent workflows. Catalog telemetry
+events do not record file paths, hostnames, SQL, schema names, table names,
+column names, error messages, raw environment values, or argv. Error reports use
+PostHog Error Tracking and can include stack frames and raw error messages,
+which may contain local file paths or the local username in those paths.
+**ktx** redacts secrets, credentials, database URLs, auth headers, argv, raw
+environment values, SQL text, row data, and user-typed prompt or MCP argument
+text from the explicit `$exception` payload. See
+[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the event
+catalog and opt-out options.
 
 ## License
 

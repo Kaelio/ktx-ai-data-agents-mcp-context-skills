@@ -7,7 +7,9 @@ import { assertReadOnlySql, limitSqlForExecution } from '../../context/connectio
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 import {
+  connectorTestFailure,
   createKtxConnectorCapabilities,
+  type KtxConnectorTestResult,
   type KtxColumnSampleInput,
   type KtxColumnSampleResult,
   type KtxColumnStatsInput,
@@ -464,7 +466,7 @@ class SnowflakeSdkDriver implements KtxSnowflakeDriver {
       await this.query('SELECT 1');
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+      return connectorTestFailure(error);
     }
   }
 
@@ -573,7 +575,7 @@ export class KtxSnowflakeScanConnector implements KtxScanConnector {
     }
   }
 
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
+  async testConnection(): Promise<KtxConnectorTestResult> {
     return this.getDriver().test();
   }
 

@@ -406,6 +406,8 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     }
 
     const resolvedAgentScope = options.local ? 'local' : options.global ? 'global' : 'project';
+    const debugEnabled =
+      ((command.optsWithGlobals ? command.optsWithGlobals() : command.opts()) as { debug?: unknown }).debug === true;
     await runSetupArgs(context, {
       command: 'run',
       projectDir: resolveCommandProjectDir(command),
@@ -415,6 +417,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       agentScope: resolvedAgentScope,
       skipAgents: options.skipAgents === true,
       inputMode: options.input === false ? 'disabled' : 'auto',
+      ...(debugEnabled ? { debug: true } : {}),
       yes: options.yes === true,
       cliVersion: context.packageInfo.version,
       ...(options.llmBackend ? { llmBackend: options.llmBackend } : {}),

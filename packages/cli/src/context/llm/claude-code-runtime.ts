@@ -7,8 +7,10 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
+import { createAbortError, isAbortError, throwIfAborted } from '../core/abort.js';
 import { createKtxClaudeCodeEnv } from './claude-code-env.js';
 import { resolveClaudeCodeModel } from './claude-code-models.js';
+import type { RateLimitGovernor, RateLimitSignal } from './rate-limit-governor.js';
 import { createClaudeSdkTools, mcpToolIds } from './runtime-tools.js';
 import type {
   KtxGenerateObjectInput,
@@ -21,7 +23,16 @@ import type {
   RunLoopStopReason,
 } from './runtime-port.js';
 
-type QueryFn = (params: Parameters<typeof defaultQuery>[0]) => AsyncIterable<SDKMessage>;
+type QueryResult = AsyncIterable<SDKMessage> & {
+  interrupt?: () => void | Promise<void>;
+};
+
+type QueryFn = (params: Parameters<typeof defaultQuery>[0]) => QueryResult;
+
+interface ClaudeQueryOutcome {
+  result: SDKResultMessage;
+  rejectedRateLimitSignal?: RateLimitSignal;
+}
 
 function claudeTokenUsage(result: SDKResultMessage): LlmTokenUsage {
   const usage = (result as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
@@ -43,6 +54,7 @@ export interface ClaudeCodeKtxLlmRuntimeDeps {
   query?: QueryFn;
   env?: NodeJS.ProcessEnv;
   logger?: KtxLogger;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
 const BUILTIN_TOOLS = [
@@ -157,6 +169,74 @@ function expectedMcpServerNames(tools: KtxRuntimeToolSet | undefined): Set<strin
   return tools && Object.keys(tools).length > 0 ? new Set([KTX_MCP_SERVER_NAME]) : new Set();
 }
 
+const CLAUDE_RATE_LIMIT_ERROR_MARKERS = /\b429\b|rate limit|too many requests|quota exceeded|overloaded|max_retries/i;
+
+function normalizeClaudeResetAtMs(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.round(value < 10_000_000_000 ? value * 1_000 : value);
+  }
+  if (typeof value === 'string') {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return normalizeClaudeResetAtMs(numeric);
+    }
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function isClaudeRateLimitResult(result: SDKResultMessage, rejectedSignal: RateLimitSignal | undefined): boolean {
+  const error = resultError(result);
+  if (!error) {
+    return false;
+  }
+  if (rejectedSignal?.status === 'rejected') {
+    return true;
+  }
+  const resultDetails = result as {
+    stop_reason?: unknown;
+    terminal_reason?: unknown;
+    errors?: unknown[];
+  };
+  const details = [
+    error.message,
+    resultDetails.stop_reason,
+    resultDetails.terminal_reason,
+    ...(resultDetails.errors ?? []),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join('\n');
+  return CLAUDE_RATE_LIMIT_ERROR_MARKERS.test(details);
+}
+
+function claudeRateLimitSignal(message: SDKMessage): RateLimitSignal | null {
+  const record = message as unknown as Record<string, unknown>;
+  if (record.type === 'rate_limit_event') {
+    const info = record.rate_limit_info as Record<string, unknown> | undefined;
+    if (!info) return null;
+    const rawStatus = typeof info.status === 'string' ? info.status : 'allowed';
+    const resetAtMs = normalizeClaudeResetAtMs(info.resetsAt);
+    return {
+      provider: 'claude-subscription',
+      status: rawStatus === 'rejected' ? 'rejected' : rawStatus === 'allowed_warning' ? 'warning' : 'allowed',
+      ...(resetAtMs !== undefined ? { resetAtMs } : {}),
+      ...(typeof info.rateLimitType === 'string' ? { rateLimitType: info.rateLimitType } : {}),
+      ...(typeof info.utilization === 'number' ? { utilization: info.utilization } : {}),
+    };
+  }
+  if (record.subtype === 'api_retry' || record.type === 'api_retry') {
+    const retryDelayMs = typeof record.retry_delay_ms === 'number' ? record.retry_delay_ms : undefined;
+    return {
+      provider: 'claude-subscription',
+      status: 'warning',
+      ...(retryDelayMs !== undefined ? { retryAfterMs: retryDelayMs } : {}),
+      rateLimitType: 'api_retry',
+    };
+  }
+  return null;
+}
+
 function managedMcpSettings(serverNames: string[]): NonNullable<Options['managedSettings']> {
   return {
     allowManagedMcpServersOnly: true,
@@ -217,21 +297,63 @@ async function collectResult(params: {
   allowedToolIds: Set<string>;
   expectedMcpServerNames: Set<string>;
   onAssistantTurn?: () => Promise<void>;
-}): Promise<SDKResultMessage> {
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
+  abortSignal?: AbortSignal;
+}): Promise<ClaudeQueryOutcome> {
   let result: SDKResultMessage | undefined;
-  for await (const message of params.query({ prompt: params.prompt, options: params.options })) {
-    assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
-    if (countsAsAssistantTurn(message)) {
-      await params.onAssistantTurn?.();
+  let rejectedRateLimitSignal: RateLimitSignal | undefined;
+  throwIfAborted(params.abortSignal);
+  await params.rateLimitGovernor?.waitForReady(params.abortSignal);
+  throwIfAborted(params.abortSignal);
+  const queryResult = params.query({ prompt: params.prompt, options: params.options });
+  const onAbort = () => {
+    void Promise.resolve(queryResult.interrupt?.()).catch(() => undefined);
+  };
+  params.abortSignal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    for await (const message of queryResult) {
+      throwIfAborted(params.abortSignal);
+      const rateLimitSignal = claudeRateLimitSignal(message);
+      if (rateLimitSignal) {
+        if (rateLimitSignal.status === 'rejected') {
+          rejectedRateLimitSignal = rateLimitSignal;
+        }
+        params.rateLimitGovernor?.report(rateLimitSignal);
+      }
+      assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
+      if (countsAsAssistantTurn(message)) {
+        await params.onAssistantTurn?.();
+      }
+      if (isResult(message)) {
+        result = message;
+      }
     }
-    if (isResult(message)) {
-      result = message;
-    }
+  } finally {
+    params.abortSignal?.removeEventListener('abort', onAbort);
+  }
+  if (params.abortSignal?.aborted) {
+    throw createAbortError();
   }
   if (!result) {
     throw new Error('Claude Code query returned no result message');
   }
-  return result;
+  return {
+    result,
+    ...(rejectedRateLimitSignal ? { rejectedRateLimitSignal } : {}),
+  };
+}
+
+async function collectResultWithRateLimitRetry(params: Parameters<typeof collectResult>[0]): Promise<SDKResultMessage> {
+  // maxRetryAttempts() returns 1 when no governor is present or pacing is
+  // disabled, so a rate-limited result surfaces without an extra query; the
+  // Claude Code SDK applies its own backoff for transient rejections.
+  const maxAttempts = params.rateLimitGovernor?.maxRetryAttempts() ?? 1;
+  for (let attempt = 0; ; attempt += 1) {
+    const outcome = await collectResult(params);
+    if (!isClaudeRateLimitResult(outcome.result, outcome.rejectedRateLimitSignal) || attempt >= maxAttempts - 1) {
+      return outcome.result;
+    }
+  }
 }
 
 export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
@@ -252,12 +374,14 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       tools: input.tools,
     });
     const startedAt = Date.now();
-    const result = await collectResult({
+    const result = await collectResultWithRateLimitRetry({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
       allowedToolIds: new Set(mcpToolIds(input.tools ?? {})),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
+      rateLimitGovernor: this.deps.rateLimitGovernor,
+      abortSignal: input.abortSignal,
     });
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
@@ -289,12 +413,14 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       outputFormat: { type: 'json_schema' as const, schema: jsonSchema(input.schema as z.ZodType) },
     };
     const startedAt = Date.now();
-    const result = await collectResult({
+    const result = await collectResultWithRateLimitRetry({
       query: this.runQuery,
       prompt: [input.system, input.prompt].filter(Boolean).join('\n\n'),
       options,
       allowedToolIds: new Set([...mcpToolIds(input.tools ?? {}), STRUCTURED_OUTPUT_TOOL_NAME]),
       expectedMcpServerNames: expectedMcpServerNames(input.tools),
+      rateLimitGovernor: this.deps.rateLimitGovernor,
+      abortSignal: input.abortSignal,
     });
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: claudeTokenUsage(result) });
     const error = resultError(result);
@@ -319,12 +445,14 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         maxTurns: params.stepBudget,
         tools: params.toolSet,
       });
-      const result = await collectResult({
+      const result = await collectResultWithRateLimitRetry({
         query: this.runQuery,
         prompt: params.userPrompt,
         options: { ...options, systemPrompt: params.systemPrompt },
         allowedToolIds: new Set(mcpToolIds(params.toolSet)),
         expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
+        rateLimitGovernor: this.deps.rateLimitGovernor,
+        abortSignal: params.abortSignal,
         onAssistantTurn: async () => {
           stepIndex += 1;
           stepBoundariesMs.push(Date.now() - startedAt);
@@ -355,6 +483,9 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         },
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       return {
         stopReason: 'error',
@@ -388,7 +519,7 @@ export async function runClaudeCodeAuthProbe(input: {
       env: input.env,
       maxTurns: 1,
     });
-    const result = await collectResult({
+    const result = await collectResultWithRateLimitRetry({
       query: input.query ?? defaultQuery,
       prompt: 'Reply with exactly: ok',
       options,

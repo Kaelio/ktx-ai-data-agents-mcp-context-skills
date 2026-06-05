@@ -14,6 +14,7 @@ export interface RunIsolatedWorkUnitInput {
   patchDir: string;
   trace: IngestTraceWriter;
   workUnit: WorkUnit;
+  abortSignal?: AbortSignal;
   run(child: IngestSessionWorktree): Promise<WorkUnitOutcome>;
   afterSuccess?(child: IngestSessionWorktree): Promise<void>;
 }

@@ -73,6 +73,7 @@ export type KtxSetupDatabaseDriver =
 export interface KtxSetupDatabasesArgs {
   projectDir: string;
   inputMode: 'auto' | 'disabled';
+  debug?: boolean;
   yes?: boolean;
   cliVersion?: string;
   runtimeInstallPolicy?: KtxManagedPythonInstallPolicy;
@@ -1626,7 +1627,12 @@ function hasServiceAccountsBlock(connection: KtxProjectConnectionConfig | undefi
   return 'serviceAccounts' in filters;
 }
 
-function printQueryHistoryFilterProposal(io: KtxCliIo, proposal: QueryHistoryFilterProposal): void {
+function printQueryHistoryFilterProposal(io: KtxCliIo, proposal: QueryHistoryFilterProposal, debug = false): void {
+  if (debug && proposal.parseFailedTemplateIds.length > 0) {
+    io.stderr.write(
+      `[debug] query-history filter picker could not parse ${proposal.parseFailedTemplateIds.length} template(s): ${proposal.parseFailedTemplateIds.join(', ')}\n`,
+    );
+  }
   if (proposal.excludedRoles.length === 0) {
     if (proposal.skipped?.reason === 'no-llm') {
       io.stdout.write('│  Query-history filter picker skipped: no LLM is configured.\n');
@@ -1634,6 +1640,12 @@ function printQueryHistoryFilterProposal(io: KtxCliIo, proposal: QueryHistoryFil
       io.stdout.write('│  Query-history filter picker skipped: SQL analysis is unavailable.\n');
     } else if (proposal.skipped?.reason === 'no-in-scope-history') {
       io.stdout.write('│  Query-history filter picker found no in-scope service-account exclusions.\n');
+    }
+    if (proposal.parseFailedTemplateIds.length > 0) {
+      const count = proposal.parseFailedTemplateIds.length;
+      io.stdout.write(
+        `│  Skipped ${count} query template${count === 1 ? '' : 's'} ktx could not parse (run with --debug to list them).\n`,
+      );
     }
     for (const warning of proposal.warnings) {
       io.stdout.write(`│  ! ${warning}\n`);
@@ -1727,12 +1739,17 @@ async function maybeProposeQueryHistoryFilters(input: {
     deps: input.deps,
   });
   if (!llmRuntime && !input.deps.queryHistoryFilterPicker) {
-    printQueryHistoryFilterProposal(input.io, {
-      excludedRoles: [],
-      consideredRoleCount: 0,
-      skipped: { reason: 'no-llm' },
-      warnings: [],
-    });
+    printQueryHistoryFilterProposal(
+      input.io,
+      {
+        excludedRoles: [],
+        consideredRoleCount: 0,
+        skipped: { reason: 'no-llm' },
+        warnings: [],
+        parseFailedTemplateIds: [],
+      },
+      input.args.debug === true,
+    );
     return;
   }
 
@@ -1773,7 +1790,19 @@ async function maybeProposeQueryHistoryFilters(input: {
     userServiceAccountsPresent,
   });
 
-  printQueryHistoryFilterProposal(input.io, proposal);
+  printQueryHistoryFilterProposal(input.io, proposal, input.args.debug === true);
+  await emitTelemetryEvent({
+    name: 'query_history_filter_completed',
+    projectDir: input.projectDir,
+    io: input.io,
+    fields: {
+      dialect,
+      consideredRoleCount: proposal.consideredRoleCount,
+      excludedRoleCount: proposal.excludedRoles.length,
+      parseFailedCount: proposal.parseFailedTemplateIds.length,
+      outcome: 'ok',
+    },
+  });
   if (proposal.skipped?.reason === 'user-block-present') {
     input.io.stdout.write('│  Existing query-history service-account filters left unchanged.\n');
     return;

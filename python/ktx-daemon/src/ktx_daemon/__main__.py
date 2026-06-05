@@ -6,6 +6,8 @@ import argparse
 import json
 import sys
 import time
+from collections.abc import Callable
+from types import TracebackType
 from typing import Any
 
 from pydantic import ValidationError
@@ -90,6 +92,41 @@ def _read_stdin_json() -> dict[str, Any]:
     return parsed
 
 
+def install_serve_http_exception_hooks(started_at: float) -> Callable[[], None]:
+    original_hook = sys.excepthook
+
+    def hook(
+        exc_type: type[BaseException],
+        exc: BaseException,
+        tb: TracebackType | None,
+    ) -> None:
+        report_serve_http_crash(exc, started_at=started_at)
+        original_hook(exc_type, exc, tb)
+
+    sys.excepthook = hook
+
+    def dispose() -> None:
+        sys.excepthook = original_hook
+
+    return dispose
+
+
+def report_serve_http_crash(error: BaseException, *, started_at: float) -> None:
+    from ktx_daemon.telemetry import report_exception
+    from ktx_daemon.telemetry.daemon_lifecycle import emit_daemon_stopped_once
+
+    report_exception(
+        error,
+        source="serve-http",
+        handled=False,
+        fatal=True,
+    )
+    emit_daemon_stopped_once(
+        reason="crash",
+        uptime_ms=max(0, (time.perf_counter() - started_at) * 1000),
+    )
+
+
 def run_http_server(
     *,
     host: str,
@@ -102,15 +139,23 @@ def run_http_server(
     from ktx_daemon.app import create_app
 
     started_at = time.perf_counter()
-    uvicorn.run(
-        create_app(
-            enable_code_execution=enable_code_execution,
-            telemetry_started_at=started_at,
-        ),
-        host=host,
-        port=port,
-        log_level=log_level,
-    )
+    dispose_hooks = install_serve_http_exception_hooks(started_at)
+    try:
+        try:
+            uvicorn.run(
+                create_app(
+                    enable_code_execution=enable_code_execution,
+                    telemetry_started_at=started_at,
+                ),
+                host=host,
+                port=port,
+                log_level=log_level,
+            )
+        except Exception as error:
+            report_serve_http_crash(error, started_at=started_at)
+            raise
+    finally:
+        dispose_hooks()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -169,6 +214,14 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f"{error}\n")
         return 1
     except Exception as error:
+        from ktx_daemon.telemetry import report_exception
+
+        report_exception(
+            error,
+            source=str(args.command),
+            handled=True,
+            fatal=False,
+        )
         sys.stderr.write(f"{type(error).__name__}: {error}\n")
         return 1
 

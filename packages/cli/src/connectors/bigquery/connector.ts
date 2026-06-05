@@ -5,7 +5,9 @@ import { assertReadOnlySql, limitSqlForExecution } from '../../context/connectio
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
 import {
+  connectorTestFailure,
   createKtxConnectorCapabilities,
+  type KtxConnectorTestResult,
   type KtxColumnSampleInput,
   type KtxColumnSampleResult,
   type KtxColumnStatsInput,
@@ -320,7 +322,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
     this.id = `bigquery:${options.connectionId}`;
   }
 
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
+  async testConnection(): Promise<KtxConnectorTestResult> {
     try {
       const client = this.getClient();
       await client.getDatasets({ maxResults: 1 });
@@ -329,7 +331,7 @@ export class KtxBigQueryScanConnector implements KtxScanConnector {
       }
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
+      return connectorTestFailure(error);
     }
   }
 

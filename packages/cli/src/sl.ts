@@ -26,7 +26,8 @@ import {
   type KtxManagedPythonInstallPolicy,
 } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:sl');
@@ -202,8 +203,9 @@ function ambiguousSourceMessage(sourceName: string, connectionIds: readonly stri
 export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: KtxSlDeps = {}): Promise<number> {
   const startedAt = performance.now();
   let queryForTelemetry: SemanticLayerQueryInput | undefined;
+  let project: KtxLocalProject | undefined;
   try {
-    const project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
+    project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
     if (args.command === 'list') {
       const sources = await listLocalSlSources(project, { connectionId: args.connectionId });
       await printSlSources({
@@ -320,7 +322,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
             projectDir: args.projectDir,
           });
       const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)() : undefined;
-      const result = await compileLocalSlQuery(project as KtxLocalProject, {
+      const result = await compileLocalSlQuery(project, {
         connectionId: args.connectionId,
         query,
         compute,
@@ -351,6 +353,20 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
     const _exhaustive: never = args;
     throw new Error(`Unsupported sl command: ${JSON.stringify(_exhaustive)}`);
   } catch (error) {
+    await reportException({
+      error,
+      context: { source: `sl ${args.command}`, handled: true, fatal: false },
+      projectDir: args.projectDir,
+      io,
+      redactionSecrets: await collectTelemetryRedactionSecrets({
+        project,
+        projectDir: args.projectDir,
+        connectionId: args.connectionId,
+        includeLlm: args.command === 'query',
+        includeEmbeddings: args.command === 'search' || args.command === 'query',
+        env: process.env,
+      }),
+    });
     if (args.command === 'validate') {
       const errorClass = scrubErrorClass(error);
       await emitTelemetryEvent({

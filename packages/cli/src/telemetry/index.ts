@@ -7,6 +7,7 @@ import {
   type CompletedCommandSpan,
 } from './command-hook.js';
 import { shutdownTelemetryEmitter, trackTelemetryEvent } from './emitter.js';
+import { reportException, type ExceptionContext } from './exception.js';
 import {
   buildCommonEnvelope,
   buildTelemetryEvent,
@@ -17,8 +18,8 @@ import {
 import { computeTelemetryProjectId, loadTelemetryIdentity } from './identity.js';
 import { buildProjectStackSnapshotFields } from './project-snapshot.js';
 
-export { beginCommandSpan, completeCommandSpan, shutdownTelemetryEmitter };
-export type { CommandOutcome, CompletedCommandSpan };
+export { beginCommandSpan, completeCommandSpan, reportException, shutdownTelemetryEmitter };
+export type { CommandOutcome, CompletedCommandSpan, ExceptionContext };
 
 export async function showTelemetryNoticeIfNeeded(io: KtxCliIo, packageInfo: KtxCliPackageInfo): Promise<void> {
   const identity = await loadTelemetryIdentity({

@@ -220,5 +220,6 @@ export interface IngestJobPhase {
 export interface IngestJobContext {
   jobId: string;
   memoryFlow?: MemoryFlowEventSink;
+  abortSignal?: AbortSignal;
   startPhase(weight: number): IngestJobPhase;
 }

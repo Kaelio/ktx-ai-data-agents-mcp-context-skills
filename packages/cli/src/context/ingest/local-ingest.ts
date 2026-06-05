@@ -3,6 +3,7 @@ import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
 import type { KtxLogger } from '../../context/core/config.js';
+import { createAbortError, isAbortError } from '../../context/core/abort.js';
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
 import type { AgentRunnerPort, KtxLlmRuntimePort } from '../../context/llm/runtime-port.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
@@ -36,6 +37,7 @@ export interface RunLocalIngestOptions {
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
   embeddingProvider?: import('../../llm/types.js').KtxEmbeddingProvider | null;
+  abortSignal?: AbortSignal;
 }
 
 export interface LocalIngestResult {
@@ -123,10 +125,11 @@ function findAdapter(adapters: SourceAdapter[], source: string): SourceAdapter {
   return adapter;
 }
 
-function localJobContext(jobId: string, memoryFlow?: MemoryFlowEventSink): IngestJobContext {
+function localJobContext(jobId: string, memoryFlow?: MemoryFlowEventSink, abortSignal?: AbortSignal): IngestJobContext {
   return {
     jobId,
     ...(memoryFlow ? { memoryFlow } : {}),
+    ...(abortSignal ? { abortSignal } : {}),
     startPhase() {
       return new LocalIngestPhase();
     },
@@ -158,6 +161,7 @@ async function runScheduledPullJob(options: {
   queryExecutor?: KtxSqlQueryExecutorPort;
   logger?: KtxLogger;
   embeddingProvider?: import('../../llm/types.js').KtxEmbeddingProvider | null;
+  abortSignal?: AbortSignal;
 }): Promise<LocalIngestResult> {
   const runtime = createLocalBundleIngestRuntime(options);
   const jobId = options.jobId ?? runtime.nextJobId();
@@ -169,7 +173,7 @@ async function runScheduledPullJob(options: {
       trigger: options.trigger ?? 'manual_resync',
       bundleRef: { kind: 'scheduled_pull', config: options.pullConfig },
     },
-    localJobContext(jobId, options.memoryFlow),
+    localJobContext(jobId, options.memoryFlow, options.abortSignal),
   );
   const report = await runtime.store.findByJobId(jobId);
   if (!report) {
@@ -212,6 +216,7 @@ export async function runLocalIngest(options: RunLocalIngestOptions): Promise<Lo
       queryExecutor: options.queryExecutor,
       logger: options.logger,
       embeddingProvider: options.embeddingProvider,
+      abortSignal: options.abortSignal,
     });
   }
 
@@ -223,7 +228,7 @@ export async function runLocalIngest(options: RunLocalIngestOptions): Promise<Lo
       trigger: options.trigger ?? (options.sourceDir ? 'upload' : 'manual_resync'),
       bundleRef,
     },
-    localJobContext(jobId, options.memoryFlow),
+    localJobContext(jobId, options.memoryFlow, options.abortSignal),
   );
   const report = await runtime.store.findByJobId(jobId);
   if (!report) {
@@ -362,6 +367,9 @@ export async function runLocalMetabaseIngest(
 
   const children: LocalMetabaseFanoutChild[] = [];
   for (const childPlan of childPlans) {
+    if (options.abortSignal?.aborted) {
+      throw createAbortError();
+    }
     const targetConnectionId = safeSegment('target connection id', childPlan.targetConnectionId);
     if (!options.project.config.connections[targetConnectionId]) {
       throw new Error(`Target connection "${targetConnectionId}" is not configured in ktx.yaml`);
@@ -391,8 +399,12 @@ export async function runLocalMetabaseIngest(
         queryExecutor: options.queryExecutor,
         logger: options.logger,
         embeddingProvider: options.embeddingProvider,
+        abortSignal: options.abortSignal,
       });
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       child = await recordLocalMetabaseChildFailure({
         project: options.project,
         jobId: childJobId,

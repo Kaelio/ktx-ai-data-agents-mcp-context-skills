@@ -87,8 +87,10 @@ def test_app_lifespan_emits_daemon_lifecycle_debug_events(
     monkeypatch,
     capsys,
 ) -> None:
+    from ktx_daemon.telemetry.daemon_lifecycle import reset_daemon_lifecycle_for_tests
     from ktx_daemon.telemetry.identity import reset_identity_cache
 
+    reset_daemon_lifecycle_for_tests()
     reset_identity_cache()
     identity_path = tmp_path / ".ktx" / "telemetry.json"
     identity_path.parent.mkdir(parents=True)

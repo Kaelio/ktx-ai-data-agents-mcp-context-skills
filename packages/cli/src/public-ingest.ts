@@ -23,7 +23,8 @@ import type { KtxScanArgs, KtxScanDeps } from './scan.js';
 import type { KtxTableRef } from './context/scan/types.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
-import { emitProjectStackSnapshot, emitTelemetryEvent } from './telemetry/index.js';
+import { emitProjectStackSnapshot, emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { formatErrorDetail } from './telemetry/scrubber.js';
 
 profileMark('module:public-ingest');
@@ -1119,30 +1120,63 @@ export async function runKtxPublicIngest(
           feature,
         });
       } catch (error) {
+        await reportException({
+          error,
+          context: { source: 'ingest runtime', handled: true, fatal: false },
+          projectDir: args.projectDir,
+          io,
+          redactionSecrets: await collectTelemetryRedactionSecrets({
+            project,
+            projectDir: args.projectDir,
+            connectionId: args.targetConnectionId,
+            includeLlm: true,
+            includeEmbeddings: true,
+            env: deps.env ?? process.env,
+          }),
+        });
         io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
         return 1;
       }
     }
     const { runContextBuild } = await import('./context-build-view.js');
     const contextBuild = deps.runContextBuild ?? runContextBuild;
-    const result = await contextBuild(
-      project,
-      {
+    try {
+      const result = await contextBuild(
+        project,
+        {
+          projectDir: args.projectDir,
+          ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
+          all: args.all,
+          entrypoint: 'ingest',
+          inputMode: args.inputMode,
+          ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
+          ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
+          ...(args.scanMode ? { scanMode: args.scanMode } : {}),
+          ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
+          ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
+          ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
+        },
+        io,
+      );
+      return result.exitCode;
+    } catch (error) {
+      await reportException({
+        error,
+        context: { source: 'ingest context-build', handled: true, fatal: false },
         projectDir: args.projectDir,
-        ...(args.targetConnectionId ? { targetConnectionId: args.targetConnectionId } : {}),
-        all: args.all,
-        entrypoint: 'ingest',
-        inputMode: args.inputMode,
-        ...(args.queryHistory ? { queryHistory: args.queryHistory } : {}),
-        ...(args.queryHistoryWindowDays !== undefined ? { queryHistoryWindowDays: args.queryHistoryWindowDays } : {}),
-        ...(args.scanMode ? { scanMode: args.scanMode } : {}),
-        ...(args.detectRelationships !== undefined ? { detectRelationships: args.detectRelationships } : {}),
-        ...(args.cliVersion ? { cliVersion: args.cliVersion } : {}),
-        ...(args.runtimeInstallPolicy ? { runtimeInstallPolicy: args.runtimeInstallPolicy } : {}),
-      },
-      io,
-    );
-    return result.exitCode;
+        io,
+        redactionSecrets: await collectTelemetryRedactionSecrets({
+          project,
+          projectDir: args.projectDir,
+          connectionId: args.targetConnectionId,
+          includeLlm: true,
+          includeEmbeddings: true,
+          env: deps.env ?? process.env,
+        }),
+      });
+      io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
   }
 
   const plan = buildPublicIngestPlan(project, args);

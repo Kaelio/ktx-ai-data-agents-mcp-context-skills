@@ -16,6 +16,16 @@ type PostHogClient = {
     properties: Record<string, unknown>;
     groups?: Record<string, string>;
   }): void;
+  captureException(
+    error: unknown,
+    distinctId?: string,
+    additionalProperties?: Record<string, unknown>,
+  ): void;
+  captureExceptionImmediate(
+    error: unknown,
+    distinctId?: string,
+    additionalProperties?: Record<string, unknown>,
+  ): Promise<void>;
   shutdown(): Promise<void> | void;
 };
 
@@ -100,6 +110,57 @@ export async function trackTelemetryEvent(input: {
       properties: input.event.properties,
       groups: input.projectId ? { project: input.projectId } : undefined,
     });
+  } catch {
+    return;
+  }
+}
+
+function writeDebugExceptionPayload(input: {
+  error: Error;
+  distinctId: string;
+  properties: Record<string, unknown>;
+  stderr: TelemetrySink;
+}): void {
+  input.stderr.write(
+    `[telemetry-exception] ${JSON.stringify({
+      distinctId: input.distinctId,
+      message: input.error.message,
+      name: input.error.name,
+      properties: input.properties,
+    })}\n`,
+  );
+}
+
+export async function trackTelemetryException(input: {
+  error: Error;
+  distinctId: string;
+  properties: Record<string, unknown>;
+  env?: TelemetryEmitterEnv;
+  stderr: TelemetrySink;
+  projectApiKey?: string;
+  host?: string;
+  immediate?: boolean;
+}): Promise<void> {
+  const env = input.env ?? process.env;
+
+  if (debugEnabled(env)) {
+    writeDebugExceptionPayload(input);
+    return;
+  }
+
+  const projectApiKey = telemetryProjectApiKey(input.projectApiKey);
+  const host = telemetryHost(env, input.host);
+  const client = await getPostHogClient(projectApiKey, host);
+  if (!client) {
+    return;
+  }
+
+  try {
+    if (input.immediate) {
+      await client.captureExceptionImmediate(input.error, input.distinctId, input.properties);
+      return;
+    }
+    client.captureException(input.error, input.distinctId, input.properties);
   } catch {
     return;
   }

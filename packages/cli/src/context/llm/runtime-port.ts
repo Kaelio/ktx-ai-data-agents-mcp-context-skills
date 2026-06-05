@@ -49,6 +49,7 @@ export interface RunLoopParams {
   stepBudget: number;
   telemetryTags: Record<string, string>;
   onStepFinish?: (info: RunLoopStepInfo) => void | Promise<void>;
+  abortSignal?: AbortSignal;
 }
 
 export interface RunLoopResult {
@@ -64,6 +65,7 @@ export interface KtxGenerateTextInput {
   tools?: KtxRuntimeToolSet;
   temperature?: number;
   onMetrics?: (metrics: { totalMs: number; usage: LlmTokenUsage }) => void;
+  abortSignal?: AbortSignal;
 }
 
 export interface KtxGenerateObjectInput<TOutput, TSchema extends z.ZodType<TOutput>> {
@@ -74,6 +76,7 @@ export interface KtxGenerateObjectInput<TOutput, TSchema extends z.ZodType<TOutp
   temperature?: number;
   schema: TSchema;
   onMetrics?: (metrics: { totalMs: number; usage: LlmTokenUsage }) => void;
+  abortSignal?: AbortSignal;
 }
 
 export interface KtxLlmRuntimePort {

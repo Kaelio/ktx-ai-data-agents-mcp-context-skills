@@ -129,6 +129,48 @@ function installTelemetrySignalFlush(io: KtxCliIo, info: KtxCliPackageInfo): () 
   };
 }
 
+/** @internal */
+export function createGlobalExceptionReporter(io: KtxCliIo, info: KtxCliPackageInfo) {
+  return async (source: 'uncaughtException' | 'unhandledRejection', error: unknown): Promise<void> => {
+    const { reportException, shutdownTelemetryEmitter } = await import('./telemetry/index.js');
+    await reportException({
+      error,
+      context: { source, handled: false, fatal: true },
+      io,
+      packageInfo: info,
+      immediate: true,
+    });
+    await shutdownTelemetryEmitter();
+  };
+}
+
+export function installGlobalExceptionHandlers(io: KtxCliIo, info: KtxCliPackageInfo): () => void {
+  const report = createGlobalExceptionReporter(io, info);
+  const handle = (source: 'uncaughtException' | 'unhandledRejection', error: unknown): void => {
+    void (async () => {
+      try {
+        await report(source, error);
+      } catch {
+        // Best-effort: preserve Node's process termination behavior.
+      }
+      if (error instanceof Error && error.stack) {
+        io.stderr.write(`${error.stack}\n`);
+      } else {
+        io.stderr.write(`${String(error)}\n`);
+      }
+      process.exit(1);
+    })();
+  };
+  const onUncaught = (error: Error): void => handle('uncaughtException', error);
+  const onUnhandled = (reason: unknown): void => handle('unhandledRejection', reason);
+  process.on('uncaughtException', onUncaught);
+  process.on('unhandledRejection', onUnhandled);
+  return () => {
+    process.off('uncaughtException', onUncaught);
+    process.off('unhandledRejection', onUnhandled);
+  };
+}
+
 export async function runKtxCli(
   argv = process.argv.slice(2),
   io: KtxCliIo = process,
@@ -141,11 +183,14 @@ export async function runKtxCli(
   // Real-process entry only: flush telemetry if interrupted. Test/programmatic
   // callers pass their own `io`, so they never install process-level handlers.
   const removeSignalFlush = (io as unknown) === process ? installTelemetrySignalFlush(io, info) : undefined;
+  const removeGlobalExceptionHandlers =
+    (io as unknown) === process ? installGlobalExceptionHandlers(io, info) : undefined;
   try {
     return await runCommanderKtxCli(argv, io, deps, info, {
       runInit: runInitForCommander,
     });
   } finally {
+    removeGlobalExceptionHandlers?.();
     removeSignalFlush?.();
   }
 }

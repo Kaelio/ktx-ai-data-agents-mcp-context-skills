@@ -10,6 +10,12 @@ import type { KtxConnectionDriver, KtxScanConnector } from '../src/context/scan/
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnection } from '../src/connection.js';
 
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
+
 function stripAnsi(s: string): string {
   return s.replace(/\[[0-9;]*m/g, '');
 }
@@ -38,7 +44,7 @@ function makeIo() {
 
 function nativeConnector(
   driver: KtxConnectionDriver,
-  testResult: { success: true } | { success: false; error: string } = { success: true },
+  testResult: { success: true } | { success: false; error: string; cause?: unknown } = { success: true },
 ) {
   const testConnection = vi.fn(async () => testResult);
   const cleanup = vi.fn(async () => undefined);
@@ -72,6 +78,7 @@ describe('runKtxConnection', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-connection-'));
+    reportExceptionMock.mockClear();
   });
 
   afterEach(async () => {
@@ -165,12 +172,13 @@ describe('runKtxConnection', () => {
   it('records the raw errorDetail in connection_test telemetry when a native test fails', async () => {
     vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
     vi.stubEnv('CI', '');
+    vi.stubEnv('DATABASE_URL', 'postgres://svc:db-url-password@db.example.test/analytics'); // pragma: allowlist secret
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
     await writeConnections(projectDir, {
-      warehouse: { driver: 'sqlite' },
+      warehouse: { driver: 'postgres', url: 'env:DATABASE_URL' },
     });
-    const { connector } = nativeConnector('sqlite', { success: false, error: 'database file is unreadable' });
+    const { connector } = nativeConnector('postgres', { success: false, error: 'database file is unreadable' });
     const io = makeIo();
 
     const code = await runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
@@ -181,6 +189,44 @@ describe('runKtxConnection', () => {
     expect(io.stderr()).toContain('"event":"connection_test"');
     expect(io.stderr()).toContain('"outcome":"error"');
     expect(io.stderr()).toContain('"errorDetail":"database file is unreadable"');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'connection test', handled: true, fatal: false }),
+        projectDir,
+        redactionSecrets: expect.arrayContaining([
+          'postgres://svc:db-url-password@db.example.test/analytics', // pragma: allowlist secret
+          'db-url-password',
+        ]),
+      }),
+    );
+  });
+
+  it('preserves the driver error class and code in connection_test telemetry', async () => {
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('CI', '');
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeConnections(projectDir, {
+      warehouse: { driver: 'sqlserver', host: 'db.example.test', database: 'analytics', username: 'svc_ro' },
+    });
+    class ConnectionError extends Error {
+      readonly code = 'ELOGIN';
+    }
+    const driverError = new ConnectionError("Login failed for user 'svc_ro'.");
+    const { connector } = nativeConnector('sqlserver', {
+      success: false,
+      error: driverError.message,
+      cause: driverError,
+    });
+    const io = makeIo();
+
+    const code = await runKtxConnection({ command: 'test', projectDir, connectionId: 'warehouse' }, io.io, {
+      createScanConnector: vi.fn(async () => connector),
+    });
+
+    expect(code).toBe(1);
+    expect(io.stderr()).toContain('"errorClass":"ConnectionError"');
+    expect(io.stderr()).toContain('"errorDetail":"ELOGIN: Login failed for user \'svc_ro\'."');
   });
 
   it('reports the connector error and still cleans up when native testConnection fails', async () => {

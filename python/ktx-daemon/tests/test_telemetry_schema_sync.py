@@ -36,4 +36,5 @@ def test_python_schema_copy_matches_node_schema() -> None:
         "daemon_stopped",
         "sl_plan_completed",
         "sql_gen_completed",
+        "query_history_filter_completed",
     ]

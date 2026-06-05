@@ -16,7 +16,8 @@ import { bold, dim, green, red, SYMBOLS } from './io/symbols.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { formatErrorDetail, scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:connection');
@@ -74,6 +75,12 @@ async function testNativeConnection(
     }
     const result = await connector.testConnection();
     if (!result.success) {
+      // Re-throw the driver's original error so connection_test telemetry records
+      // its real class (e.g. ConnectionError) and code (e.g. ELOGIN) instead of
+      // collapsing every native failure to a generic Error with no code.
+      if (result.cause instanceof Error) {
+        throw result.cause;
+      }
       throw new Error(result.error ?? 'connection test failed');
     }
     return { driver: connector.driver };
@@ -318,6 +325,21 @@ async function emitConnectionTest(input: {
       ...(errorDetail ? { errorDetail } : {}),
     },
   });
+  if (input.error) {
+    await reportException({
+      error: input.error,
+      context: { source: 'connection test', handled: true, fatal: false },
+      projectDir: input.project.projectDir,
+      io: input.io,
+      redactionSecrets: await collectTelemetryRedactionSecrets({
+        project: input.project,
+        connectionId: input.connectionId,
+        includeLlm: false,
+        includeEmbeddings: false,
+        env: process.env,
+      }),
+    });
+  }
 }
 
 function visualWidth(text: string): number {

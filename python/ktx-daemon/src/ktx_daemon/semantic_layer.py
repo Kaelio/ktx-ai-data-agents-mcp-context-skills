@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from ktx_daemon.telemetry import error_class, track_telemetry_event
+from ktx_daemon.telemetry import error_class, report_exception, track_telemetry_event
 from pydantic import BaseModel, ConfigDict, Field
 from semantic_layer.duplicate_check import validate_measure_duplicates
 from semantic_layer.engine import SemanticEngine
@@ -150,6 +150,13 @@ def query_semantic_layer(
             track_telemetry_event(
                 "sql_gen_completed", sql_fields, project_id=request.project_id
             )
+        report_exception(
+            error,
+            source="semantic-query",
+            handled=True,
+            fatal=False,
+            project_id=request.project_id,
+        )
         raise
 
 

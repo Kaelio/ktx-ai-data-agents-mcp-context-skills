@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import pLimit from 'p-limit';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../../context/core/config.js';
+import type { RateLimitWaitState } from '../../context/llm/rate-limit-governor.js';
 import { createRuntimeToolDescriptorFromAiTool } from '../../context/llm/runtime-tools.js';
 import type { KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../context/memory/types.js';
@@ -219,6 +220,10 @@ export class IngestBundleRunner {
   }
 
   async run(job: IngestBundleJob, ctx?: IngestJobContext): Promise<IngestBundleResult> {
+    const unsubscribeRateLimitGovernor = this.subscribeRateLimitGovernor({
+      trace: this.createTrace(job),
+      memoryFlow: ctx?.memoryFlow,
+    });
     const key = job.connectionId;
     const previous = this.chainByConnection.get(key);
     if (previous) {
@@ -241,7 +246,69 @@ export class IngestBundleRunner {
       ctx?.memoryFlow?.finish('error', [sanitizeMemoryFlowError(error)]);
       throw error;
     } finally {
+      unsubscribeRateLimitGovernor();
       await this.maybeEmitIngestProfile(job.jobId);
+    }
+  }
+
+  private formatRateLimitWait(
+    state: Extract<RateLimitWaitState, { kind: 'wait_tick' | 'wait_started' | 'wait_finished' }>,
+  ): string {
+    const seconds = Math.ceil(state.remainingMs / 1_000);
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    const duration = minutes > 0 ? `${minutes}m${String(remainder).padStart(2, '0')}s` : `${seconds}s`;
+    const type = state.rateLimitType ? ` ${state.rateLimitType}` : '';
+    return `Rate-limited (${state.provider}${type}); resuming in ${duration}; Ctrl+C to stop`;
+  }
+
+  private subscribeRateLimitGovernor(input: {
+    trace: IngestTraceWriter;
+    memoryFlow?: MemoryFlowEventSink;
+  }): () => void {
+    const governor = this.deps.settings.rateLimitGovernor;
+    if (!governor) {
+      return () => undefined;
+    }
+    return governor.subscribe((state: RateLimitWaitState) => {
+      if (state.kind === 'rate_limit_observed') {
+        void input.trace.event('info', 'rate_limit', 'rate_limit_observed', { ...state });
+        return;
+      }
+      if (state.kind === 'concurrency_adjusted') {
+        void input.trace.event('info', 'rate_limit', 'concurrency_adjusted', { ...state });
+        return;
+      }
+      void input.trace.event('info', 'rate_limit', state.kind, { ...state });
+      if (state.kind === 'wait_tick' || state.kind === 'wait_started') {
+        input.memoryFlow?.emit({
+          type: 'rate_limit_wait',
+          provider: state.provider,
+          ...(state.rateLimitType ? { rateLimitType: state.rateLimitType } : {}),
+          resumeAtMs: state.resumeAtMs,
+          remainingMs: state.remainingMs,
+        });
+        input.memoryFlow?.emit({
+          type: 'stage_progress',
+          stage: 'integration',
+          percent: 50,
+          message: this.formatRateLimitWait(state),
+          transient: true,
+        });
+      }
+    });
+  }
+
+  private async withRateLimitWorkSlot<T>(abortSignal: AbortSignal | undefined, fn: () => Promise<T>): Promise<T> {
+    const governor = this.deps.settings.rateLimitGovernor;
+    if (!governor) {
+      return fn();
+    }
+    const release = await governor.acquireWorkSlot(abortSignal);
+    try {
+      return await fn();
+    } finally {
+      release();
     }
   }
 
@@ -877,6 +944,7 @@ export class IngestBundleRunner {
     includeContextEvidenceTools: boolean;
     currentTableExists(tableRef: string): Promise<boolean>;
     memoryFlow?: MemoryFlowEventSink;
+    abortSignal?: AbortSignal;
     wuSkillNames: string[];
     onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
   }): Promise<WorkUnitOutcome> {
@@ -1029,6 +1097,7 @@ export class IngestBundleRunner {
         jobId: input.job.jobId,
         toolFailureCount: (unitKey) => input.transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
         onStepFinish: input.onStepFinish,
+        abortSignal: input.abortSignal,
       },
       input.wu,
     );
@@ -1524,7 +1593,8 @@ export class IngestBundleRunner {
         try {
           await Promise.all(
             workUnits.map((wu, index) =>
-              limitWorkUnit(async () => {
+              limitWorkUnit(() =>
+                this.withRateLimitWorkSlot(ctx?.abortSignal, async () => {
                 const outcome = await runIsolatedWorkUnit({
                   unitIndex: index,
                   ingestionBaseSha,
@@ -1532,6 +1602,7 @@ export class IngestBundleRunner {
                   patchDir,
                   trace: runTrace,
                   workUnit: wu,
+                  abortSignal: ctx?.abortSignal,
                   afterSuccess: (child) => copyTransientIngestEvidence(child.workdir, sessionWorktree.workdir),
                   run: async (child) => {
                     const scopedWikiService = this.deps.wikiService.forWorktree(child.workdir);
@@ -1565,6 +1636,7 @@ export class IngestBundleRunner {
                       includeContextEvidenceTools: adapter.evidenceIndexing === 'documents' && !!contextReport,
                       currentTableExists: (tableRef) =>
                         this.tableRefExistsInSemanticLayer(scopedSemanticLayerService, slConnectionIds, tableRef),
+                      abortSignal: ctx?.abortSignal,
                       memoryFlow,
                       wuSkillNames,
                       onStepFinish: ({ stepIndex, stepBudget }) => {
@@ -1594,7 +1666,8 @@ export class IngestBundleRunner {
                   completedWorkUnits / workUnits.length,
                   `${completedWorkUnits} of ${workUnits.length} work units complete`,
                 );
-              }),
+                }),
+              ),
             ),
           );
         } catch (error) {
@@ -1693,6 +1766,7 @@ export class IngestBundleRunner {
                 reason: context.reason,
                 maxAttempts: 1,
                 stepBudget: 12,
+                abortSignal: ctx?.abortSignal,
               });
               emitStageProgress(
                 'integration',
@@ -1714,6 +1788,7 @@ export class IngestBundleRunner {
                 repairKind: 'patch_semantic_gate',
                 maxAttempts: 1,
                 stepBudget: 16,
+                abortSignal: ctx?.abortSignal,
               });
               emitStageProgress(
                 'integration',
@@ -1993,6 +2068,7 @@ export class IngestBundleRunner {
                 );
               }
             : undefined,
+          abortSignal: ctx?.abortSignal,
         });
         curatorReport = curatorOutcome.report;
         curatorWarnings = curatorOutcome.warnings;
@@ -2038,6 +2114,7 @@ export class IngestBundleRunner {
           sourceKey: job.sourceKey,
           jobId: job.jobId,
           force: !!overrideReport,
+          abortSignal: ctx?.abortSignal,
           onStepFinish: stage4
             ? ({ stepIndex, stepBudget }) => {
                 emitStageProgress('reconciliation', 85, `Reconciling results: step ${stepIndex}/${stepBudget}`, {
@@ -2470,6 +2547,7 @@ export class IngestBundleRunner {
           repairKind: 'final_artifact_gate',
           maxAttempts: 1,
           stepBudget: 16,
+          abortSignal: ctx?.abortSignal,
         });
 
         isolatedDiffSummary.gateRepairAttempts += gateRepair.attempts;

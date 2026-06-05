@@ -50,6 +50,17 @@ connections:
           maxConcurrency: 1,
           failureMode: 'continue',
         },
+        rateLimit: {
+          enabled: true,
+          throttleThreshold: 0.8,
+          minConcurrencyUnderPressure: 1,
+          retry: {
+            maxAttempts: 6,
+            baseDelayMs: 1_000,
+            maxDelayMs: 60_000,
+            jitter: true,
+          },
+        },
         profile: false,
       },
       agent: {
@@ -161,6 +172,52 @@ ingest:
     expect(parseKtxProjectConfig('ingest:\n  adapters: []\n').ingest.profile).toBe(false);
     expect(parseKtxProjectConfig('ingest:\n  profile: true\n').ingest.profile).toBe(true);
     expect(parseKtxProjectConfig('ingest:\n  profile: json\n').ingest.profile).toBe('json');
+  });
+
+  it('defaults ingest rate-limit settings', () => {
+    const config = buildDefaultKtxProjectConfig();
+    expect(config.ingest.rateLimit).toEqual({
+      enabled: true,
+      throttleThreshold: 0.8,
+      minConcurrencyUnderPressure: 1,
+      retry: {
+        maxAttempts: 6,
+        baseDelayMs: 1_000,
+        maxDelayMs: 60_000,
+        jitter: true,
+      },
+    });
+  });
+
+  it('validates ingest rate-limit retry settings', () => {
+    const config = parseKtxProjectConfig(`
+llm:
+  provider:
+    backend: none
+ingest:
+  rateLimit:
+    enabled: true
+    throttleThreshold: 0.7
+    minConcurrencyUnderPressure: 2
+    maxWaitMs: 300000
+    retry:
+      maxAttempts: 4
+      baseDelayMs: 500
+      maxDelayMs: 30000
+      jitter: false
+`);
+    expect(config.ingest.rateLimit).toEqual({
+      enabled: true,
+      throttleThreshold: 0.7,
+      minConcurrencyUnderPressure: 2,
+      maxWaitMs: 300_000,
+      retry: {
+        maxAttempts: 4,
+        baseDelayMs: 500,
+        maxDelayMs: 30_000,
+        jitter: false,
+      },
+    });
   });
 
   it('parses global Vertex LLM config', () => {

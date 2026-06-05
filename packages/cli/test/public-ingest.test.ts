@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '../src/context/project/config.js';
 import { initKtxProject } from '../src/context/project/project.js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildPublicIngestPlan,
   executePublicIngestTarget,
@@ -12,6 +12,12 @@ import {
   publicProgressMessage,
   runKtxPublicIngest,
 } from '../src/public-ingest.js';
+
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
 
 /** Count non-overlapping occurrences of `needle` in `haystack`. */
 function occurrences(haystack: string, needle: string): number {
@@ -377,6 +383,10 @@ describe('publicProgressMessage', () => {
 });
 
 describe('runKtxPublicIngest', () => {
+  beforeEach(() => {
+    reportExceptionMock.mockClear();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -1204,6 +1214,104 @@ describe('runKtxPublicIngest', () => {
         cliVersion: '0.2.0',
         installPolicy: 'prompt',
         feature: 'core',
+      }),
+    );
+  });
+
+  it('reports foreground runtime preflight exceptions', async () => {
+    const io = makeIo({ isTTY: true, interactive: true });
+    const project = projectWithConnections({
+      warehouse: { driver: 'postgres' },
+    });
+    const ensureRuntime = vi.fn(async (): Promise<ManagedPythonCommandRuntime> => {
+      throw new Error('runtime unavailable');
+    });
+    const runContextBuild = vi.fn(async () => ({ exitCode: 0 }));
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'auto',
+          queryHistory: 'enabled',
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'prompt',
+        },
+        io.io,
+        {
+          loadProject: vi.fn(async () => project),
+          ensureRuntime,
+          runContextBuild,
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(runContextBuild).not.toHaveBeenCalled();
+    expect(io.stderr()).toContain('runtime unavailable');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'ingest runtime', handled: true, fatal: false }),
+        projectDir: '/tmp/project',
+      }),
+    );
+  });
+
+  it('reports foreground context-build exceptions', async () => {
+    const io = makeIo({ isTTY: true, interactive: true });
+    const config = buildDefaultKtxProjectConfig();
+    const project: KtxPublicIngestProject = {
+      projectDir: '/tmp/project',
+      config: {
+        ...config,
+        connections: { warehouse: { driver: 'postgres', password: 'env:INGEST_DB_PASSWORD' } }, // pragma: allowlist secret
+        llm: {
+          ...config.llm,
+          provider: {
+            backend: 'anthropic',
+            anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+          },
+          models: { default: 'claude-sonnet-4-6' },
+        },
+      },
+    };
+    const runContextBuild = vi.fn(async () => {
+      throw new Error('context build failed');
+    });
+
+    await expect(
+      runKtxPublicIngest(
+        {
+          command: 'run',
+          projectDir: '/tmp/project',
+          targetConnectionId: 'warehouse',
+          all: false,
+          json: false,
+          inputMode: 'auto',
+          queryHistory: 'default',
+        },
+        io.io,
+        {
+          loadProject: vi.fn(async () => project),
+          runContextBuild,
+          env: {
+            ...process.env,
+            ANTHROPIC_API_KEY: 'ingest-anthropic-secret', // pragma: allowlist secret
+            INGEST_DB_PASSWORD: 'ingest-db-password', // pragma: allowlist secret
+          },
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('context build failed');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'ingest context-build', handled: true, fatal: false }),
+        projectDir: '/tmp/project',
+        redactionSecrets: expect.arrayContaining(['ingest-anthropic-secret', 'ingest-db-password']),
       }),
     );
   });

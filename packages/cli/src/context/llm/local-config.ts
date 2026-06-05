@@ -6,16 +6,28 @@ import type { KtxProjectEmbeddingConfig, KtxProjectLlmConfig } from '../project/
 import { AiSdkKtxLlmRuntime } from './ai-sdk-runtime.js';
 import { ClaudeCodeKtxLlmRuntime } from './claude-code-runtime.js';
 import { CodexKtxLlmRuntime } from './codex-runtime.js';
+import type { RateLimitGovernor } from './rate-limit-governor.js';
 import type { KtxLlmRuntimePort } from './runtime-port.js';
+
+type ClaudeCodeRuntimeDeps = ConstructorParameters<typeof ClaudeCodeKtxLlmRuntime>[0] & {
+  rateLimitGovernor?: RateLimitGovernor;
+};
+type CodexRuntimeDeps = ConstructorParameters<typeof CodexKtxLlmRuntime>[0] & {
+  rateLimitGovernor?: RateLimitGovernor;
+};
+type AiSdkRuntimeDeps = ConstructorParameters<typeof AiSdkKtxLlmRuntime>[0] & {
+  rateLimitGovernor?: RateLimitGovernor;
+};
 
 interface LocalConfigDeps {
   env?: NodeJS.ProcessEnv;
   projectDir?: string;
+  rateLimitGovernor?: RateLimitGovernor;
   createKtxLlmProvider?: typeof createKtxLlmProvider;
   createKtxEmbeddingProvider?: typeof createKtxEmbeddingProvider;
-  createClaudeCodeRuntime?: (deps: ConstructorParameters<typeof ClaudeCodeKtxLlmRuntime>[0]) => KtxLlmRuntimePort;
-  createCodexRuntime?: (deps: ConstructorParameters<typeof CodexKtxLlmRuntime>[0]) => KtxLlmRuntimePort;
-  createAiSdkRuntime?: (deps: { llmProvider: KtxLlmProvider }) => KtxLlmRuntimePort;
+  createClaudeCodeRuntime?: (deps: ClaudeCodeRuntimeDeps) => KtxLlmRuntimePort;
+  createCodexRuntime?: (deps: CodexRuntimeDeps) => KtxLlmRuntimePort;
+  createAiSdkRuntime?: (deps: AiSdkRuntimeDeps) => KtxLlmRuntimePort;
 }
 
 function resolveOptional(value: string | undefined, env: NodeJS.ProcessEnv): string | undefined {
@@ -129,6 +141,7 @@ export function createLocalKtxLlmRuntimeFromConfig(
       projectDir,
       modelSlots: resolved.modelSlots,
       env: deps.env,
+      rateLimitGovernor: deps.rateLimitGovernor,
     });
   }
   if (resolved.backend === 'codex') {
@@ -139,10 +152,14 @@ export function createLocalKtxLlmRuntimeFromConfig(
     return (deps.createCodexRuntime ?? ((runtimeDeps) => new CodexKtxLlmRuntime(runtimeDeps)))({
       projectDir,
       modelSlots: resolved.modelSlots,
+      rateLimitGovernor: deps.rateLimitGovernor,
     });
   }
   const llmProvider = (deps.createKtxLlmProvider ?? createKtxLlmProvider)(resolved);
-  return (deps.createAiSdkRuntime ?? ((runtimeDeps) => new AiSdkKtxLlmRuntime(runtimeDeps)))({ llmProvider });
+  return (deps.createAiSdkRuntime ?? ((runtimeDeps) => new AiSdkKtxLlmRuntime(runtimeDeps)))({
+    llmProvider,
+    rateLimitGovernor: deps.rateLimitGovernor,
+  });
 }
 
 export function resolveLocalKtxEmbeddingConfig(

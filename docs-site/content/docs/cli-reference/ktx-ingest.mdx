@@ -177,7 +177,9 @@ Slowest phase: reconciliation (2m 05s, 48% of wall time). 2 work units (1 failed
 
 Work units run serially by default (`ingest.workUnits.maxConcurrency` is `1`);
 raise it in `ktx.yaml` if the profile shows the run is bound by serialized
-work-unit agent loops.
+work-unit agent loops. If the provider reports an LLM rate limit, **ktx** shows
+a transient wait message and temporarily reduces effective work-unit concurrency
+according to `ingest.rateLimit`.
 
 ## Common errors
 

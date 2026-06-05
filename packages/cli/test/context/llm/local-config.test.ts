@@ -7,6 +7,7 @@ import {
 import {
   createLocalKtxEmbeddingProviderFromConfig,
   createLocalKtxLlmProviderFromConfig,
+  createLocalKtxLlmRuntimeFromConfig,
   resolveLocalKtxEmbeddingConfig,
   resolveLocalKtxLlmConfig,
 } from '../../../src/context/llm/local-config.js';
@@ -128,6 +129,64 @@ describe('local KTX LLM config', () => {
       historyTtl: '5m',
       vertexFallbackTo5m: false,
     });
+  });
+
+  it('passes the rate-limit governor into created runtimes', () => {
+    const rateLimitGovernor = {} as never;
+    const createClaudeCodeRuntime = vi.fn(() => ({
+      generateText: vi.fn(),
+      generateObject: vi.fn(),
+      runAgentLoop: vi.fn(),
+    }));
+    const createCodexRuntime = vi.fn(() => ({
+      generateText: vi.fn(),
+      generateObject: vi.fn(),
+      runAgentLoop: vi.fn(),
+    }));
+    const createAiSdkRuntime = vi.fn(() => ({
+      generateText: vi.fn(),
+      generateObject: vi.fn(),
+      runAgentLoop: vi.fn(),
+    }));
+    const createKtxLlmProvider = vi.fn(() => ({
+      getModel: vi.fn(),
+      getModelByName: vi.fn(),
+      cacheMarker: vi.fn(),
+      repairToolCallHandler: vi.fn(),
+      thinkingProviderOptions: vi.fn(),
+      telemetryConfig: vi.fn(),
+      promptCachingConfig: vi.fn(),
+      activeBackend: vi.fn(() => 'anthropic'),
+    }));
+
+    createLocalKtxLlmRuntimeFromConfig(
+      {
+        provider: { backend: 'claude-code' },
+        models: { default: 'sonnet' },
+        promptCaching: undefined,
+      },
+      { projectDir: '/tmp/project', env: {}, rateLimitGovernor, createClaudeCodeRuntime },
+    );
+    createLocalKtxLlmRuntimeFromConfig(
+      {
+        provider: { backend: 'codex' },
+        models: { default: 'codex' },
+        promptCaching: undefined,
+      },
+      { projectDir: '/tmp/project', env: {}, rateLimitGovernor, createCodexRuntime },
+    );
+    createLocalKtxLlmRuntimeFromConfig(
+      {
+        provider: { backend: 'anthropic' },
+        models: { default: 'claude-sonnet-4-6' },
+        promptCaching: undefined,
+      },
+      { env: {}, rateLimitGovernor, createAiSdkRuntime, createKtxLlmProvider: createKtxLlmProvider as never },
+    );
+
+    expect(createClaudeCodeRuntime).toHaveBeenCalledWith(expect.objectContaining({ rateLimitGovernor }));
+    expect(createCodexRuntime).toHaveBeenCalledWith(expect.objectContaining({ rateLimitGovernor }));
+    expect(createAiSdkRuntime).toHaveBeenCalledWith(expect.objectContaining({ rateLimitGovernor }));
   });
 });
 

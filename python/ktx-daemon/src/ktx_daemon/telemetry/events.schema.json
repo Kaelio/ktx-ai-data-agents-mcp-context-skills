@@ -206,6 +206,17 @@
         "errorClass",
         "durationMs"
       ]
+    },
+    {
+      "name": "query_history_filter_completed",
+      "description": "Emitted after the setup query-history service-account filter picker runs.",
+      "fields": [
+        "dialect",
+        "consideredRoleCount",
+        "excludedRoleCount",
+        "parseFailedCount",
+        "outcome"
+      ]
     }
   ],
   "$defs": {
@@ -1432,6 +1443,77 @@
         "outcome",
         "dialect",
         "durationMs"
+      ],
+      "additionalProperties": false
+    },
+    "query_history_filter_completed": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cliVersion": {
+          "type": "string"
+        },
+        "nodeVersion": {
+          "type": "string"
+        },
+        "osPlatform": {
+          "type": "string"
+        },
+        "osRelease": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "node",
+            "daemon-py"
+          ]
+        },
+        "isCi": {
+          "type": "boolean"
+        },
+        "dialect": {
+          "type": "string"
+        },
+        "consideredRoleCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "excludedRoleCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "parseFailedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error"
+          ]
+        }
+      },
+      "required": [
+        "cliVersion",
+        "nodeVersion",
+        "osPlatform",
+        "osRelease",
+        "arch",
+        "runtime",
+        "isCi",
+        "dialect",
+        "consideredRoleCount",
+        "excludedRoleCount",
+        "parseFailedCount",
+        "outcome"
       ],
       "additionalProperties": false
     }

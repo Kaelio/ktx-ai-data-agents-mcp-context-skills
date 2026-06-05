@@ -107,6 +107,199 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     expect(result.error).toBe(err);
   });
 
+  it('reports AI SDK retry-after rate limits and retries through the governor', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const rateLimitError = Object.assign(new Error('too many requests'), {
+      name: 'TooManyRequestsError',
+      retryAfter: 2,
+      statusCode: 429,
+    });
+    (generateText as any).mockRejectedValueOnce(rateLimitError).mockResolvedValueOnce({
+      text: 'done',
+      toolCalls: [],
+      steps: [],
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    });
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(report).toHaveBeenCalledWith({
+      provider: 'anthropic-api',
+      status: 'rejected',
+      retryAfterMs: 2_000,
+      rateLimitType: 'http_429',
+    });
+    expect(waitForReady).toHaveBeenCalledTimes(2);
+    expect(generateText).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry AI SDK rate limits without a governor', async () => {
+    const rateLimitError = Object.assign(new Error('too many requests'), {
+      name: 'TooManyRequestsError',
+      statusCode: 429,
+    });
+    (generateText as any).mockRejectedValue(rateLimitError);
+    // The beforeEach runtime is constructed without a rateLimitGovernor.
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors a governor retry budget of one attempt without retrying', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const rateLimitError = Object.assign(new Error('too many requests'), {
+      name: 'TooManyRequestsError',
+      statusCode: 429,
+    });
+    (generateText as any).mockRejectedValue(rateLimitError);
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 1 } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(generateText).toHaveBeenCalledTimes(1);
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('reports Anthropic API response-header utilization to the governor', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    (generateText as any).mockResolvedValue({
+      text: 'done',
+      toolCalls: [],
+      steps: [],
+      response: {
+        headers: {
+          'anthropic-ratelimit-requests-limit': '100',
+          'anthropic-ratelimit-requests-remaining': '8',
+          'anthropic-ratelimit-input-tokens-limit': '10000',
+          'anthropic-ratelimit-input-tokens-remaining': '9000',
+        },
+      },
+    });
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(report).toHaveBeenCalledWith({
+      provider: 'anthropic-api',
+      status: 'allowed',
+      rateLimitType: 'rpm',
+      utilization: 0.92,
+    });
+  });
+
+  it('reports generic x-ratelimit response-header utilization for Vertex providers', async () => {
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    const report = vi.fn();
+    const vertexProvider = {
+      ...llmProvider,
+      getModel: vi.fn().mockReturnValue({ modelId: 'gemini-3-pro', provider: 'google-vertex' }),
+    };
+    (generateText as any).mockResolvedValue({
+      text: 'done',
+      toolCalls: [],
+      steps: [],
+      response: {
+        headers: {
+          'x-ratelimit-limit-requests': '200',
+          'x-ratelimit-remaining-requests': '30',
+          'x-ratelimit-limit-tokens': '100000',
+          'x-ratelimit-remaining-tokens': '4000',
+        },
+      },
+    });
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: vertexProvider as any,
+      rateLimitGovernor: { waitForReady, report, maxRetryAttempts: () => 6 } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(report).toHaveBeenCalledWith({
+      provider: 'vertex',
+      status: 'allowed',
+      rateLimitType: 'tpm',
+      utilization: 0.96,
+    });
+  });
+
+  it('passes abort signals into governor waits and AI SDK generateText calls', async () => {
+    const controller = new AbortController();
+    const waitForReady = vi.fn().mockResolvedValue(undefined);
+    (generateText as any).mockResolvedValue({ text: 'done', toolCalls: [], steps: [] });
+    const runtime = new AiSdkKtxLlmRuntime({
+      llmProvider: llmProvider as any,
+      rateLimitGovernor: { waitForReady, report: vi.fn(), maxRetryAttempts: () => 6 } as never,
+    });
+
+    const result = await runtime.runAgentLoop({
+      modelRole: 'candidateExtraction',
+      systemPrompt: '',
+      userPrompt: '',
+      toolSet: {},
+      stepBudget: 10,
+      telemetryTags: {},
+      abortSignal: controller.signal,
+    });
+
+    expect(result.stopReason).toBe('natural');
+    expect(waitForReady).toHaveBeenCalledWith(controller.signal);
+    expect((generateText as any).mock.calls[0][0].abortSignal).toBe(controller.signal);
+  });
+
   it('returns metrics with stepCount, per-step boundaries, and aggregate token usage', async () => {
     (generateText as any).mockImplementation(async (opts: any) => {
       await opts.onStepFinish({});

@@ -61,6 +61,13 @@ type MemoryFlowEventPayload =
       transient?: boolean;
     }
   | {
+      type: 'rate_limit_wait';
+      provider: string;
+      rateLimitType?: string;
+      resumeAtMs: number;
+      remainingMs: number;
+    }
+  | {
       type: 'work_unit_started';
       unitKey: string;
       skills: string[];
