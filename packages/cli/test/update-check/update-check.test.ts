@@ -75,6 +75,27 @@ describe('update-check orchestration', () => {
     await expect(readFile(updateCheckCachePath(homeDir), 'utf-8')).rejects.toThrow();
   });
 
+  it.each([
+    ['CI', true, { CI: '1', KTX_OUTPUT: 'pretty' }],
+    ['non-TTY stdout', false, { KTX_OUTPUT: 'pretty' }],
+  ])('suppresses cache and network work for %s even when pretty output is forced', async (_name, stdoutIsTTY, env) => {
+    const fetchDistTags = vi.fn(async () => ({ latest: '0.10.0' }));
+
+    const result = await prepareUpdateCheckNotice({
+      io: makeIo(stdoutIsTTY).io,
+      env,
+      homeDir,
+      installedVersion: '0.9.0',
+      commandOptions: {},
+      now: () => new Date('2026-06-06T12:00:00.000Z'),
+      fetchDistTags,
+    });
+
+    expect(result.notice).toBeNull();
+    expect(fetchDistTags).not.toHaveBeenCalled();
+    await expect(readFile(updateCheckCachePath(homeDir), 'utf-8')).rejects.toThrow();
+  });
+
   it('does not suppress when only KTX_TELEMETRY_DISABLED is set', () => {
     expect(
       shouldSuppressUpdateCheck({
@@ -138,6 +159,48 @@ describe('update-check orchestration', () => {
     expect(fetchDistTags).not.toHaveBeenCalled();
     const stored = JSON.parse(await readFile(updateCheckCachePath(homeDir), 'utf-8')) as { lastNoticeAt?: string };
     expect(stored.lastNoticeAt).toBe('2026-06-06T12:00:00.000Z');
+  });
+
+  it('queues a stale cached notice and still refreshes in the background', async () => {
+    await mkdir(join(homeDir, '.ktx'), { recursive: true });
+    await writeFile(
+      updateCheckCachePath(homeDir),
+      JSON.stringify(
+        {
+          checkedAt: '2026-06-05T10:00:00.000Z',
+          channel: 'latest',
+          installedVersion: '0.9.0',
+          latestForChannel: '0.10.0',
+          lastNoticeAt: '2026-06-05T11:00:00.000Z',
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
+    const fetchDistTags = vi.fn(async () => ({ latest: '0.11.0' }));
+
+    const result = await prepareUpdateCheckNotice({
+      io: makeIo(true).io,
+      env: { NO_COLOR: '1' },
+      homeDir,
+      installedVersion: '0.9.0',
+      now: () => new Date('2026-06-06T12:00:00.000Z'),
+      fetchDistTags,
+    });
+
+    expect(result.notice).toBe('↑ Update available: ktx 0.9.0 → 0.10.0\n  npm i -g @kaelio/ktx\n');
+    expect(fetchDistTags).toHaveBeenCalledTimes(1);
+
+    await flushAsyncWork();
+    await vi.waitFor(async () => {
+      const stored = JSON.parse(await readFile(updateCheckCachePath(homeDir), 'utf-8')) as {
+        latestForChannel: string;
+        lastNoticeAt?: string;
+      };
+      expect(stored.latestForChannel).toBe('0.11.0');
+      expect(stored.lastNoticeAt).toBe('2026-06-06T12:00:00.000Z');
+    });
   });
 
   it('throttles a cached notice for 24 hours', async () => {
@@ -248,6 +311,7 @@ describe('update-check orchestration', () => {
       channel: 'latest',
       installedVersion: '0.9.0',
       latestForChannel: '0.10.0',
+      lastNoticeAt: '2026-06-06T09:00:00.000Z',
     };
     await writeFile(updateCheckCachePath(homeDir), JSON.stringify(originalCache, null, 2), 'utf-8');
 

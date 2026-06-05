@@ -56,12 +56,20 @@ export function shouldSuppressUpdateCheck(args: {
     return true;
   }
 
-  const mode = resolveOutputMode({
-    json: commandRequestsJson(args.commandOptions),
-    io: args.io,
-    env,
-  });
-  return mode !== 'pretty';
+  if (commandRequestsJson(args.commandOptions) || truthy(env.CI) || args.io.stdout.isTTY !== true) {
+    return true;
+  }
+
+  try {
+    const mode = resolveOutputMode({
+      json: false,
+      io: args.io,
+      env,
+    });
+    return mode !== 'pretty';
+  } catch {
+    return true;
+  }
 }
 
 /** @internal */
@@ -149,7 +157,7 @@ export async function prepareUpdateCheckNotice(
   let cache = await readUpdateCheckCache({ homeDir: options.homeDir });
   let notice: string | null = null;
 
-  if (cache?.installedVersion === options.installedVersion && !shouldRefreshCache(cache, options.installedVersion, now)) {
+  if (cache?.installedVersion === options.installedVersion) {
     const decision = decideUpdate(options.installedVersion, {
       [cache.channel]: cache.latestForChannel,
     });

@@ -50,7 +50,7 @@ describe('cli-program update check hooks', () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
-  it('does not await the background refresh for stale cache entries', async () => {
+  it('prints a stale-cache notice without awaiting the background refresh', async () => {
     await writeFile(
       updateCheckCachePath(homeDir),
       JSON.stringify(
@@ -89,7 +89,7 @@ describe('cli-program update check hooks', () => {
     await program.parseAsync(['--project-dir', projectDir, 'status'], { from: 'user' });
 
     expect(fetchDistTags).toHaveBeenCalledTimes(1);
-    expect(io.stderr()).not.toContain('Update available');
+    expect(io.stderr()).toContain('↑ Update available: ktx 0.9.0 → 0.10.0\n  npm i -g @kaelio/ktx\n');
   });
 
   it('prints a queued fresh-cache notice after the action', async () => {
