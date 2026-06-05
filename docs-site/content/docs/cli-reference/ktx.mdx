@@ -74,6 +74,44 @@ The public context-build entrypoint is `ktx ingest [connectionId]` or
 | `-v`, `--version` | Show the CLI package name and version. |
 | `-h`, `--help` | Show help for the current command. |
 
+## Update notices
+
+> **Note:** The update notifier writes only to stderr and keeps command stdout
+> unchanged.
+
+When a newer package is available on your installed release channel, `ktx`
+prints a short notice after the command finishes:
+
+```text
+↑ Update available: ktx 0.9.0 → 0.10.0
+  npm i -g @kaelio/ktx
+```
+
+Stable installs compare against the npm `latest` dist-tag.
+Release-candidate installs compare against the `next` dist-tag and show:
+
+```text
+npm i -g @kaelio/ktx@next
+```
+
+The check is skipped for JSON output, CI, non-TTY stdout, and hidden completion
+commands. To opt out explicitly, set any of these environment variables:
+
+```bash
+KTX_NO_UPDATE_CHECK=1
+NO_UPDATE_NOTIFIER=1
+DO_NOT_TRACK=1
+```
+
+The `ktx` CLI prints one npm command because globally installed binaries don't
+expose a reliable runtime package-manager signal. If you prefer another global
+package manager, use the equivalent command:
+
+```bash
+pnpm add -g @kaelio/ktx
+yarn global add @kaelio/ktx
+```
+
 ## Project resolution
 
 Most commands are project-aware. Pass `--project-dir <path>` when scripting or
