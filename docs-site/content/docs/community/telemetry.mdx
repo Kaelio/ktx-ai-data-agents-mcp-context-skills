@@ -46,6 +46,33 @@ an operation errors, the detail we record is the error as your tools reported
 it, which can include identifiers from your setup. If you'd rather send nothing
 at all, turn telemetry off using any of the options above.
 
+## Error reports
+
+When telemetry is enabled, **ktx** sends PostHog Error Tracking `$exception`
+events for CLI and daemon exceptions. Error reports help group crashes and
+handled failures into PostHog issues.
+
+Error reports can include:
+
+- Stack frames, including function names, local file paths, line numbers, and
+  SDK-provided source context.
+- Error class names and raw error messages.
+- Cause chains when the runtime exposes them.
+- `source`, `handled`, and `fatal` diagnostic fields.
+- Runtime version, OS, architecture, and CI fields.
+- The hashed `projectId` when **ktx** knows the project.
+
+Error reports never intentionally include:
+
+- Secrets, credentials, API keys, tokens, cookies, signed URLs, or auth headers.
+- Database URLs, connection strings, DSNs, raw argv, or raw environment values.
+- SQL text, schema names, table names, or column names as explicit payload
+  properties.
+- Customer row data.
+- User prompt text or raw MCP arguments.
+
+The same opt-out controls listed above disable error reports.
+
 ## Storage and retention
 
 Telemetry is sent to PostHog, a third-party product-analytics service used by
