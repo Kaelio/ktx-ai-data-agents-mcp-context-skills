@@ -7,7 +7,7 @@ import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { createManagedDaemonSqlAnalysisPort } from './managed-python-http.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
 import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:sql');
@@ -217,6 +217,12 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
         outcome: 'error',
         ...(errorClass ? { errorClass } : {}),
       },
+    });
+    await reportException({
+      error,
+      context: { source: 'sql run', handled: true, fatal: false },
+      projectDir: args.projectDir,
+      io,
     });
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

@@ -7,6 +7,12 @@ import { runCommanderKtxCli } from '../src/cli-program.js';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from '../src/cli-runtime.js';
 import { TELEMETRY_NOTICE } from '../src/telemetry/identity.js';
 
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
+
 function makeIo(stdoutIsTTY = true): { io: KtxCliIo; stdout: () => string; stderr: () => string } {
   let stdout = '';
   let stderr = '';
@@ -43,6 +49,7 @@ describe('runCommanderKtxCli telemetry', () => {
     vi.stubEnv('CI', '');
     vi.stubEnv('KTX_TELEMETRY_DISABLED', '');
     vi.stubEnv('DO_NOT_TRACK', '');
+    reportExceptionMock.mockClear();
   });
 
   afterEach(async () => {
@@ -130,5 +137,31 @@ describe('runCommanderKtxCli telemetry', () => {
     const unknownIo = makeIo(true);
     await expect(runCommanderKtxCli(['unknown'], unknownIo.io, {}, info, { runInit: async () => 0 })).resolves.toBe(1);
     expect(unknownIo.stderr()).not.toContain('[telemetry]');
+  });
+
+  it('reports genuine top-level command catches as handled exceptions', async () => {
+    const io = makeIo(true);
+    const deps: KtxCliDeps = {
+      doctor: async () => {
+        throw new Error('status failed');
+      },
+    };
+
+    await expect(
+      runCommanderKtxCli(
+        ['--project-dir', tempDir, 'status', '--json'],
+        io.io,
+        deps,
+        info,
+        { runInit: async () => 0 },
+      ),
+    ).resolves.toBe(1);
+
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'ktx status', handled: true, fatal: false }),
+        projectDir: tempDir,
+      }),
+    );
   });
 });

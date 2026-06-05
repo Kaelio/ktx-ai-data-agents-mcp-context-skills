@@ -26,7 +26,7 @@ import {
   type KtxManagedPythonInstallPolicy,
 } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
 import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:sl');
@@ -351,6 +351,12 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
     const _exhaustive: never = args;
     throw new Error(`Unsupported sl command: ${JSON.stringify(_exhaustive)}`);
   } catch (error) {
+    await reportException({
+      error,
+      context: { source: `sl ${args.command}`, handled: true, fatal: false },
+      projectDir: args.projectDir,
+      io,
+    });
     if (args.command === 'validate') {
       const errorClass = scrubErrorClass(error);
       await emitTelemetryEvent({

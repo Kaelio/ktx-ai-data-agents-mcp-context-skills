@@ -8,7 +8,7 @@ import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
 import { formatErrorDetail, scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:scan');
@@ -396,6 +396,12 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
         ...(errorClass ? { errorClass } : {}),
         ...(errorDetail ? { errorDetail } : {}),
       },
+    });
+    await reportException({
+      error,
+      context: { source: 'scan run', handled: true, fatal: false },
+      projectDir: args.projectDir,
+      io,
     });
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

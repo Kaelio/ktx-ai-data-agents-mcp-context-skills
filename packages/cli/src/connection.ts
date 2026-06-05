@@ -16,7 +16,7 @@ import { bold, dim, green, red, SYMBOLS } from './io/symbols.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
 import { formatErrorDetail, scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:connection');
@@ -324,6 +324,14 @@ async function emitConnectionTest(input: {
       ...(errorDetail ? { errorDetail } : {}),
     },
   });
+  if (input.error) {
+    await reportException({
+      error: input.error,
+      context: { source: 'connection test', handled: true, fatal: false },
+      projectDir: input.project.projectDir,
+      io: input.io,
+    });
+  }
 }
 
 function visualWidth(text: string): number {

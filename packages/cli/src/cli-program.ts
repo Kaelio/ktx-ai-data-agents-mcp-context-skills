@@ -529,6 +529,13 @@ export async function runCommanderKtxCli(
       try {
         return await runBareInteractiveCommand(program, io, context);
       } catch (error) {
+        const telemetry = await import('./telemetry/index.js');
+        await telemetry.reportException({
+          error,
+          context: { source: 'bare-interactive', handled: true, fatal: false },
+          packageInfo: info,
+          io,
+        });
         io.stderr.write(`${formatCliError(error)}\n`);
         return 1;
       }
@@ -563,6 +570,23 @@ export async function runCommanderKtxCli(
         outcome: commandOutcomeForParseResult(parseError, exitCode),
         error: parseError,
       });
+      if (
+        parseError &&
+        !isCommanderExit(parseError) &&
+        !isKtxProjectMissingAbortError(parseError)
+      ) {
+        await telemetryModule.reportException({
+          error: parseError,
+          context: {
+            source: completed?.commandPath.join(' ') ?? 'commander parseAsync',
+            handled: true,
+            fatal: false,
+          },
+          projectDir: completed?.projectGroupAttached ? completed.projectDir : undefined,
+          packageInfo: info,
+          io,
+        });
+      }
       await telemetryModule.emitCompletedCommand({ completed, packageInfo: info, io });
       await telemetryModule.shutdownTelemetryEmitter();
     }

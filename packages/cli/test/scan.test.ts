@@ -8,6 +8,12 @@ import type { LocalScanRunResult, RunLocalScanOptions } from '../src/context/sca
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCliScanProgress, runKtxScan, type KtxScanDeps } from '../src/scan.js';
 
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
+
 const sqlServerExtractSchema = vi.hoisted(() =>
   vi.fn(async (connectionId: string) => ({
     connectionId,
@@ -317,6 +323,7 @@ describe('runKtxScan', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-scan-'));
+    reportExceptionMock.mockClear();
   });
 
   afterEach(async () => {
@@ -452,6 +459,12 @@ describe('runKtxScan', () => {
     expect(io.stderr()).toContain('"event":"scan_completed"');
     expect(io.stderr()).toContain('"outcome":"error"');
     expect(io.stderr()).toContain('"errorDetail":"ETIMEDOUT: introspection timed out"');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'scan run', handled: true, fatal: false }),
+        projectDir: tempDir,
+      }),
+    );
   });
 
   it('passes KTX daemon options to local ingest adapters when no explicit daemon URL is set', async () => {

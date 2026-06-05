@@ -3,7 +3,12 @@ import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { KtxCliIo } from '../../cli-runtime.js';
 import type { MemoryAgentInput } from '../../context/memory/types.js';
-import { emitTelemetryEvent, mcpTelemetrySampleRate, shouldEmitMcpTelemetry } from '../../telemetry/index.js';
+import {
+  emitTelemetryEvent,
+  mcpTelemetrySampleRate,
+  reportException,
+  shouldEmitMcpTelemetry,
+} from '../../telemetry/index.js';
 import { scrubErrorClass } from '../../telemetry/scrubber.js';
 import type {
   KtxMcpClientInfo,
@@ -518,11 +523,20 @@ function registerParsedTool<TSchema extends z.ZodType>(
   },
   schema: TSchema,
   handler: (input: z.infer<TSchema>, context?: KtxMcpToolHandlerContext) => Promise<KtxMcpToolResult>,
+  telemetry?: { projectDir?: string; io?: KtxCliIo },
 ): void {
   server.registerTool(name, config, async (input, context) => {
     try {
       return await handler(schema.parse(input), context);
     } catch (error) {
+      if (telemetry?.io) {
+        await reportException({
+          error,
+          context: { source: `mcp:${name}`, handled: true, fatal: false },
+          projectDir: telemetry.projectDir,
+          io: telemetry.io,
+        });
+      }
       return jsonErrorToolResult(formatToolError(error));
     }
   });
@@ -571,6 +585,14 @@ function instrumentMcpServer(
           }
           return result;
         } catch (error) {
+          if (telemetry.io) {
+            await reportException({
+              error,
+              context: { source: `mcp:${name}`, handled: true, fatal: false },
+              projectDir: telemetry.projectDir,
+              io: telemetry.io,
+            });
+          }
           if (telemetry.io && telemetry.projectDir && shouldEmitMcpTelemetry()) {
             const errorClass = scrubErrorClass(error);
             await emitTelemetryEvent({
@@ -596,6 +618,7 @@ function instrumentMcpServer(
 
 export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void {
   const { ports, userContext } = deps;
+  const toolTelemetry = { projectDir: deps.projectDir, io: deps.io };
   const server = instrumentMcpServer(deps.server, {
     projectDir: deps.projectDir,
     io: deps.io,
@@ -616,6 +639,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       },
       connectionListSchema,
       async () => jsonToolResult({ connections: await connections.list() }),
+      toolTelemetry,
     );
   }
 
@@ -640,6 +664,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
             limit: input.limit,
           }),
         ),
+      toolTelemetry,
     );
 
     registerParsedTool(
@@ -657,6 +682,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         const page = await knowledge.read({ userId: userContext.userId, key: input.key });
         return page ? jsonToolResult(page) : jsonErrorToolResult(`Wiki page "${input.key}" was not found.`);
       },
+      toolTelemetry,
     );
   }
 
@@ -679,6 +705,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
           ? jsonToolResult(source)
           : jsonErrorToolResult(`Semantic-layer source "${input.sourceName}" was not found.`);
       },
+      toolTelemetry,
     );
 
     registerParsedTool(
@@ -711,6 +738,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         );
         return jsonToolResult(projectSlQueryResult(result, input.include));
       },
+      toolTelemetry,
     );
   }
 
@@ -728,6 +756,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       },
       entityDetailsSchema,
       async (input) => jsonToolResult(await entityDetails.read(input)),
+      toolTelemetry,
     );
   }
 
@@ -745,6 +774,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       },
       dictionarySearchSchema,
       async (input) => jsonToolResult(await dictionarySearch.search(input)),
+      toolTelemetry,
     );
   }
 
@@ -762,6 +792,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
       },
       discoverDataSchema,
       async (input) => jsonToolResult({ refs: await discover.search(input) }),
+      toolTelemetry,
     );
   }
 
@@ -791,6 +822,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
           ),
         );
       },
+      toolTelemetry,
     );
   }
 
@@ -818,6 +850,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         };
         return jsonToolResult(await memoryIngest.ingest(ingestInput));
       },
+      toolTelemetry,
     );
 
     registerParsedTool(
@@ -835,6 +868,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         const status = await memoryIngest.status(input.runId);
         return status ? jsonToolResult(status) : jsonErrorToolResult(`Memory ingest run "${input.runId}" was not found.`);
       },
+      toolTelemetry,
     );
   }
 }

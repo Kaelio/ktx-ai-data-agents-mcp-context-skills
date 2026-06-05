@@ -23,6 +23,12 @@ import type {
   MemoryIngestPort,
 } from '../../../src/context/mcp/types.js';
 
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../../../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
+
 type RegisteredTool = {
   name: string;
   config: {
@@ -278,6 +284,37 @@ describe('createKtxMcpServer', () => {
     // event still emits and the optional client fields are simply omitted.
     expect(io.stderrText()).not.toContain('mcpClientName');
     expect(io.stderrText()).not.toContain('mcpClientVersion');
+  });
+
+  it('reports MCP tool exceptions with a tool-derived source', async () => {
+    reportExceptionMock.mockClear();
+    const fake = makeFakeServer();
+    const io = makeIo();
+    const projectDir = '/tmp/ktx-mcp-exception';
+
+    createKtxMcpServer({
+      server: fake.server,
+      userContext: { userId: 'local-user' },
+      projectDir,
+      io,
+      contextTools: {
+        knowledge: {
+          search: vi.fn<KtxKnowledgeMcpPort['search']>().mockRejectedValue(new Error('wiki failed')),
+          read: vi.fn<KtxKnowledgeMcpPort['read']>().mockResolvedValue(null),
+        },
+      },
+    });
+
+    await expect(getTool(fake.tools, 'wiki_search').handler({ query: 'revenue recognition', limit: 5 })).resolves.toMatchObject({
+      isError: true,
+    });
+
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'mcp:wiki_search', handled: true, fatal: false }),
+        projectDir,
+      }),
+    );
   });
 
   it('captures the connecting MCP client name and version', async () => {

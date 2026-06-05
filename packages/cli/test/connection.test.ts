@@ -10,6 +10,12 @@ import type { KtxConnectionDriver, KtxScanConnector } from '../src/context/scan/
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxConnection } from '../src/connection.js';
 
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
+
 function stripAnsi(s: string): string {
   return s.replace(/\[[0-9;]*m/g, '');
 }
@@ -72,6 +78,7 @@ describe('runKtxConnection', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-connection-'));
+    reportExceptionMock.mockClear();
   });
 
   afterEach(async () => {
@@ -181,6 +188,12 @@ describe('runKtxConnection', () => {
     expect(io.stderr()).toContain('"event":"connection_test"');
     expect(io.stderr()).toContain('"outcome":"error"');
     expect(io.stderr()).toContain('"errorDetail":"database file is unreadable"');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'connection test', handled: true, fatal: false }),
+        projectDir,
+      }),
+    );
   });
 
   it('preserves the driver error class and code in connection_test telemetry', async () => {
