@@ -46,7 +46,6 @@ test("product runtime component explains the serving cycle", async () => {
     "Claude Code",
     "Cursor",
     "Codex",
-    "OpenCode",
     "Search wiki + semantic layer",
     "Return approved metrics",
     "Compile metrics → SQL",

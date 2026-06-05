@@ -37,17 +37,17 @@ type HubNode = Node<HubNodeData, "hub">;
 type TargetNode = Node<TargetNodeData, "target">;
 type FlowNode = AgentNode | HubNode | TargetNode;
 
-const AGENT_W = 300;
-const AGENT_H = 116;
-const HUB_W = 360;
-const HUB_H = 232;
-const TARGET_W = 322;
-const TARGET_H = 176;
+const AGENT_W = 252;
+const AGENT_H = 96;
+const HUB_W = 306;
+const HUB_H = 190;
+const TARGET_W = 268;
+const TARGET_H = 148;
 
 const CENTER_X = 470;
 const ROW_AGENT_Y = 0;
-const ROW_HUB_Y = 250;
-const ROW_TARGET_Y = 616;
+const ROW_HUB_Y = 196;
+const ROW_TARGET_Y = 488;
 
 const AGENT_X = CENTER_X - AGENT_W / 2;
 const HUB_X = CENTER_X - HUB_W / 2;
@@ -70,7 +70,7 @@ const nodes: FlowNode[] = [
     position: { x: AGENT_X, y: ROW_AGENT_Y },
     data: {
       title: "Your agent",
-      items: ["Claude Code", "Cursor", "Codex", "OpenCode"],
+      items: ["Claude Code", "Cursor", "Codex"],
     },
     draggable: false,
     selectable: false,
@@ -202,7 +202,7 @@ function AgentNodeView({ data }: NodeProps<AgentNode>) {
   return (
     <div
       style={{ width: AGENT_W, height: AGENT_H }}
-      className="flex flex-col justify-center rounded-md border border-fd-border bg-fd-card px-4 py-3 shadow-sm"
+      className="flex flex-col justify-center rounded-md border border-fd-border bg-fd-card px-3.5 py-2.5 shadow-sm"
     >
       <Handle
         id="ask"
@@ -218,12 +218,12 @@ function AgentNodeView({ data }: NodeProps<AgentNode>) {
         className="!opacity-0"
         style={{ left: "65%" }}
       />
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-fd-primary/15 text-fd-primary">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-fd-primary/15 text-fd-primary">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -238,15 +238,15 @@ function AgentNodeView({ data }: NodeProps<AgentNode>) {
             <path d="M12 3v3" />
           </svg>
         </span>
-        <p className="text-[19px] font-semibold leading-7 text-fd-foreground">
+        <p className="text-[17px] font-semibold leading-6 text-fd-foreground">
           {data.title}
         </p>
       </div>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {data.items.map((item) => (
           <span
             key={item}
-            className="rounded border border-fd-border bg-fd-background px-2 py-0.5 text-[13px] leading-5 text-fd-muted-foreground"
+            className="rounded border border-fd-border bg-fd-background px-1.5 py-0.5 text-[12px] leading-5 text-fd-muted-foreground"
           >
             {item}
           </span>
@@ -260,7 +260,7 @@ function HubNodeView({ data }: NodeProps<HubNode>) {
   return (
     <div
       style={{ width: HUB_W, height: HUB_H }}
-      className="relative flex flex-col rounded-md border border-cyan-200/20 bg-[#0f1f23] px-5 py-4 text-white shadow-sm dark:bg-[#0b181b]"
+      className="relative flex flex-col rounded-md border border-cyan-200/20 bg-[#0f1f23] px-4 py-3.5 text-white shadow-sm dark:bg-[#0b181b]"
     >
       <Handle
         id="ask"
@@ -291,21 +291,21 @@ function HubNodeView({ data }: NodeProps<HubNode>) {
         style={{ left: "56%" }}
       />
       <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-cyan-300/95 font-mono text-base font-bold text-[#0b1c20]">
+        <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-cyan-300/95 font-mono text-sm font-bold text-[#0b1c20]">
           k
         </span>
-        <span className="text-[22px] font-bold leading-7 text-white">
+        <span className="text-[19px] font-bold leading-6 text-white">
           {data.title}
         </span>
-        <span className="ml-1 rounded border border-cyan-200/30 bg-white/5 px-2 py-0.5 font-mono text-[12px] leading-5 text-cyan-100/85">
+        <span className="ml-1 rounded border border-cyan-200/30 bg-white/5 px-1.5 py-0.5 font-mono text-[11px] leading-5 text-cyan-100/85">
           {data.badge}
         </span>
       </div>
-      <div className="mt-3.5 flex flex-1 flex-col justify-center gap-2.5">
+      <div className="mt-3 flex flex-1 flex-col justify-center gap-2">
         {data.rows.map((row) => (
-          <div key={row} className="flex items-center gap-3">
-            <span className="h-2 w-2 flex-none rounded-full bg-cyan-300/95" />
-            <span className="text-[16px] font-medium leading-6 text-cyan-50/90">
+          <div key={row} className="flex items-center gap-2.5">
+            <span className="h-1.5 w-1.5 flex-none rounded-full bg-cyan-300/95" />
+            <span className="text-[14px] font-medium leading-5 text-cyan-50/90">
               {row}
             </span>
           </div>
@@ -323,16 +323,16 @@ function TargetNodeView({ data }: NodeProps<TargetNode>) {
         height: TARGET_H,
         borderTop: `3px solid ${data.accent}`,
       }}
-      className="overflow-hidden rounded-md border border-fd-border bg-fd-card px-4 py-3.5 shadow-sm"
+      className="overflow-hidden rounded-md border border-fd-border bg-fd-card px-3.5 py-3 shadow-sm"
     >
       <Handle id="in" type="target" position={Position.Top} className="!opacity-0" />
       <div className="flex items-center gap-2">
-        <p className="text-[19px] font-semibold leading-7 text-fd-foreground">
+        <p className="text-[17px] font-semibold leading-6 text-fd-foreground">
           {data.title}
         </p>
         {data.badge ? (
           <span
-            className="rounded-full px-2 py-0.5 text-[12px] font-semibold leading-5"
+            className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-5"
             style={{
               color: data.accent,
               background: "color-mix(in oklch, var(--color-fd-card) 86%, #64748b)",
@@ -343,14 +343,14 @@ function TargetNodeView({ data }: NodeProps<TargetNode>) {
         ) : null}
       </div>
       {data.rows.length > 0 ? (
-        <div className="mt-1.5 flex flex-col gap-0.5">
+        <div className="mt-1 flex flex-col gap-0.5">
           {data.rows.map((row) => (
             <span
               key={row.text}
               className={
                 row.mono
-                  ? "font-mono text-[14px] font-semibold tracking-tight"
-                  : "text-[13px] leading-5 text-fd-muted-foreground"
+                  ? "font-mono text-[13px] font-semibold tracking-tight"
+                  : "text-[12px] leading-4 text-fd-muted-foreground"
               }
               style={row.color ? { color: row.color } : undefined}
             >
@@ -359,7 +359,7 @@ function TargetNodeView({ data }: NodeProps<TargetNode>) {
           ))}
         </div>
       ) : null}
-      <p className="mt-2 line-clamp-2 text-[14px] leading-5 text-fd-muted-foreground">
+      <p className="mt-1.5 line-clamp-2 text-[13px] leading-[18px] text-fd-muted-foreground">
         {data.body}
       </p>
     </div>
@@ -552,8 +552,8 @@ export function ProductRuntime() {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           canvasStyle={{
-            height: "min(900px, 124vw)",
-            minHeight: 560,
+            height: "min(620px, 98vw)",
+            minHeight: 430,
           }}
           className="runtime-canvas"
           fitViewOptions={{ padding: 0.06 }}
