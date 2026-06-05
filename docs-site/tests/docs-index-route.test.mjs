@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { readFile, writeFile } from "node:fs/promises";
+import http from "node:http";
+import https from "node:https";
 import { dirname, join } from "node:path";
 import { createServer } from "node:net";
 import { after, before, test } from "node:test";
@@ -100,6 +102,37 @@ after(async () => {
   }
 });
 
+// Node's fetch (undici) overwrites the Host header with the connection host,
+// so the alias-host redirect rules never match. The low-level http(s) client
+// sends Host verbatim, which is what the alias canonicalization keys off of.
+function requestWithHost(hostHeader, path) {
+  const target = new URL(docsSiteUrl);
+  const client = target.protocol === "https:" ? https : http;
+  const port =
+    target.port || (target.protocol === "https:" ? "443" : "80");
+
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      {
+        hostname: target.hostname,
+        port,
+        path,
+        method: "GET",
+        headers: { Host: hostHeader },
+      },
+      (response) => {
+        response.resume();
+        resolve({
+          status: response.statusCode,
+          location: response.headers.location,
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 test("/ktx/docs redirects to the docs introduction", async () => {
   const response = await fetch(`${docsSiteUrl}${docsBasePath}/docs`, {
     redirect: "manual",
@@ -139,5 +172,53 @@ test("/ktx/api/search returns docs search results", async () => {
         typeof result.url === "string" && result.url.startsWith("/docs/"),
     ),
     "search should return at least one docs result",
+  );
+});
+
+test("ktx.sh canonicalizes to a single /ktx basePath on the docs host", async () => {
+  const root = await requestWithHost("ktx.sh", "/");
+  assert.equal(root.status, 308);
+  assert.equal(root.location, "https://docs.kaelio.com/ktx/");
+  assert.ok(
+    !root.location.includes("/ktx/ktx"),
+    "the basePath must not be doubled",
+  );
+
+  const page = await requestWithHost(
+    "ktx.sh",
+    "/docs/getting-started/quickstart",
+  );
+  assert.equal(page.status, 308);
+  assert.equal(
+    page.location,
+    "https://docs.kaelio.com/ktx/docs/getting-started/quickstart",
+  );
+});
+
+test("docs.ktx.sh canonicalizes to a single /ktx basePath on the docs host", async () => {
+  const root = await requestWithHost("docs.ktx.sh", "/");
+  assert.equal(root.status, 308);
+  assert.equal(root.location, "https://docs.kaelio.com/ktx");
+  assert.ok(
+    !root.location.includes("/ktx/ktx"),
+    "the basePath must not be doubled",
+  );
+
+  const page = await requestWithHost("docs.ktx.sh", "/llms.txt");
+  assert.equal(page.status, 308);
+  assert.equal(page.location, "https://docs.kaelio.com/ktx/llms.txt");
+});
+
+test("ktx.sh keeps the /slack and /stars exceptions", async () => {
+  const slack = await requestWithHost("ktx.sh", "/slack");
+  assert.equal(slack.status, 307);
+  assert.match(slack.location, /^https:\/\/join\.slack\.com\//);
+
+  // /stars is proxied by a beforeFiles rewrite, so the apex catch-all must not
+  // canonicalize it to the docs host.
+  const stars = await requestWithHost("ktx.sh", "/stars");
+  assert.ok(
+    !(stars.location ?? "").startsWith("https://docs.kaelio.com"),
+    "the stars dashboard must not be redirected to the docs host",
   );
 });

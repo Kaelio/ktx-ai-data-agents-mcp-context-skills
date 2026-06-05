@@ -30,16 +30,19 @@ const config = {
     };
   },
   async redirects() {
+    // Alias-host canonicalization MUST come before the generic root/docs
+    // redirects below. Those generic rules have no host guard, so if they ran
+    // first they would inject a "/ktx" basePath into the path on the alias
+    // hosts, which the alias catch-alls would then prepend a second time —
+    // producing https://docs.kaelio.com/ktx/ktx/docs/... Redirects also run
+    // before beforeFiles rewrites, so the ktx.sh catch-all must exclude
+    // /stars* to let the stars dashboard rewrite proxy through.
     return [
       {
-        source: "/",
-        destination: "/ktx/docs/getting-started/introduction",
-        permanent: false,
-        basePath: false,
-      },
-      {
-        source: "/docs",
-        destination: "/docs/getting-started/introduction",
+        source: "/slack",
+        has: [{ type: "host", value: "ktx.sh" }],
+        destination:
+          "https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ",
         permanent: false,
         basePath: false,
       },
@@ -51,18 +54,22 @@ const config = {
         basePath: false,
       },
       {
-        source: "/slack",
-        has: [{ type: "host", value: "ktx.sh" }],
-        destination:
-          "https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ",
-        permanent: false,
-        basePath: false,
-      },
-      {
         source: "/:path((?!stars(?:/|$)).*)",
         has: [{ type: "host", value: "ktx.sh" }],
         destination: "https://docs.kaelio.com/ktx/:path",
         permanent: true,
+        basePath: false,
+      },
+      {
+        source: "/",
+        destination: "/ktx/docs/getting-started/introduction",
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: "/docs",
+        destination: "/docs/getting-started/introduction",
+        permanent: false,
         basePath: false,
       },
     ];
