@@ -178,3 +178,95 @@ def test_report_exception_does_not_discover_env_values_without_snapshot(
     )
 
     assert "plain-secret-without-pattern" in str(FakePosthog.captures[0]["exception"])
+
+
+def test_route_derived_boundary_reports_new_throwing_route(monkeypatch) -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from ktx_daemon.app import create_app
+
+    reports: list[dict[str, object]] = []
+
+    def fake_report(exception: BaseException, **kwargs: object) -> None:
+        reports.append({"exception": exception, **kwargs})
+
+    monkeypatch.setattr("ktx_daemon.app.report_exception", fake_report)
+    app: FastAPI = create_app()
+
+    @app.get("/new-throwing-route")
+    async def new_throwing_route() -> dict[str, str]:
+        raise RuntimeError("route boom")
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/new-throwing-route")
+
+    assert response.status_code == 500
+    assert reports
+    assert reports[0]["source"] in {"app:/new-throwing-route", "app:new_throwing_route"}
+    assert reports[0]["handled"] is True
+    assert reports[0]["fatal"] is False
+
+
+def test_route_derived_boundary_covers_existing_validate_route(monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+    from ktx_daemon import app as app_module
+
+    reports: list[dict[str, object]] = []
+
+    def fake_report(exception: BaseException, **kwargs: object) -> None:
+        reports.append({"exception": exception, **kwargs})
+
+    monkeypatch.setattr(
+        app_module,
+        "validate_semantic_layer",
+        lambda _request: (_ for _ in ()).throw(RuntimeError("validate boom")),
+    )
+    monkeypatch.setattr(app_module, "report_exception", fake_report)
+
+    client = TestClient(app_module.create_app(), raise_server_exceptions=False)
+    response = client.post("/semantic-layer/validate", json={"sources": []})
+
+    assert response.status_code == 500
+    assert reports
+    assert reports[0]["source"] in {
+        "app:/semantic-layer/validate",
+        "app:semantic_validate",
+    }
+
+
+def test_daemon_stopped_clean_shutdown_emits_request_once(monkeypatch) -> None:
+    from ktx_daemon.telemetry.daemon_lifecycle import (
+        emit_daemon_stopped_once,
+        reset_daemon_lifecycle_for_tests,
+    )
+
+    events: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        "ktx_daemon.telemetry.daemon_lifecycle.track_telemetry_event",
+        lambda name, fields: events.append((name, fields)),
+    )
+    reset_daemon_lifecycle_for_tests()
+
+    emit_daemon_stopped_once(reason="request", uptime_ms=1)
+    emit_daemon_stopped_once(reason="request", uptime_ms=2)
+
+    assert events == [("daemon_stopped", {"reason": "request", "uptimeMs": 1})]
+
+
+def test_daemon_stopped_crash_wins_over_request(monkeypatch) -> None:
+    from ktx_daemon.telemetry.daemon_lifecycle import (
+        emit_daemon_stopped_once,
+        reset_daemon_lifecycle_for_tests,
+    )
+
+    events: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        "ktx_daemon.telemetry.daemon_lifecycle.track_telemetry_event",
+        lambda name, fields: events.append((name, fields)),
+    )
+    reset_daemon_lifecycle_for_tests()
+
+    emit_daemon_stopped_once(reason="crash", uptime_ms=3)
+    emit_daemon_stopped_once(reason="request", uptime_ms=4)
+
+    assert events == [("daemon_stopped", {"reason": "crash", "uptimeMs": 3})]

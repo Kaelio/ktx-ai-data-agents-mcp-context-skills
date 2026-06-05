@@ -97,6 +97,33 @@ def test_query_semantic_layer_emits_plan_and_sql_debug_events(
     assert "public.orders" not in captured.err
 
 
+def test_query_semantic_layer_reports_exception(monkeypatch) -> None:
+    from ktx_daemon import semantic_layer as semantic_layer_module
+
+    reports: list[dict[str, object]] = []
+
+    def fake_report(exception: BaseException, **kwargs: object) -> None:
+        reports.append({"exception": exception, **kwargs})
+
+    monkeypatch.setattr(semantic_layer_module, "report_exception", fake_report)
+
+    with pytest.raises(ValueError):
+        query_semantic_layer(
+            SemanticLayerQueryRequest(
+                sources=[ORDERS_SOURCE, ORDERS_SOURCE],
+                dialect="postgres",
+                projectId="a" * 64,
+                query={"measures": ["orders.order_count"]},
+            )
+        )
+
+    assert reports
+    assert reports[0]["source"] == "semantic-query"
+    assert reports[0]["handled"] is True
+    assert reports[0]["fatal"] is False
+    assert reports[0]["project_id"] == "a" * 64
+
+
 def test_semantic_layer_request_rejects_project_id_field_name() -> None:
     with pytest.raises(ValueError):
         SemanticLayerQueryRequest(
