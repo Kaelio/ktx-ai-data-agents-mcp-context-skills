@@ -1136,8 +1136,6 @@ describe('runKtxCli', () => {
           '--no-input',
           '--anthropic-api-key-env',
           'ANTHROPIC_API_KEY',
-          '--llm-model',
-          'claude-sonnet-4-6',
         ],
         setupIo.io,
         { setup },
@@ -1151,7 +1149,6 @@ describe('runKtxCli', () => {
         inputMode: 'disabled',
         cliVersion,
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       setupIo.io,
@@ -1175,8 +1172,6 @@ describe('runKtxCli', () => {
           'local-gcp-project',
           '--vertex-location',
           'us-east5',
-          '--llm-model',
-          'claude-sonnet-4-6',
         ],
         setupIo.io,
         { setup },
@@ -1192,14 +1187,13 @@ describe('runKtxCli', () => {
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       setupIo.io,
     );
   });
 
-  it('dispatches the provider-neutral LLM model setup flag to the setup runner', async () => {
+  it('rejects the removed --llm-model setup flag', async () => {
     const setup = vi.fn(async () => 0);
     const setupIo = makeIo();
 
@@ -1218,20 +1212,10 @@ describe('runKtxCli', () => {
         setupIo.io,
         { setup },
       ),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
 
-    expect(setup).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'run',
-        projectDir: tempDir,
-        inputMode: 'disabled',
-        cliVersion,
-        llmBackend: 'claude-code',
-        llmModel: 'opus',
-        skipLlm: false,
-      }),
-      setupIo.io,
-    );
+    expect(setup).not.toHaveBeenCalled();
+    expect(setupIo.stderr()).toContain("unknown option '--llm-model'");
   });
 
   it('rejects conflicting Anthropic credential setup flags', async () => {

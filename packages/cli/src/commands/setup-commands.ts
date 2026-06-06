@@ -95,7 +95,6 @@ function shouldShowSetupEntryMenu(
     llmBackend?: KtxSetupLlmBackend;
     anthropicApiKeyEnv?: string;
     anthropicApiKeyFile?: string;
-    llmModel?: string;
     vertexProject?: string;
     vertexLocation?: string;
     skipLlm?: boolean;
@@ -166,7 +165,6 @@ function shouldShowSetupEntryMenu(
     'llmBackend',
     'anthropicApiKeyEnv',
     'anthropicApiKeyFile',
-    'llmModel',
     'vertexProject',
     'vertexLocation',
     'skipLlm',
@@ -229,7 +227,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .addOption(
       new Option('--anthropic-api-key-file <path>', 'File containing the Anthropic API key').hideHelp(),
     )
-    .addOption(new Option('--llm-model <model>', 'LLM model ID or backend model alias').hideHelp())
     .addOption(new Option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
@@ -420,7 +417,6 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
       ...(options.llmBackend ? { llmBackend: options.llmBackend } : {}),
       ...(options.anthropicApiKeyEnv ? { anthropicApiKeyEnv: options.anthropicApiKeyEnv } : {}),
       ...(options.anthropicApiKeyFile ? { anthropicApiKeyFile: options.anthropicApiKeyFile } : {}),
-      ...(options.llmModel ? { llmModel: options.llmModel } : {}),
       ...(options.vertexProject ? { vertexProject: options.vertexProject } : {}),
       ...(options.vertexLocation ? { vertexLocation: options.vertexLocation } : {}),
       skipLlm: options.skipLlm === true,

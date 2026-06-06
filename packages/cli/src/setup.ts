@@ -85,7 +85,6 @@ export type KtxSetupArgs =
       llmBackend?: KtxSetupLlmBackend;
       anthropicApiKeyEnv?: string;
       anthropicApiKeyFile?: string;
-      llmModel?: string;
       vertexProject?: string;
       vertexLocation?: string;
       skipLlm: boolean;
@@ -699,7 +698,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
             ...(args.llmBackend ? { llmBackend: args.llmBackend } : {}),
             ...(args.anthropicApiKeyEnv ? { anthropicApiKeyEnv: args.anthropicApiKeyEnv } : {}),
             ...(args.anthropicApiKeyFile ? { anthropicApiKeyFile: args.anthropicApiKeyFile } : {}),
-            ...(args.llmModel ? { llmModel: args.llmModel } : {}),
             ...(args.vertexProject ? { vertexProject: args.vertexProject } : {}),
             ...(args.vertexLocation ? { vertexLocation: args.vertexLocation } : {}),
             forcePrompt: forcePromptSteps.has('models') || runOnly === 'models',

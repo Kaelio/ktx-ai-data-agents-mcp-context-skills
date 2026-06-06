@@ -1305,7 +1305,6 @@ describe('setup status', () => {
           yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: true,
           databaseSchemas: [],
@@ -1322,7 +1321,6 @@ describe('setup status', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       testIo.io,
@@ -1347,7 +1345,6 @@ describe('setup status', () => {
           llmBackend: 'vertex',
           vertexProject: 'local-gcp-project',
           vertexLocation: 'us-east5',
-          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: true,
           databaseSchemas: [],
@@ -1366,7 +1363,6 @@ describe('setup status', () => {
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       }),
       testIo.io,
@@ -1390,7 +1386,6 @@ describe('setup status', () => {
           yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
           embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
@@ -1658,7 +1653,6 @@ describe('setup status', () => {
           yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           embeddingBackend: 'openai',
           embeddingApiKeyEnv: 'OPENAI_API_KEY', // pragma: allowlist secret
@@ -2657,7 +2651,6 @@ describe('setup status', () => {
           yes: true,
           cliVersion: '0.2.0',
           anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-          llmModel: 'claude-sonnet-4-6',
           skipLlm: false,
           skipEmbeddings: false,
           databaseSchemas: [],
