@@ -10,7 +10,7 @@ import { resolveKtxConfigReference } from './context/core/config-reference.js';
 import { type KtxProjectConfig, type KtxProjectLlmConfig, serializeKtxProjectConfig } from './context/project/config.js';
 import { loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
-import type { KtxLlmConfig } from './llm/types.js';
+import { type KtxModelRole, KTX_MODEL_ROLES, type KtxLlmConfig } from './llm/types.js';
 import { type KtxLlmHealthCheckResult, runKtxLlmHealthCheck } from './llm/model-health.js';
 import {
   formatClaudeCodePromptCachingWarning,
@@ -37,7 +37,6 @@ export interface KtxSetupModelArgs {
   llmBackend?: KtxSetupLlmBackend;
   anthropicApiKeyEnv?: string;
   anthropicApiKeyFile?: string;
-  llmModel?: string;
   vertexProject?: string;
   vertexLocation?: string;
   forcePrompt?: boolean;
@@ -51,13 +50,6 @@ export type KtxSetupModelResult =
   | { status: 'back'; projectDir: string }
   | { status: 'missing-input'; projectDir: string }
   | { status: 'failed'; projectDir: string };
-
-/** @internal */
-export interface AnthropicModelChoice {
-  id: string;
-  label: string;
-  recommended: boolean;
-}
 
 export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code' | 'codex';
 
@@ -76,9 +68,7 @@ export interface KtxSetupModelPromptAdapter {
 
 export interface KtxSetupModelDeps {
   env?: NodeJS.ProcessEnv;
-  fetch?: typeof fetch;
   prompts?: KtxSetupModelPromptAdapter;
-  listModels?: (apiKey: string) => Promise<AnthropicModelChoice[]>;
   healthCheck?: (config: KtxLlmConfig) => Promise<KtxLlmHealthCheckResult>;
   claudeCodeAuthProbe?: (input: {
     projectDir: string;
@@ -91,90 +81,57 @@ export interface KtxSetupModelDeps {
   spinner?: () => KtxCliSpinner;
 }
 
-/** @internal */
-export const BUNDLED_ANTHROPIC_MODELS: AnthropicModelChoice[] = [
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true },
-  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', recommended: false },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', recommended: false },
-];
-
-const VERTEX_ANTHROPIC_MODELS: AnthropicModelChoice[] = [
-  { id: 'claude-opus-4-7', label: 'Claude Opus 4.7', recommended: false },
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: false },
-  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', recommended: false },
-  { id: 'claude-opus-4-5', label: 'Claude Opus 4.5', recommended: false },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', recommended: false },
-  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', recommended: false },
-  { id: 'claude-opus-4-1', label: 'Claude Opus 4.1', recommended: false },
-];
-
-const CLAUDE_CODE_MODELS: AnthropicModelChoice[] = [
-  { id: 'sonnet', label: 'Claude Sonnet', recommended: true },
-  { id: 'opus', label: 'Claude Opus', recommended: false },
-  { id: 'haiku', label: 'Claude Haiku', recommended: false },
-];
-
-// Curated Codex models from OpenAI's current lineup that work under both
-// ChatGPT-account (subscription) and API-key auth. Intentionally omitted:
-// the `*-codex` ids (e.g. gpt-5.3-codex, gpt-5.2-codex) are API-key-only and
-// fail on ChatGPT-account auth, and gpt-5.3-codex-spark is a ChatGPT-Pro-only
-// research preview. Codex resolves real availability per account at runtime
-// (its binary remote-fetches the model list), so this is a convenience
-// shortlist only — the manual-entry option accepts any id your account's
-// `codex` picker exposes, and the auth probe reports an unsupported choice.
-const CODEX_MODELS: AnthropicModelChoice[] = [
-  { id: 'gpt-5.5', label: 'GPT-5.5', recommended: true },
-  { id: 'gpt-5.4', label: 'GPT-5.4', recommended: false },
-  { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini', recommended: false },
-];
-
-const HIDDEN_ANTHROPIC_MODEL_PATTERNS = [
-  /^claude-sonnet-4$/i,
-  /^claude-opus-4$/i,
-  /^Claude Sonnet 4$/i,
-  /^Claude Opus 4$/i,
-];
-
 const ANTHROPIC_CREDENTIAL_PROMPT_CONTEXT =
   'KTX uses the key to verify Anthropic model access now and to run ingest agents that turn schemas, SQL, ' +
   'BI metadata, and docs into semantic-layer sources and wiki context. ktx.yaml stores an env: or file: ' +
   'reference, not the raw key.';
-
-const ANTHROPIC_MODEL_PROMPT_CONTEXT =
-  'KTX uses this as the default model for ingest agents that turn schemas, SQL, BI metadata, and docs ' +
-  'into semantic-layer sources and wiki context.';
 
 const VERTEX_PROJECT_PROMPT_CONTEXT =
   'KTX stores the selected Google Cloud project ID in ktx.yaml and uses Application Default Credentials for ' +
   'access. Project visibility depends on the signed-in Google account and organization permissions.';
 const DEFAULT_VERTEX_LOCATION = 'us-east5';
 
+type KtxSetupModelPreset = Record<KtxModelRole, string>;
+
+const ANTHROPIC_PRESET = {
+  default: 'claude-sonnet-4-6',
+  triage: 'claude-haiku-4-5',
+  candidateExtraction: 'claude-sonnet-4-6',
+  curator: 'claude-opus-4-7',
+  reconcile: 'claude-opus-4-7',
+  repair: 'claude-haiku-4-5',
+} satisfies KtxSetupModelPreset;
+
+const CLAUDE_CODE_PRESET = {
+  default: 'sonnet',
+  triage: 'haiku',
+  candidateExtraction: 'sonnet',
+  curator: 'opus',
+  reconcile: 'opus',
+  repair: 'haiku',
+} satisfies KtxSetupModelPreset;
+
+const CODEX_PRESET = {
+  default: DEFAULT_CODEX_MODEL,
+  triage: DEFAULT_CODEX_MODEL,
+  candidateExtraction: DEFAULT_CODEX_MODEL,
+  curator: DEFAULT_CODEX_MODEL,
+  reconcile: DEFAULT_CODEX_MODEL,
+  repair: DEFAULT_CODEX_MODEL,
+} satisfies KtxSetupModelPreset;
+
+const MODEL_PRESETS = {
+  anthropic: ANTHROPIC_PRESET,
+  vertex: ANTHROPIC_PRESET,
+  'claude-code': CLAUDE_CODE_PRESET,
+  codex: CODEX_PRESET,
+} satisfies Record<KtxSetupLlmBackend, KtxSetupModelPreset>;
+
+function presetForBackend(backend: KtxSetupLlmBackend): KtxSetupModelPreset {
+  return MODEL_PRESETS[backend];
+}
+
 const execFileAsync = promisify(execFile);
-
-type AnthropicModelDiscoveryErrorReason = 'authentication' | 'http' | 'empty-response';
-
-class AnthropicModelDiscoveryError extends Error {
-  constructor(
-    message: string,
-    public readonly reason: AnthropicModelDiscoveryErrorReason,
-    public readonly status?: number,
-  ) {
-    super(message);
-    this.name = 'AnthropicModelDiscoveryError';
-  }
-}
-
-function isAnthropicModelAuthenticationError(error: unknown): error is AnthropicModelDiscoveryError {
-  return error instanceof AnthropicModelDiscoveryError && error.reason === 'authentication';
-}
-
-function isSelectableAnthropicModel(model: AnthropicModelChoice): boolean {
-  return !HIDDEN_ANTHROPIC_MODEL_PATTERNS.some((pattern) => pattern.test(model.id) || pattern.test(model.label));
-}
-
-type ChooseModelResult =
-  | { status: 'ready'; model: string }
-  | { status: 'back' | 'missing-input' | 'invalid-credential' };
 
 type ChooseBackendResult =
   | { status: 'ready'; backend: KtxSetupLlmBackend; prompted: boolean }
@@ -234,47 +191,6 @@ async function defaultListGcloudProjects(): Promise<GcloudProjectChoice[]> {
     .filter((project): project is GcloudProjectChoice => Boolean(project));
 }
 
-/** @internal */
-export async function fetchAnthropicModels(
-  apiKey: string,
-  fetchFn: typeof fetch = fetch,
-): Promise<AnthropicModelChoice[]> {
-  const response = await fetchFn('https://api.anthropic.com/v1/models?limit=1000', {
-    headers: {
-      'anthropic-version': '2023-06-01',
-      'x-api-key': apiKey,
-    },
-  });
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new AnthropicModelDiscoveryError(
-        `Anthropic model discovery failed with HTTP ${response.status}`,
-        'authentication',
-        response.status,
-      );
-    }
-    throw new AnthropicModelDiscoveryError(
-      `Anthropic model discovery failed with HTTP ${response.status}`,
-      'http',
-      response.status,
-    );
-  }
-  const body = (await response.json()) as { data?: Array<{ id?: unknown; display_name?: unknown; type?: unknown }> };
-  const models = (body.data ?? [])
-    .map((item) => ({
-      id: typeof item.id === 'string' ? item.id : '',
-      label: typeof item.display_name === 'string' ? item.display_name : typeof item.id === 'string' ? item.id : '',
-      recommended: false,
-    }))
-    .filter((item) => item.id.startsWith('claude-'))
-    .filter(isSelectableAnthropicModel);
-  if (models.length === 0) {
-    throw new AnthropicModelDiscoveryError('Anthropic model discovery returned no Claude models', 'empty-response');
-  }
-  const recommendedIndex = models.findIndex((item) => item.id.includes('sonnet'));
-  return models.map((item, index) => ({ ...item, recommended: index === Math.max(recommendedIndex, 0) }));
-}
-
 export function isKtxSetupLlmConfigReady(config: KtxProjectLlmConfig): boolean {
   let resolved: KtxLlmConfig | null;
   try {
@@ -309,12 +225,12 @@ function buildProjectLlmConfig(
     | { backend: 'vertex'; vertex: { project?: string; location: string } }
     | { backend: 'claude-code' }
     | { backend: 'codex' },
-  model: string,
+  models: KtxSetupModelPreset,
 ): KtxProjectLlmConfig {
   if (provider.backend === 'claude-code') {
     return {
       provider: { backend: 'claude-code' },
-      models: { ...existing.models, default: model },
+      models,
       promptCaching: existing.promptCaching,
     };
   }
@@ -322,7 +238,7 @@ function buildProjectLlmConfig(
   if (provider.backend === 'codex') {
     return {
       provider: { backend: 'codex' },
-      models: { ...existing.models, default: model },
+      models,
       promptCaching: existing.promptCaching,
     };
   }
@@ -333,7 +249,7 @@ function buildProjectLlmConfig(
         backend: 'vertex',
         vertex: provider.vertex,
       },
-      models: { ...existing.models, default: model },
+      models,
       promptCaching: { ...(existing.promptCaching ?? {}), enabled: true, vertexFallbackTo5m: true },
     };
   }
@@ -343,7 +259,7 @@ function buildProjectLlmConfig(
       backend: 'anthropic',
       anthropic: { api_key: provider.credentialRef },
     },
-    models: { ...existing.models, default: model },
+    models,
     promptCaching: { ...(existing.promptCaching ?? {}), enabled: true },
   };
 }
@@ -514,14 +430,10 @@ function requestedBackend(args: KtxSetupModelArgs): KtxSetupLlmBackend | undefin
   if (args.vertexProject || args.vertexLocation) {
     return 'vertex';
   }
-  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile || args.llmModel) {
+  if (args.anthropicApiKeyEnv || args.anthropicApiKeyFile) {
     return 'anthropic';
   }
   return undefined;
-}
-
-function requestedModel(args: KtxSetupModelArgs): string | undefined {
-  return args.llmModel;
 }
 
 async function chooseBackend(
@@ -774,187 +686,6 @@ async function chooseVertexConfig(
   };
 }
 
-async function chooseModel(
-  args: KtxSetupModelArgs,
-  credentialValue: string,
-  io: KtxCliIo,
-  deps: KtxSetupModelDeps,
-): Promise<ChooseModelResult> {
-  const providedModel = requestedModel(args);
-  if (providedModel) {
-    return { status: 'ready', model: providedModel };
-  }
-  if (args.inputMode === 'disabled') {
-    io.stderr.write('Missing LLM model: pass --llm-model.\n');
-    return { status: 'missing-input' };
-  }
-
-  let models: AnthropicModelChoice[];
-  try {
-    models = deps.listModels
-      ? await deps.listModels(credentialValue)
-      : await fetchAnthropicModels(credentialValue, deps.fetch);
-  } catch (error) {
-    if (isAnthropicModelAuthenticationError(error)) {
-      const statusSuffix = error.status ? ` (HTTP ${error.status})` : '';
-      io.stderr.write(`Anthropic API key is invalid or unauthorized${statusSuffix}. Check the key and try again.\n`);
-      return { status: 'invalid-credential' };
-    }
-    io.stderr.write(
-      'Could not fetch live Anthropic models. Showing bundled defaults. Setup will still test the selected model before saving it.\n',
-    );
-    models = BUNDLED_ANTHROPIC_MODELS;
-  }
-
-  const selectableModels = models.filter(isSelectableAnthropicModel);
-  const prompts = deps.prompts ?? createPromptAdapter();
-  const modelOptions = [
-    ...selectableModels.map((model) => ({
-      value: model.id,
-      label: model.label || model.id,
-      ...(model.recommended ? { hint: 'recommended' } : {}),
-    })),
-    { value: 'manual', label: 'Enter a model ID manually' },
-    { value: 'back', label: 'Back' },
-  ];
-  const choice = await prompts.autocomplete({
-    message: `Which Anthropic model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
-    placeholder: 'Type to search models',
-    options: modelOptions,
-  });
-  if (choice === 'back') {
-    return { status: 'back' };
-  }
-  if (choice === 'manual') {
-    const manual = await prompts.text({
-      message: withTextInputNavigation('Anthropic model ID'),
-      placeholder: selectableModels.find((model) => model.recommended)?.id ?? selectableModels[0]?.id,
-    });
-    if (manual === undefined) {
-      return { status: 'back' };
-    }
-    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
-  }
-  return { status: 'ready', model: choice };
-}
-
-async function chooseVertexModel(args: KtxSetupModelArgs, io: KtxCliIo, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
-  const providedModel = requestedModel(args);
-  if (providedModel) {
-    return { status: 'ready', model: providedModel };
-  }
-  if (args.inputMode === 'disabled') {
-    io.stderr.write('Missing LLM model: pass --llm-model.\n');
-    return { status: 'missing-input' };
-  }
-
-  const selectableModels = VERTEX_ANTHROPIC_MODELS.filter(isSelectableAnthropicModel);
-  const prompts = deps.prompts ?? createPromptAdapter();
-  const choice = await prompts.autocomplete({
-    message: `Which Anthropic model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
-    placeholder: 'Type to search models',
-    options: [
-      ...selectableModels.map((model) => ({
-        value: model.id,
-        label: model.label || model.id,
-        ...(model.recommended ? { hint: 'recommended' } : {}),
-      })),
-      { value: 'manual', label: 'Enter a model ID manually' },
-      { value: 'back', label: 'Back' },
-    ],
-  });
-  if (choice === 'back') {
-    return { status: 'back' };
-  }
-  if (choice === 'manual') {
-    const manual = await prompts.text({
-      message: withTextInputNavigation('Anthropic model ID'),
-      placeholder: selectableModels.find((model) => model.recommended)?.id ?? selectableModels[0]?.id,
-    });
-    if (manual === undefined) {
-      return { status: 'back' };
-    }
-    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
-  }
-  return { status: 'ready', model: choice };
-}
-
-async function chooseClaudeCodeModel(args: KtxSetupModelArgs, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
-  const providedModel = requestedModel(args);
-  if (providedModel) {
-    return { status: 'ready', model: providedModel };
-  }
-  if (args.inputMode === 'disabled') {
-    return { status: 'ready', model: 'sonnet' };
-  }
-
-  const prompts = deps.prompts ?? createPromptAdapter();
-  const choice = await prompts.select({
-    message: `Which Claude Code model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
-    options: [
-      ...CLAUDE_CODE_MODELS.map((model) => ({
-        value: model.id,
-        label: model.label,
-        ...(model.recommended ? { hint: 'recommended' } : {}),
-      })),
-      { value: 'manual', label: 'Enter a Claude Code model ID manually' },
-      { value: 'back', label: 'Back' },
-    ],
-  });
-  if (choice === 'back') {
-    return { status: 'back' };
-  }
-  if (choice === 'manual') {
-    const manual = await prompts.text({
-      message: withTextInputNavigation('Claude Code model ID'),
-      placeholder: CLAUDE_CODE_MODELS.find((model) => model.recommended)?.id ?? CLAUDE_CODE_MODELS[0]?.id,
-    });
-    if (manual === undefined) {
-      return { status: 'back' };
-    }
-    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
-  }
-  return { status: 'ready', model: choice };
-}
-
-async function chooseCodexModel(args: KtxSetupModelArgs, deps: KtxSetupModelDeps): Promise<ChooseModelResult> {
-  const providedModel = requestedModel(args);
-  if (providedModel) {
-    return { status: 'ready', model: providedModel };
-  }
-  if (args.inputMode === 'disabled') {
-    return { status: 'ready', model: DEFAULT_CODEX_MODEL };
-  }
-
-  const prompts = deps.prompts ?? createPromptAdapter();
-  const choice = await prompts.select({
-    message: `Which Codex model should KTX use?\n\n${ANTHROPIC_MODEL_PROMPT_CONTEXT}`,
-    options: [
-      ...CODEX_MODELS.map((model) => ({
-        value: model.id,
-        label: model.label,
-        ...(model.recommended ? { hint: 'recommended' } : {}),
-      })),
-      { value: 'manual', label: 'Enter a Codex model ID manually' },
-      { value: 'back', label: 'Back' },
-    ],
-  });
-  if (choice === 'back') {
-    return { status: 'back' };
-  }
-  if (choice === 'manual') {
-    const manual = await prompts.text({
-      message: withTextInputNavigation('Codex model ID'),
-      placeholder: CODEX_MODELS.find((model) => model.recommended)?.id ?? CODEX_MODELS[0]?.id,
-    });
-    if (manual === undefined) {
-      return { status: 'back' };
-    }
-    return manual.trim() ? { status: 'ready', model: manual.trim() } : { status: 'missing-input' };
-  }
-  return { status: 'ready', model: choice };
-}
-
 async function persistLlmConfig(
   projectDir: string,
   provider:
@@ -962,12 +693,12 @@ async function persistLlmConfig(
     | { backend: 'vertex'; vertex: { project?: string; location: string } }
     | { backend: 'claude-code' }
     | { backend: 'codex' },
-  model: string,
+  models: KtxSetupModelPreset,
 ): Promise<void> {
   const project = await loadKtxProject({ projectDir });
   const config = {
     ...project.config,
-    llm: buildProjectLlmConfig(project.config.llm, provider, model),
+    llm: buildProjectLlmConfig(project.config.llm, provider, models),
     scan: {
       ...project.config.scan,
       enrichment: {
@@ -990,6 +721,61 @@ function buildInteractiveRetryArgs(args: KtxSetupModelArgs, backend?: KtxSetupLl
   };
 }
 
+type PresetModelValidationResult = { ok: true } | { ok: false; message: string };
+
+function distinctPresetModels(preset: KtxSetupModelPreset): string[] {
+  const models: string[] = [];
+  const seen = new Set<string>();
+  for (const role of KTX_MODEL_ROLES) {
+    const model = preset[role];
+    if (!seen.has(model)) {
+      seen.add(model);
+      models.push(model);
+    }
+  }
+  return models;
+}
+
+function rolesUsingModel(preset: KtxSetupModelPreset, model: string): KtxModelRole[] {
+  return KTX_MODEL_ROLES.filter((role) => preset[role] === model);
+}
+
+function formatPresetFallbackWarning(roles: KtxModelRole[], unavailableModel: string, anchorModel: string): string {
+  return `LLM model ${unavailableModel} is unavailable for ${roles.join(', ')}; using ${anchorModel} for those roles.`;
+}
+
+async function validatePresetModels(
+  preset: KtxSetupModelPreset,
+  validateModel: (model: string) => Promise<PresetModelValidationResult>,
+  io: KtxCliIo,
+): Promise<{ status: 'ready'; models: KtxSetupModelPreset } | { status: 'failed'; message: string }> {
+  const anchorModel = preset.default;
+  const degraded = { ...preset };
+  const models = distinctPresetModels(preset);
+
+  const anchorResult = await validateModel(anchorModel);
+  if (!anchorResult.ok) {
+    return { status: 'failed', message: anchorResult.message };
+  }
+
+  for (const model of models) {
+    if (model === anchorModel) {
+      continue;
+    }
+    const result = await validateModel(model);
+    if (result.ok) {
+      continue;
+    }
+    const affectedRoles = rolesUsingModel(degraded, model);
+    for (const role of affectedRoles) {
+      degraded[role] = anchorModel;
+    }
+    io.stderr.write(`${formatPresetFallbackWarning(affectedRoles, model, anchorModel)}\n`);
+  }
+
+  return { status: 'ready', models: degraded };
+}
+
 export async function runKtxSetupAnthropicModelStep(
   args: KtxSetupModelArgs,
   io: KtxCliIo,
@@ -1007,7 +793,6 @@ export async function runKtxSetupAnthropicModelStep(
     !args.llmBackend &&
     !args.anthropicApiKeyEnv &&
     !args.anthropicApiKeyFile &&
-    !args.llmModel &&
     !args.vertexProject &&
     !args.vertexLocation
   ) {
@@ -1038,94 +823,74 @@ export async function runKtxSetupAnthropicModelStep(
         return { status: vertex.status, projectDir: args.projectDir };
       }
 
-      const model = await chooseVertexModel(backendArgs, io, deps);
-      if (model.status === 'back' && !backendArgs.vertexLocation) {
+      const preset = presetForBackend('vertex');
+      const validation = await validatePresetModels(
+        preset,
+        async (model) =>
+          runLlmHealthCheckWithProgress(
+            buildVertexHealthConfig(vertex.values, model),
+            'Vertex AI',
+            model,
+            healthCheck,
+            deps,
+          ),
+        io,
+      );
+      if (validation.status !== 'ready') {
+        io.stderr.write(
+          `Vertex AI Anthropic model health check failed: ${formatVertexHealthFailure(validation.message, vertex.values)}\n`,
+        );
+        if (args.inputMode === 'disabled') {
+          return { status: 'failed', projectDir: args.projectDir };
+        }
+        io.stderr.write('Choose a different Vertex AI project or location, or Back.\n');
         attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
         continue;
       }
-      if (model.status === 'invalid-credential') {
-        return { status: 'failed', projectDir: args.projectDir };
-      }
-      if (model.status !== 'ready') {
-        return { status: model.status, projectDir: args.projectDir };
-      }
 
-      const health = await runLlmHealthCheckWithProgress(
-        buildVertexHealthConfig(vertex.values, model.model),
-        'Vertex AI',
-        model.model,
-        healthCheck,
-        deps,
-      );
-      if (health.ok) {
-        await persistLlmConfig(args.projectDir, { backend: 'vertex', vertex: vertex.refs }, model.model);
-        io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
-        return { status: 'ready', projectDir: args.projectDir };
-      }
-
-      io.stderr.write(`Vertex AI Anthropic model health check failed: ${formatVertexHealthFailure(health.message, vertex.values)}\n`);
-      if (args.inputMode === 'disabled') {
-        return { status: 'failed', projectDir: args.projectDir };
-      }
-      io.stderr.write('Choose a different Vertex AI project, location, or model, or Back.\n');
-      attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
-      continue;
+      await persistLlmConfig(args.projectDir, { backend: 'vertex', vertex: vertex.refs }, validation.models);
+      io.stdout.write(`│  LLM ready: yes (${validation.models.default})\n`);
+      return { status: 'ready', projectDir: args.projectDir };
     }
 
     if (backendChoice.backend === 'claude-code') {
-      const model = await chooseClaudeCodeModel(backendArgs, deps);
-      if (model.status === 'back' && backendChoice.prompted) {
-        attemptArgs = buildInteractiveRetryArgs(args);
-        continue;
-      }
-      if (model.status === 'invalid-credential') {
-        return { status: 'failed', projectDir: args.projectDir };
-      }
-      if (model.status !== 'ready') {
-        return { status: model.status, projectDir: args.projectDir };
-      }
+      const preset = presetForBackend('claude-code');
       const probe = deps.claudeCodeAuthProbe ?? runClaudeCodeAuthProbe;
-      const health = await probe({ projectDir: args.projectDir, model: model.model, env: deps.env ?? process.env });
-      if (!health.ok) {
-        io.stderr.write(`${health.message}\n`);
+      const validation = await validatePresetModels(
+        preset,
+        async (model) => probe({ projectDir: args.projectDir, model, env: deps.env ?? process.env }),
+        io,
+      );
+      if (validation.status !== 'ready') {
+        io.stderr.write(`${validation.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
       }
       const warning = formatClaudeCodePromptCachingWarning(
         ignoredClaudeCodePromptCachingFields(
-          buildProjectLlmConfig(project.config.llm, { backend: 'claude-code' }, model.model),
+          buildProjectLlmConfig(project.config.llm, { backend: 'claude-code' }, validation.models),
         ),
       );
       if (warning) {
         io.stderr.write(`${warning}\n`);
       }
-      await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, model.model);
-      io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
+      await persistLlmConfig(args.projectDir, { backend: 'claude-code' }, validation.models);
+      io.stdout.write(`│  LLM ready: yes (${validation.models.default})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 
     if (backendChoice.backend === 'codex') {
-      const model = await chooseCodexModel(backendArgs, deps);
-      if (model.status === 'back' && backendChoice.prompted) {
-        attemptArgs = buildInteractiveRetryArgs(args);
-        continue;
-      }
-      if (model.status === 'invalid-credential') {
-        return { status: 'failed', projectDir: args.projectDir };
-      }
-      if (model.status !== 'ready') {
-        return { status: model.status, projectDir: args.projectDir };
-      }
+      const preset = presetForBackend('codex');
       const probe = deps.codexAuthProbe ?? runCodexAuthProbe;
-      const health = await probe({ projectDir: args.projectDir, model: model.model });
-      if (!health.ok) {
-        io.stderr.write(`${health.message}\n`);
+      const validation = await validatePresetModels(preset, async (model) => probe({ projectDir: args.projectDir, model }), io);
+      if (validation.status !== 'ready') {
+        io.stderr.write(`${validation.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
       }
       // Prefix the clack gutter so the warning sits inside the setup frame
       // instead of breaking out of it; kept on stderr for scripted runs.
       io.stderr.write(`│  ${formatCodexIsolationWarning()}\n`);
-      await persistLlmConfig(args.projectDir, { backend: 'codex' }, model.model);
-      io.stdout.write(`│  LLM ready: yes (codex, ${model.model})\n`);
+      await persistLlmConfig(args.projectDir, { backend: 'codex' }, validation.models);
+      io.stdout.write(`│  LLM ready: yes (codex, ${validation.models.default})\n`);
       return { status: 'ready', projectDir: args.projectDir };
     }
 
@@ -1138,8 +903,21 @@ export async function runKtxSetupAnthropicModelStep(
       return { status: credential.status, projectDir: args.projectDir };
     }
 
-    const model = await chooseModel(backendArgs, credential.value, io, deps);
-    if (model.status === 'invalid-credential') {
+    const preset = presetForBackend('anthropic');
+    const validation = await validatePresetModels(
+      preset,
+      async (model) =>
+        runLlmHealthCheckWithProgress(
+          buildAnthropicHealthConfig(credential.value, model),
+          'Anthropic API',
+          model,
+          healthCheck,
+          deps,
+        ),
+      io,
+    );
+    if (validation.status !== 'ready') {
+      io.stderr.write(`Anthropic model health check failed: ${validation.message}\n`);
       if (args.inputMode === 'disabled') {
         return { status: 'failed', projectDir: args.projectDir };
       }
@@ -1147,32 +925,9 @@ export async function runKtxSetupAnthropicModelStep(
       attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
       continue;
     }
-    if (model.status === 'back' && !backendArgs.anthropicApiKeyEnv && !backendArgs.anthropicApiKeyFile) {
-      attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
-      continue;
-    }
-    if (model.status !== 'ready') {
-      return { status: model.status, projectDir: args.projectDir };
-    }
 
-    const health = await runLlmHealthCheckWithProgress(
-      buildAnthropicHealthConfig(credential.value, model.model),
-      'Anthropic API',
-      model.model,
-      healthCheck,
-      deps,
-    );
-    if (health.ok) {
-      await persistLlmConfig(args.projectDir, { backend: 'anthropic', credentialRef: credential.ref }, model.model);
-      io.stdout.write(`│  LLM ready: yes (${model.model})\n`);
-      return { status: 'ready', projectDir: args.projectDir };
-    }
-
-    io.stderr.write(`Anthropic model health check failed: ${health.message}\n`);
-    if (args.inputMode === 'disabled') {
-      return { status: 'failed', projectDir: args.projectDir };
-    }
-    io.stderr.write('Choose a different credential source or model, or Back.\n');
-    attemptArgs = buildInteractiveRetryArgs(args, backendChoice.backend);
+    await persistLlmConfig(args.projectDir, { backend: 'anthropic', credentialRef: credential.ref }, validation.models);
+    io.stdout.write(`│  LLM ready: yes (${validation.models.default})\n`);
+    return { status: 'ready', projectDir: args.projectDir };
   }
 }

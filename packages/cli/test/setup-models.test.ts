@@ -6,8 +6,6 @@ import { parseKtxProjectConfig } from '../src/context/project/config.js';
 import { readKtxSetupState, writeKtxSetupState } from '../src/context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  BUNDLED_ANTHROPIC_MODELS,
-  fetchAnthropicModels,
   type KtxSetupModelPromptAdapter,
   runKtxSetupAnthropicModelStep,
 } from '../src/setup-models.js';
@@ -97,6 +95,33 @@ function makePromptAdapter(options: {
   };
 }
 
+const anthropicPreset = {
+  default: 'claude-sonnet-4-6',
+  triage: 'claude-haiku-4-5',
+  candidateExtraction: 'claude-sonnet-4-6',
+  curator: 'claude-opus-4-7',
+  reconcile: 'claude-opus-4-7',
+  repair: 'claude-haiku-4-5',
+};
+
+const claudeCodePreset = {
+  default: 'sonnet',
+  triage: 'haiku',
+  candidateExtraction: 'sonnet',
+  curator: 'opus',
+  reconcile: 'opus',
+  repair: 'haiku',
+};
+
+const codexPreset = {
+  default: 'gpt-5.5',
+  triage: 'gpt-5.5',
+  candidateExtraction: 'gpt-5.5',
+  curator: 'gpt-5.5',
+  reconcile: 'gpt-5.5',
+  repair: 'gpt-5.5',
+};
+
 describe('setup Anthropic model step', () => {
   let tempDir: string;
 
@@ -107,66 +132,6 @@ describe('setup Anthropic model step', () => {
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
-  });
-
-  it('does not expose Claude Sonnet 4 or Claude Opus 4 as selectable Anthropic models', async () => {
-    const fetchModels = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            data: [
-              { id: 'claude-sonnet-4', display_name: 'Claude Sonnet 4' },
-              { id: 'claude-opus-4', display_name: 'Claude Opus 4' },
-              { id: 'claude-sonnet-4-6', display_name: 'Claude Sonnet 4.6' },
-              { id: 'claude-opus-4-6', display_name: 'Claude Opus 4.6' },
-              { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
-            ],
-          }),
-          { status: 200 },
-        ),
-    );
-
-    await expect(fetchAnthropicModels('sk-ant-test', fetchModels)).resolves.toEqual([ // pragma: allowlist secret
-      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true },
-      { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', recommended: false },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', recommended: false },
-    ]);
-    expect(BUNDLED_ANTHROPIC_MODELS.map((model) => model.id)).not.toEqual(
-      expect.arrayContaining(['claude-sonnet-4', 'claude-opus-4']),
-    );
-  });
-
-  it('filters Claude Sonnet 4 and Claude Opus 4 from Anthropic model prompt choices', async () => {
-    const prompts = makePromptAdapter({ selectValues: ['env', 'back', 'back'] });
-
-    await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      makeIo().io,
-      {
-        prompts,
-        env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => [
-          { id: 'claude-sonnet-4', label: 'Claude Sonnet 4', recommended: true },
-          { id: 'claude-opus-4', label: 'Claude Opus 4', recommended: false },
-          { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true },
-          { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', recommended: false },
-          { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', recommended: false },
-        ]),
-      },
-    );
-
-    expect(prompts.autocomplete).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Which Anthropic model should KTX use?'),
-        options: [
-          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', hint: 'recommended' },
-          { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-          { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-          { value: 'manual', label: 'Enter a model ID manually' },
-          { value: 'back', label: 'Back' },
-        ],
-      }),
-    );
   });
 
   it('offers Anthropic provider paths in the preferred order', async () => {
@@ -212,9 +177,38 @@ describe('setup Anthropic model step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.llm).toMatchObject({
       provider: { backend: 'claude-code' },
-      models: { default: 'sonnet' },
+      models: claudeCodePreset,
     });
-    expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
+    expect(authProbe).toHaveBeenCalledTimes(3);
+    expect(authProbe).toHaveBeenNthCalledWith(1, expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
+    expect(authProbe).toHaveBeenNthCalledWith(2, expect.objectContaining({ projectDir: tempDir, model: 'haiku' }));
+    expect(authProbe).toHaveBeenNthCalledWith(3, expect.objectContaining({ projectDir: tempDir, model: 'opus' }));
+  });
+
+  it('does not prompt for a Claude Code model during interactive setup', async () => {
+    const io = makeIo();
+    const prompts = makePromptAdapter({ selectValues: ['claude-code'] });
+    const authProbe = vi.fn(async () => ({ ok: true as const }));
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
+      io.io,
+      { prompts, claudeCodeAuthProbe: authProbe },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(prompts.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which LLM provider should KTX use?'),
+      }),
+    );
+    expect(prompts.select).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Claude Code model should KTX use?'),
+      }),
+    );
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm.models).toMatchObject(claudeCodePreset);
   });
 
   it('configures Codex backend and validates local auth', async () => {
@@ -226,7 +220,6 @@ describe('setup Anthropic model step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         llmBackend: 'codex',
-        llmModel: 'gpt-5.5',
         skipLlm: false,
       },
       io.io,
@@ -237,8 +230,9 @@ describe('setup Anthropic model step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.llm).toMatchObject({
       provider: { backend: 'codex' },
-      models: { default: 'gpt-5.5' },
+      models: codexPreset,
     });
+    expect(codexAuthProbe).toHaveBeenCalledTimes(1);
     expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.5' }));
     // The warning carries the clack gutter so it renders inside the setup frame.
     expect(io.stderr()).toContain('│  Codex backend isolation is limited');
@@ -264,68 +258,10 @@ describe('setup Anthropic model step', () => {
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.llm).toMatchObject({
       provider: { backend: 'codex' },
-      models: { default: 'gpt-5.5' },
+      models: codexPreset,
     });
+    expect(codexAuthProbe).toHaveBeenCalledTimes(1);
     expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.5' }));
-  });
-
-  it('offers the curated Codex models during interactive setup', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['codex', 'gpt-5.5'] });
-    const codexAuthProbe = vi.fn(async () => ({ ok: true as const }));
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      io.io,
-      { prompts, codexAuthProbe },
-    );
-
-    expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Which Codex model should KTX use?'),
-        options: [
-          { value: 'gpt-5.5', label: 'GPT-5.5', hint: 'recommended' },
-          { value: 'gpt-5.4', label: 'GPT-5.4' },
-          { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
-          { value: 'manual', label: 'Enter a Codex model ID manually' },
-          { value: 'back', label: 'Back' },
-        ],
-      }),
-    );
-    expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-5.5' }));
-  });
-
-  it('prompts for the Claude Code model during interactive setup', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['claude-code', 'opus'] });
-    const authProbe = vi.fn(async () => ({ ok: true as const }));
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      io.io,
-      { prompts, claudeCodeAuthProbe: authProbe },
-    );
-
-    expect(result.status).toBe('ready');
-    expect(prompts.select).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Which Claude Code model should KTX use?'),
-        options: [
-          { value: 'sonnet', label: 'Claude Sonnet', hint: 'recommended' },
-          { value: 'opus', label: 'Claude Opus' },
-          { value: 'haiku', label: 'Claude Haiku' },
-          { value: 'manual', label: 'Enter a Claude Code model ID manually' },
-          { value: 'back', label: 'Back' },
-        ],
-      }),
-    );
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.llm).toMatchObject({
-      provider: { backend: 'claude-code' },
-      models: { default: 'opus' },
-    });
-    expect(authProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'opus' }));
   });
 
   it('warns during Claude Code setup when existing prompt-caching fields will be ignored', async () => {
@@ -392,7 +328,6 @@ describe('setup Anthropic model step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       },
       io.io,
@@ -410,7 +345,7 @@ describe('setup Anthropic model step', () => {
         backend: 'anthropic',
         anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
       },
-      models: { default: 'claude-sonnet-4-6' },
+      models: anthropicPreset,
       promptCaching: { enabled: true },
     });
     expect(config.scan.enrichment.mode).toBe('llm');
@@ -419,9 +354,60 @@ describe('setup Anthropic model step', () => {
     expect(spinnerEvents).toEqual([
       'start:Checking Anthropic API LLM (claude-sonnet-4-6).',
       'stop:LLM test passed (Anthropic API, claude-sonnet-4-6)',
+      'start:Checking Anthropic API LLM (claude-haiku-4-5).',
+      'stop:LLM test passed (Anthropic API, claude-haiku-4-5)',
+      'start:Checking Anthropic API LLM (claude-opus-4-7).',
+      'stop:LLM test passed (Anthropic API, claude-opus-4-7)',
     ]);
     expect(io.stdout()).toContain('LLM ready: yes');
     expect(io.stdout()).not.toContain('sk-ant-test');
+  });
+
+  it('degrades unavailable Anthropic non-anchor models to the anchor before persisting', async () => {
+    const io = makeIo();
+    const { events: spinnerEvents, spinner } = makeSpinnerEvents();
+    const healthCheck = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true as const })
+      .mockResolvedValueOnce({ ok: false as const, message: 'model not enabled' })
+      .mockResolvedValueOnce({ ok: true as const });
+
+    const result = await runKtxSetupAnthropicModelStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
+        skipLlm: false,
+      },
+      io.io,
+      {
+        env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
+        healthCheck,
+        spinner,
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.llm.models).toMatchObject({
+      default: 'claude-sonnet-4-6',
+      triage: 'claude-sonnet-4-6',
+      candidateExtraction: 'claude-sonnet-4-6',
+      curator: 'claude-opus-4-7',
+      reconcile: 'claude-opus-4-7',
+      repair: 'claude-sonnet-4-6',
+    });
+    expect(io.stderr()).toContain(
+      'LLM model claude-haiku-4-5 is unavailable for triage, repair; using claude-sonnet-4-6 for those roles.',
+    );
+    expect(spinnerEvents).toEqual([
+      'start:Checking Anthropic API LLM (claude-sonnet-4-6).',
+      'stop:LLM test passed (Anthropic API, claude-sonnet-4-6)',
+      'start:Checking Anthropic API LLM (claude-haiku-4-5).',
+      'error:LLM test failed',
+      'start:Checking Anthropic API LLM (claude-opus-4-7).',
+      'stop:LLM test passed (Anthropic API, claude-opus-4-7)',
+    ]);
   });
 
   it('configures Vertex AI provider, selected model, prompt caching, and llm completion state', async () => {
@@ -436,7 +422,6 @@ describe('setup Anthropic model step', () => {
         llmBackend: 'vertex',
         vertexProject: 'local-gcp-project',
         vertexLocation: 'us-east5',
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       },
       io.io,
@@ -444,10 +429,22 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(healthCheck).toHaveBeenCalledWith({
+    expect(healthCheck).toHaveBeenNthCalledWith(1, {
       backend: 'vertex',
       vertex: { project: 'local-gcp-project', location: 'us-east5' },
       modelSlots: { default: 'claude-sonnet-4-6' },
+      promptCaching: { enabled: true, vertexFallbackTo5m: true },
+    });
+    expect(healthCheck).toHaveBeenNthCalledWith(2, {
+      backend: 'vertex',
+      vertex: { project: 'local-gcp-project', location: 'us-east5' },
+      modelSlots: { default: 'claude-haiku-4-5' },
+      promptCaching: { enabled: true, vertexFallbackTo5m: true },
+    });
+    expect(healthCheck).toHaveBeenNthCalledWith(3, {
+      backend: 'vertex',
+      vertex: { project: 'local-gcp-project', location: 'us-east5' },
+      modelSlots: { default: 'claude-opus-4-7' },
       promptCaching: { enabled: true, vertexFallbackTo5m: true },
     });
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -456,7 +453,7 @@ describe('setup Anthropic model step', () => {
         backend: 'vertex',
         vertex: { project: 'local-gcp-project', location: 'us-east5' },
       },
-      models: { default: 'claude-sonnet-4-6' },
+      models: anthropicPreset,
       promptCaching: { enabled: true, vertexFallbackTo5m: true },
     });
     expect(config.scan.enrichment.mode).toBe('llm');
@@ -465,13 +462,17 @@ describe('setup Anthropic model step', () => {
     expect(spinnerEvents).toEqual([
       'start:Checking Vertex AI LLM (claude-sonnet-4-6).',
       'stop:LLM test passed (Vertex AI, claude-sonnet-4-6)',
+      'start:Checking Vertex AI LLM (claude-haiku-4-5).',
+      'stop:LLM test passed (Vertex AI, claude-haiku-4-5)',
+      'start:Checking Vertex AI LLM (claude-opus-4-7).',
+      'stop:LLM test passed (Vertex AI, claude-opus-4-7)',
     ]);
     expect(io.stdout()).toContain('LLM ready: yes (claude-sonnet-4-6)');
   });
 
   it('uses existing Vertex AI credentials without an extra auth choice', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'local-gcp-project', 'claude-sonnet-4-6'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'local-gcp-project'] });
     const readGcloudProject = vi.fn(async () => 'local-gcp-project');
     const listGcloudProjects = vi.fn(async () => [
       { projectId: 'local-gcp-project', name: 'Local project' },
@@ -511,22 +512,6 @@ describe('setup Anthropic model step', () => {
         ],
       }),
     );
-    expect(prompts.autocomplete).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Which Anthropic model should KTX use?'),
-        options: [
-          { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-          { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-          { value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
-          { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-          { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-          { value: 'claude-opus-4-1', label: 'Claude Opus 4.1' },
-          { value: 'manual', label: 'Enter a model ID manually' },
-          { value: 'back', label: 'Back' },
-        ],
-      }),
-    );
     expect(healthCheck).toHaveBeenCalledWith({
       backend: 'vertex',
       vertex: { project: 'local-gcp-project', location: 'us-east5' },
@@ -542,7 +527,7 @@ describe('setup Anthropic model step', () => {
 
   it('skips the Vertex AI auth choice when Application Default Credentials are the only option', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'local-gcp-project', 'claude-sonnet-4-6'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'local-gcp-project'] });
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -578,7 +563,7 @@ describe('setup Anthropic model step', () => {
 
   it('lets users choose a different visible gcloud project for Vertex AI', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'other-gcp-project', 'claude-sonnet-4-6'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'other-gcp-project'] });
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -612,10 +597,7 @@ describe('setup Anthropic model step', () => {
 
   it('allows manual Vertex AI project entry when gcloud project listing is empty', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({
-      selectValues: ['vertex', 'manual', 'claude-sonnet-4-6'],
-      textValues: ['manual-gcp-project'],
-    });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'manual'], textValues: ['manual-gcp-project'] });
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -654,7 +636,7 @@ describe('setup Anthropic model step', () => {
 
   it('lets users retry Vertex AI project listing after gcloud auth fails', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['vertex', 'retry', 'other-gcp-project', 'claude-sonnet-4-6'] });
+    const prompts = makePromptAdapter({ selectValues: ['vertex', 'retry', 'other-gcp-project'] });
     const listGcloudProjects = vi
       .fn()
       .mockRejectedValueOnce(new Error('Reauthentication failed. cannot prompt during non-interactive execution.'))
@@ -743,7 +725,6 @@ describe('setup Anthropic model step', () => {
         llmBackend: 'vertex',
         vertexProject: 'kaelio-orbit-looker-20260430',
         vertexLocation: 'us-east5',
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       },
       io.io,
@@ -771,7 +752,6 @@ describe('setup Anthropic model step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         anthropicApiKeyFile: secretPath,
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       },
       io.io,
@@ -779,10 +759,25 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('ready');
-    expect(healthCheck).toHaveBeenCalledWith(
+    expect(healthCheck).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         anthropic: { apiKey: 'sk-ant-file' }, // pragma: allowlist secret
         modelSlots: { default: 'claude-sonnet-4-6' },
+      }),
+    );
+    expect(healthCheck).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        anthropic: { apiKey: 'sk-ant-file' }, // pragma: allowlist secret
+        modelSlots: { default: 'claude-haiku-4-5' },
+      }),
+    );
+    expect(healthCheck).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        anthropic: { apiKey: 'sk-ant-file' }, // pragma: allowlist secret
+        modelSlots: { default: 'claude-opus-4-7' },
       }),
     );
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -791,7 +786,7 @@ describe('setup Anthropic model step', () => {
         backend: 'anthropic',
         anthropic: { api_key: `file:${secretPath}` }, // pragma: allowlist secret
       },
-      models: { default: 'claude-sonnet-4-6' },
+      models: anthropicPreset,
     });
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
@@ -808,7 +803,6 @@ describe('setup Anthropic model step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         anthropicApiKeyFile: missingSecretPath,
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       },
       io.io,
@@ -835,32 +829,10 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).not.toContain('--skip-llm');
   });
 
-  it('does not recommend skipping when non-interactive setup is missing an LLM model', async () => {
-    const io = makeIo();
-    const healthCheck = vi.fn(async () => ({ ok: true as const }));
-
-    const result = await runKtxSetupAnthropicModelStep(
-      {
-        projectDir: tempDir,
-        inputMode: 'disabled',
-        anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        skipLlm: false,
-      },
-      io.io,
-      { env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, healthCheck }, // pragma: allowlist secret
-    );
-
-    expect(result.status).toBe('missing-input');
-    expect(healthCheck).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain('Missing LLM model: pass --llm-model.');
-    expect(io.stderr()).not.toContain('--skip-llm');
-  });
-
   it('writes pasted keys to .ktx/secrets and never prints the key', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({
       credentialChoice: 'paste',
-      modelChoice: 'claude-sonnet-4-6',
       passwordValue: 'sk-ant-pasted', // pragma: allowlist secret
     });
 
@@ -870,7 +842,6 @@ describe('setup Anthropic model step', () => {
       {
         prompts,
         env: {},
-        listModels: vi.fn(async () => [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true }]),
         healthCheck: vi.fn(async () => ({ ok: true as const })),
       },
     );
@@ -888,7 +859,7 @@ describe('setup Anthropic model step', () => {
 
   it('opens pasted key entry directly and tells users Escape goes back', async () => {
     const prompts = makePromptAdapter({
-      selectValues: ['paste', 'claude-sonnet-4-6'],
+      selectValues: ['paste'],
       passwordValue: 'sk-ant-pasted', // pragma: allowlist secret
     });
 
@@ -898,7 +869,6 @@ describe('setup Anthropic model step', () => {
       {
         prompts,
         env: {},
-        listModels: vi.fn(async () => [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true }]),
         healthCheck: vi.fn(async () => ({ ok: true as const })),
       },
     );
@@ -956,142 +926,6 @@ describe('setup Anthropic model step', () => {
     expect(io.stdout()).not.toContain('KTX uses the key');
   });
 
-  it('does not offer skipping while choosing an Anthropic model', async () => {
-    const prompts = makePromptAdapter({ selectValues: ['env', 'back', 'back'] });
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      makeIo().io,
-      {
-        prompts,
-        env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true }]),
-      },
-    );
-
-    expect(result.status).toBe('back');
-    expect(prompts.autocomplete).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Which Anthropic model should KTX use?'),
-        options: expect.not.arrayContaining([expect.objectContaining({ value: 'skip' })]),
-      }),
-    );
-  });
-
-  it('explains why KTX asks for an Anthropic model', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({ credentialChoice: 'env', modelChoice: 'claude-sonnet-4-6' });
-    const expectedPromptMessage = [
-      'Which Anthropic model should KTX use?',
-      '',
-      [
-        'KTX uses this as the default model for ingest agents that turn schemas, SQL, BI metadata, and docs',
-        'into semantic-layer sources and wiki context.',
-      ].join(' '),
-    ].join('\n');
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      io.io,
-      {
-        prompts,
-        env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true }]),
-        healthCheck: vi.fn(async () => ({ ok: true as const })),
-      },
-    );
-
-    expect(result.status).toBe('ready');
-    expect(prompts.autocomplete).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expectedPromptMessage,
-      }),
-    );
-    expect(io.stdout()).not.toContain('KTX uses this as the default model');
-    expect(io.stdout()).not.toContain('Setup verifies the selected model now');
-  });
-
-  it('uses the bundled fallback registry when live discovery fails', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({ credentialChoice: 'env', modelChoice: 'claude-sonnet-4-6' });
-
-    await expect(
-      runKtxSetupAnthropicModelStep({ projectDir: tempDir, inputMode: 'auto', skipLlm: false }, io.io, {
-        prompts,
-        env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => {
-          throw new Error('network unavailable');
-        }),
-        healthCheck: vi.fn(async () => ({ ok: true as const })),
-      }),
-    ).resolves.toMatchObject({ status: 'ready' });
-
-    expect(io.stderr()).toContain('Could not fetch live Anthropic models. Showing bundled defaults.');
-  });
-
-  it('shows bundled model choices when live discovery fails', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['env', 'manual'], textValues: [''] });
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      io.io,
-      {
-        prompts,
-        env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => {
-          throw new Error('network unavailable');
-        }),
-        healthCheck: vi.fn(async () => ({ ok: true as const })),
-      },
-    );
-
-    expect(result.status).toBe('missing-input');
-    expect(BUNDLED_ANTHROPIC_MODELS.length).toBeGreaterThan(0);
-    expect(prompts.autocomplete).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Which Anthropic model should KTX use?'),
-        options: expect.arrayContaining([
-          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', hint: 'recommended' },
-        ]),
-      }),
-    );
-    expect(prompts.text).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: 'Anthropic model ID\n│  Press Escape to go back.\n│',
-        placeholder: 'claude-sonnet-4-6',
-      }),
-    );
-  });
-
-  it('reports invalid Anthropic API keys during live discovery instead of showing bundled defaults', async () => {
-    const io = makeIo();
-    const prompts = makePromptAdapter({ selectValues: ['env', 'back'] });
-    const fetchModels = vi.fn(
-      async () => new Response(JSON.stringify({ error: { message: 'invalid x-api-key' } }), { status: 401 }),
-    );
-    const healthCheck = vi.fn(async () => ({ ok: true as const }));
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      io.io,
-      {
-        prompts,
-        env: { ANTHROPIC_API_KEY: 'sk-ant-invalid' }, // pragma: allowlist secret
-        fetch: fetchModels,
-        healthCheck,
-      },
-    );
-
-    expect(result.status).toBe('back');
-    expect(fetchModels).toHaveBeenCalledTimes(1);
-    expect(healthCheck).not.toHaveBeenCalled();
-    expect(io.stderr()).toContain('Anthropic API key is invalid or unauthorized');
-    expect(io.stderr()).toContain('Choose a different credential source or Back.');
-    expect(io.stderr()).not.toContain('Could not fetch live Anthropic models. Showing bundled defaults.');
-    expect(io.stderr()).not.toContain('sk-ant-invalid');
-  });
-
   it('does not persist llm completion when the health check fails', async () => {
     const io = makeIo();
     const result = await runKtxSetupAnthropicModelStep(
@@ -1099,7 +933,6 @@ describe('setup Anthropic model step', () => {
         projectDir: tempDir,
         inputMode: 'disabled',
         anthropicApiKeyEnv: 'ANTHROPIC_API_KEY', // pragma: allowlist secret
-        llmModel: 'claude-sonnet-4-6',
         skipLlm: false,
       },
       io.io,
@@ -1117,12 +950,12 @@ describe('setup Anthropic model step', () => {
 
   it('re-prompts after an interactive health-check failure and saves after retry success', async () => {
     const io = makeIo();
-    const prompts = makePromptAdapter({
-      selectValues: ['env', 'claude-haiku-3-5', 'env', 'claude-sonnet-4-6'],
-    });
+    const prompts = makePromptAdapter({ selectValues: ['env', 'env'] });
     const healthCheck = vi
       .fn()
       .mockResolvedValueOnce({ ok: false as const, message: 'model not found' })
+      .mockResolvedValueOnce({ ok: true as const })
+      .mockResolvedValueOnce({ ok: true as const })
       .mockResolvedValueOnce({ ok: true as const });
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -1131,22 +964,22 @@ describe('setup Anthropic model step', () => {
       {
         prompts,
         env: { ANTHROPIC_API_KEY: 'sk-ant-test' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => [
-          { id: 'claude-haiku-3-5', label: 'Claude Haiku 3.5', recommended: false },
-          { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true },
-        ]),
         healthCheck,
       },
     );
 
     expect(result.status).toBe('ready');
-    expect(healthCheck).toHaveBeenCalledTimes(2);
+    expect(healthCheck).toHaveBeenCalledTimes(4);
     expect(prompts.select).toHaveBeenCalledTimes(3);
-    expect(prompts.autocomplete).toHaveBeenCalledTimes(2);
+    expect(prompts.autocomplete).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which Anthropic model should KTX use?'),
+      }),
+    );
     expect(io.stderr()).toContain('Anthropic model health check failed: model not found');
-    expect(io.stderr()).toContain('Choose a different credential source or model, or Back.');
+    expect(io.stderr()).toContain('Choose a different credential source or Back.');
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.llm.models.default).toBe('claude-sonnet-4-6');
+    expect(config.llm.models).toMatchObject(anthropicPreset);
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
     expect((await readKtxSetupState(tempDir)).completed_steps).toContain('llm');
     expect(io.stderr()).not.toContain('sk-ant-test');
@@ -1175,39 +1008,8 @@ describe('setup Anthropic model step', () => {
     expect(config.llm.provider.backend).toBe('none');
   });
 
-  it('returns from model selection Back to credential selection instead of exiting setup', async () => {
-    const prompts = makePromptAdapter({
-      selectValues: ['paste', 'back', 'back'],
-      passwordValue: 'sk-ant-pasted', // pragma: allowlist secret
-    });
-
-    const result = await runKtxSetupAnthropicModelStep(
-      { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
-      makeIo().io,
-      {
-        prompts,
-        env: {},
-        listModels: vi.fn(async () => [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true }]),
-        healthCheck: vi.fn(async () => ({ ok: true as const })),
-      },
-    );
-
-    expect(result.status).toBe('back');
-    expect(prompts.select).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        message: expect.stringContaining('How should KTX find your Anthropic API key?'),
-      }),
-    );
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.llm.provider.backend).toBe('none');
-  });
-
   it('returns from pasted key entry Escape to credential selection and can use env credentials', async () => {
-    const prompts = makePromptAdapter({
-      selectValues: ['paste', 'env', 'claude-sonnet-4-6'],
-      passwordValues: [undefined],
-    });
+    const prompts = makePromptAdapter({ selectValues: ['paste', 'env'], passwordValues: [undefined] });
 
     const result = await runKtxSetupAnthropicModelStep(
       { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
@@ -1215,7 +1017,6 @@ describe('setup Anthropic model step', () => {
       {
         prompts,
         env: { ANTHROPIC_API_KEY: 'sk-ant-env' }, // pragma: allowlist secret
-        listModels: vi.fn(async () => [{ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', recommended: true }]),
         healthCheck: vi.fn(async () => ({ ok: true as const })),
       },
     );
