@@ -377,6 +377,10 @@ llm:
   models:
     default: claude-sonnet-4-6
     triage: claude-haiku-4-5
+    candidateExtraction: claude-sonnet-4-6
+    curator: claude-opus-4-7
+    reconcile: claude-opus-4-7
+    repair: claude-haiku-4-5
   promptCaching:
     enabled: true
     systemTtl: 1h
@@ -404,6 +408,11 @@ llm:
     backend: codex
   models:
     default: gpt-5.5
+    triage: gpt-5.5
+    candidateExtraction: gpt-5.5
+    curator: gpt-5.5
+    reconcile: gpt-5.5
+    repair: gpt-5.5
 ```
 
 ### Model roles
@@ -615,6 +624,11 @@ llm:
     backend: claude-code
   models:
     default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: opus
+    reconcile: opus
+    repair: haiku
 ingest:
   adapters:
     - live-database

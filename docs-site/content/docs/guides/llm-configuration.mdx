@@ -30,19 +30,19 @@ llm:
     default: sonnet
     triage: haiku
     candidateExtraction: sonnet
-    curator: sonnet
-    reconcile: sonnet
-    repair: sonnet
+    curator: opus
+    reconcile: opus
+    repair: haiku
 ```
 
-During setup, choose the backend interactively or pass the model in automation:
+During setup, choose the backend interactively or pass it in automation:
 
 ```bash
-ktx setup --llm-backend claude-code --llm-model opus --no-input
+ktx setup --llm-backend claude-code --no-input
 ```
 
-For Claude Code, `sonnet`, `opus`, and `haiku` map to **ktx** defaults. Full Claude
-model IDs are also accepted.
+Setup writes `sonnet`, `haiku`, and `opus` aliases into `llm.models`. You can
+edit any role to another alias or a full Claude model ID after setup.
 
 `claude-code` exposes only **ktx** MCP tools for the current agent loop. SDK init
 metadata may still list host slash commands, skills, and subagents; **ktx** does not
@@ -59,12 +59,17 @@ llm:
     backend: codex
   models:
     default: gpt-5.5
+    triage: gpt-5.5
+    candidateExtraction: gpt-5.5
+    curator: gpt-5.5
+    reconcile: gpt-5.5
+    repair: gpt-5.5
 ```
 
 Configure it non-interactively:
 
 ```bash
-ktx setup --llm-backend codex --llm-model gpt-5.5 --no-input
+ktx setup --llm-backend codex --no-input
 ```
 
 This is separate from Codex agent-client setup. `ktx setup --agents --target

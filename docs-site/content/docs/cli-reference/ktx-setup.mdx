@@ -54,7 +54,6 @@ prompts.
 | `--llm-backend <backend>` | LLM backend: `anthropic`, `vertex`, `claude-code`, or `codex` |
 | `--llm-backend claude-code` | Use the local Claude Code session for **ktx** LLM calls |
 | `--llm-backend codex` | Use local Codex authentication for **ktx** LLM calls |
-| `--llm-model <model>` | LLM model ID or backend model alias to validate and save |
 | `--anthropic-api-key-env <name>` | Environment variable containing the Anthropic API key |
 | `--anthropic-api-key-file <path>` | File containing the Anthropic API key |
 | `--vertex-project <project>` | Vertex AI project ID, `env:NAME`, or `file:/path` reference |
@@ -64,13 +63,9 @@ prompts.
 Choose only one Anthropic credential source. Anthropic credential flags are only
 valid with the Anthropic backend; Vertex flags are only valid with the Vertex
 backend. The `claude-code` and `codex` backends use local authentication instead
-of Anthropic API key or Vertex flags. For Claude Code, `--llm-model` accepts
-`sonnet`, `opus`, `haiku`, or a full Claude model ID. For Codex, `--llm-model`
-accepts `codex`, `default`, or a `gpt-*` / `codex-*` model ID such as
-`gpt-5.5`; any other value is rejected before the auth probe. Run `codex` to
-see the models available to your login, and pick a `gpt-*` / `codex-*` id from
-that list. Note that `*-codex` API-billing model IDs (for example
-`gpt-5.3-codex`) are not available to ChatGPT-subscription logins.
+of Anthropic API key or Vertex flags. After you choose a backend, `ktx setup`
+writes that backend's per-role model preset to `ktx.yaml`. To change a model,
+edit the matching `llm.models.<role>` value in `ktx.yaml`.
 
 ### Embeddings
 
@@ -198,14 +193,13 @@ ktx setup
 # Run setup for a specific project directory
 ktx setup --project-dir ./analytics
 
-# Use Claude Code with Opus for ktx LLM calls
+# Use Claude Code for ktx LLM calls
 ktx setup \
   --project-dir ./analytics \
-  --llm-backend claude-code \
-  --llm-model opus
+  --llm-backend claude-code
 
 # Configure **ktx** to use local Codex authentication for LLM work
-ktx setup --llm-backend codex --llm-model gpt-5.5 --no-input
+ktx setup --llm-backend codex --no-input
 ```
 
 When you choose `--llm-backend codex`, setup prints a warning if the public
