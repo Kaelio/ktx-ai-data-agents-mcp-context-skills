@@ -68,8 +68,6 @@ async function runSetupSmoke(projectDir) {
       projectDir,
       '--llm-backend',
       'codex',
-      '--llm-model',
-      'gpt-5.3-codex',
       '--no-input',
       '--yes',
       '--skip-databases',
@@ -79,7 +77,7 @@ async function runSetupSmoke(projectDir) {
     { timeoutMs: 600_000 },
   );
   requireSuccess('ktx setup codex backend', result);
-  if (!result.stdout.includes('LLM ready: yes (codex, gpt-5.3-codex)')) {
+  if (!result.stdout.includes('LLM ready: yes (codex, gpt-5.5)')) {
     throw new Error(`setup did not report Codex LLM readiness\nstdout:\n${result.stdout}`);
   }
 }
@@ -91,7 +89,14 @@ async function runRuntimeSmoke(projectDir) {
   const { z } = await import(zodUrl);
   const runtime = new CodexKtxLlmRuntime({
     projectDir,
-    modelSlots: { default: 'gpt-5.3-codex' },
+    modelSlots: {
+      default: 'gpt-5.5',
+      triage: 'gpt-5.5',
+      candidateExtraction: 'gpt-5.5',
+      curator: 'gpt-5.5',
+      reconcile: 'gpt-5.5',
+      repair: 'gpt-5.5',
+    },
   });
 
   const text = await runtime.generateText({
