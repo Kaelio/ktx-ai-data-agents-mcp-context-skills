@@ -10,6 +10,23 @@ export const baseOptions: BaseLayoutProps = {
   },
   links: [
     {
+      type: "menu",
+      text: "Products",
+      items: [
+        {
+          text: "ktx",
+          description: "The ktx CLI & toolkit docs",
+          url: "/docs",
+        },
+        {
+          text: "Kaelio Platform",
+          description: "Docs for the Kaelio platform",
+          url: "https://docs.kaelio.com/agent/docs",
+          external: true,
+        },
+      ],
+    },
+    {
       type: "icon",
       label: "GitHub",
       icon: <GitHubIcon />,
