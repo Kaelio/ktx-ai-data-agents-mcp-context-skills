@@ -5,7 +5,7 @@ import { SlackIcon } from "@/components/slack-icon";
 
 export const baseOptions: BaseLayoutProps = {
   nav: {
-    title: <Logo />,
+    title: Logo,
     transparentMode: "top",
   },
   links: [
