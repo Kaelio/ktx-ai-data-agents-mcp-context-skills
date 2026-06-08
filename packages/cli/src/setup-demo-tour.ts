@@ -259,6 +259,7 @@ async function runDemoContextReplay(
     frame: 0,
     startedAt: Date.now(),
     totalElapsedMs: 0,
+    starCount: null,
   };
 
   const allTargets = [...allPrimary, ...allContext];
