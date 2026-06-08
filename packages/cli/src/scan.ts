@@ -1,6 +1,6 @@
 import type { KtxProgressPort, KtxScanMode, KtxScanReport, KtxScanWarning } from './context/scan/types.js';
 import { runLocalScan } from './context/scan/local-scan.js';
-import { loadKtxProject } from './context/project/project.js';
+import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { KtxCliIo } from './index.js';
@@ -8,7 +8,8 @@ import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { profileMark } from './startup-profile.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { formatErrorDetail, scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:scan');
@@ -322,8 +323,9 @@ export function createCliScanProgress(
 
 export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps: KtxScanDeps = {}): Promise<number> {
   const startedAt = performance.now();
+  let project: KtxLocalProject | undefined;
   try {
-    const project = await loadKtxProject({ projectDir: args.projectDir });
+    project = await loadKtxProject({ projectDir: args.projectDir });
     const resolveEmbeddingProvider = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
     const resolution = await resolveEmbeddingProvider(project, {
       mode: 'ensure',
@@ -396,6 +398,20 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
         ...(errorClass ? { errorClass } : {}),
         ...(errorDetail ? { errorDetail } : {}),
       },
+    });
+    await reportException({
+      error,
+      context: { source: 'scan run', handled: true, fatal: false },
+      projectDir: args.projectDir,
+      io,
+      redactionSecrets: await collectTelemetryRedactionSecrets({
+        project,
+        projectDir: args.projectDir,
+        connectionId: args.connectionId,
+        includeLlm: true,
+        includeEmbeddings: true,
+        env: process.env,
+      }),
     });
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

@@ -119,11 +119,11 @@ export interface KtxSetupSourcesDeps {
 
 const SOURCE_OPTIONS: Array<{ value: KtxSetupSourceType; label: string }> = [
   { value: 'dbt', label: 'dbt' },
-  { value: 'metricflow', label: 'MetricFlow' },
   { value: 'metabase', label: 'Metabase' },
+  { value: 'notion', label: 'Notion' },
+  { value: 'metricflow', label: 'MetricFlow' },
   { value: 'looker', label: 'Looker' },
   { value: 'lookml', label: 'LookML' },
-  { value: 'notion', label: 'Notion' },
 ];
 
 const SOURCE_LABELS = Object.fromEntries(SOURCE_OPTIONS.map((option) => [option.value, option.label])) as Record<
@@ -269,8 +269,8 @@ async function chooseSourceCredentialRef(input: {
       message: `How should KTX find your ${input.label}?`,
       options: [
         ...(input.existingRef ? [{ value: 'keep', label: 'Keep existing credential' }] : []),
-        { value: 'env', label: `Use ${input.envName} from the environment` },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'env', label: `Use ${input.envName} from the environment` },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -307,8 +307,8 @@ async function chooseGitAuthCredentialRef(input: {
       message: `${label} repo requires authentication.`,
       options: [
         ...(input.existingRef ? [{ value: 'keep', label: 'Keep existing credential' }] : []),
-        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'paste', label: 'Paste a token and save it as a local secret file' },
+        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'skip', label: 'Skip — try without authentication' },
         { value: 'back', label: 'Back' },
       ],
@@ -1063,8 +1063,8 @@ async function promptForInteractiveSource(
         const selectedLocation = await prompts.select({
           message: `${source} source location`,
           options: [
-            { value: 'path', label: 'Local path' },
             { value: 'git', label: 'Git URL' },
+            { value: 'path', label: 'Local path' },
             { value: 'back', label: 'Back' },
           ],
         });
@@ -1343,8 +1343,8 @@ async function promptForInteractiveSource(
       const crawlMode = await prompts.select({
         message: 'Which Notion pages should KTX ingest?',
         options: [
-          { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
           { value: 'all_accessible', label: 'All pages the integration can access' },
+          { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
           { value: 'back', label: 'Back' },
         ],
       });
@@ -2064,7 +2064,7 @@ export async function runKtxSetupSourcesStep(
           const addMore = await prompts.select({
             message: `${readyConnectionIds.length} context source${readyConnectionIds.length > 1 ? 's' : ''} configured (${readyConnectionIds.join(', ')}). Add another?`,
             options: [
-              { value: 'done', label: 'Done — continue to context build' },
+              { value: 'done', label: 'Done adding context sources' },
               { value: 'edit', label: 'Edit an existing context source' },
               { value: 'add', label: 'Add another context source' },
             ],

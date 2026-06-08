@@ -2654,6 +2654,7 @@ describe('setup databases step', () => {
       consideredRoleCount: 2,
       skipped: null,
       warnings: [],
+      parseFailedTemplateIds: [],
     }));
 
     const result = await runKtxSetupDatabasesStep(
@@ -2706,6 +2707,54 @@ describe('setup databases step', () => {
     expect(io.stdout()).toContain('svc_loader');
   });
 
+  it('collapses query-history parse failures to a count and lists ids only with --debug', async () => {
+    const io = makeIo();
+    const queryHistoryFilterPicker = vi.fn(async () => ({
+      excludedRoles: [],
+      consideredRoleCount: 1,
+      skipped: { reason: 'no-in-scope-history' as const },
+      warnings: [],
+      parseFailedTemplateIds: ['111', '222'],
+    }));
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        debug: true,
+        yes: true,
+        databaseDrivers: ['postgres'],
+        databaseConnectionId: 'warehouse',
+        databaseUrl: 'env:DATABASE_URL',
+        databaseSchemas: ['public'],
+        enableQueryHistory: true,
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        historicSqlReadinessProbe: vi.fn(async () => {
+          const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
+          return {
+            ok: true as const,
+            dialect: 'postgres' as const,
+            runner,
+            result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
+          };
+        }),
+        queryHistoryFilterPicker,
+        createQueryHistoryLlmRuntime: vi.fn(() => null),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stdout()).toContain('Skipped 2 query templates ktx could not parse');
+    expect(io.stdout()).not.toContain('111');
+    expect(io.stdout()).not.toContain('222');
+    expect(io.stderr()).toContain('could not parse 2 template(s): 111, 222');
+  });
+
   it('lets interactive setup skip applying derived filters', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({
@@ -2743,6 +2792,7 @@ describe('setup databases step', () => {
           consideredRoleCount: 2,
           skipped: null,
           warnings: [],
+          parseFailedTemplateIds: [],
         })),
         createQueryHistoryLlmRuntime: vi.fn(() => null),
       },
@@ -2811,6 +2861,7 @@ describe('setup databases step', () => {
           consideredRoleCount: 2,
           skipped: { reason: 'user-block-present' as const },
           warnings: [],
+          parseFailedTemplateIds: [],
         })),
         createQueryHistoryLlmRuntime: vi.fn(() => null),
       },

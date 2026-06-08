@@ -337,7 +337,8 @@ use `PascalCase` without the suffix.
 
 ## Telemetry
 
-**ktx** ships PostHog usage telemetry. When adding commands or events:
+**ktx** ships PostHog usage telemetry. Catalog telemetry events use strict
+schemas. When adding commands or events:
 
 - **MUST NOT**: Add fields that carry user data — file paths, hostnames,
   environment values, SQL text, schema/table/column names, error messages,
@@ -353,6 +354,24 @@ use `PascalCase` without the suffix.
   `docs-site/content/docs/community/telemetry.mdx` only when the *category*
   of collected data changes. Adding another event with no new field types
   needs no docs change.
+
+### Error reports
+
+**ktx** also sends PostHog Error Tracking `$exception` events when telemetry is
+enabled. This channel is separate from the strict catalog event schema and is
+used only for exception diagnostics.
+
+`$exception` events may include stack frames, error class names, raw error
+messages, cause chains, `source`, `handled`, `fatal`, runtime version fields,
+OS/runtime fields, and the hashed `projectId` when known. Stack frames may
+include local file paths and the local username when those appear in paths.
+
+`$exception` events must never intentionally include secrets, credentials,
+database URLs, auth headers, raw argv, raw environment values, SQL text,
+schema/table/column names as explicit properties, customer row data, user prompt
+text, or raw MCP arguments. Reporters must redact call-site-provided secret
+snapshots and common static credential patterns before the SDK serializes the
+exception.
 
 ## Documentation and Specs
 

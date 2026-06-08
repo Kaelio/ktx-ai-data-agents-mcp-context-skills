@@ -78,6 +78,7 @@ export interface KtxIngestDeps {
   readReportFile?: typeof readIngestReportSnapshotFile;
   renderStoredMemoryFlow?: typeof renderMemoryFlowTui;
   startLiveMemoryFlow?: typeof startLiveMemoryFlowTui;
+  abortSignal?: AbortSignal;
   env?: NodeJS.ProcessEnv;
  localIngestOptions?: Pick<
    RunLocalIngestOptions,
@@ -91,6 +92,23 @@ export interface KtxIngestDeps {
   >;
   progress?: (update: KtxIngestProgressUpdate) => void;
   runtimeIo?: KtxIngestIo;
+}
+
+function createCliAbortSignal(): { signal: AbortSignal; dispose: () => void } {
+  const controller = new AbortController();
+  let interrupted = false;
+  const onSigint = () => {
+    if (interrupted) {
+      process.exit(130);
+    }
+    interrupted = true;
+    controller.abort(new DOMException('Aborted', 'AbortError'));
+  };
+  process.on('SIGINT', onSigint);
+  return {
+    signal: controller.signal,
+    dispose: () => process.off('SIGINT', onSigint),
+  };
 }
 
 const REPORT_SOURCE_LABELS = new Map<string, string>([
@@ -363,6 +381,12 @@ function plainIngestEventProgress(
         percent: event.percent,
         message: event.message,
         ...(event.transient !== undefined ? { transient: event.transient } : {}),
+      };
+    case 'rate_limit_wait':
+      return {
+        percent: 50,
+        message: `Rate-limited (${event.provider}${event.rateLimitType ? ` ${event.rateLimitType}` : ''}); resuming in ${Math.ceil(event.remainingMs / 1_000)}s`,
+        transient: true,
       };
     case 'work_unit_started': {
       const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
@@ -750,6 +774,8 @@ export async function runKtxIngest(
               );
         plainProgress?.start();
         structuredProgress?.start();
+        const cliAbort = deps.abortSignal ? null : createCliAbortSignal();
+        const abortSignal = deps.abortSignal ?? cliAbort?.signal;
         let result: LocalMetabaseFanoutResult;
         try {
           result = await executeMetabaseFanout({
@@ -763,6 +789,7 @@ export async function runKtxIngest(
             embeddingProvider,
             ...(memoryFlow ? { memoryFlow } : {}),
             ...(progress ? { progress } : {}),
+            ...(abortSignal ? { abortSignal } : {}),
           });
           plainProgress?.flush();
           if (args.outputMode === 'json') {
@@ -772,6 +799,7 @@ export async function runKtxIngest(
           }
         } finally {
           plainProgress?.flush();
+          cliAbort?.dispose();
         }
         return result.status === 'all_failed' ? 1 : 0;
       }
@@ -820,6 +848,8 @@ export async function runKtxIngest(
 
       plainProgress?.start();
       structuredProgress?.start();
+      const cliAbort = deps.abortSignal ? null : createCliAbortSignal();
+      const abortSignal = deps.abortSignal ?? cliAbort?.signal;
 
       try {
         const result = await executeLocalIngest({
@@ -836,6 +866,7 @@ export async function runKtxIngest(
           embeddingProvider,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),
           ...(memoryFlow ? { memoryFlow } : {}),
+          ...(abortSignal ? { abortSignal } : {}),
         });
         if (shouldUseLiveViz && memoryFlow) {
           latestMemoryFlowSnapshot = finalRunMemoryFlowInput(memoryFlow.snapshot(), result.report);
@@ -854,6 +885,7 @@ export async function runKtxIngest(
       } finally {
         plainProgress?.flush();
         liveTui?.close();
+        cliAbort?.dispose();
       }
     }
 

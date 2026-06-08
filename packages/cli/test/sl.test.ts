@@ -1,11 +1,18 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import Database from 'better-sqlite3';
+import { parseKtxProjectConfig, serializeKtxProjectConfig } from '../src/context/project/config.js';
 import { initKtxProject } from '../src/context/project/project.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSl } from '../src/sl.js';
+
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
 
 const ORDERS_YAML = [
   'name: orders',
@@ -61,6 +68,7 @@ describe('runKtxSl', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-sl-'));
+    reportExceptionMock.mockClear();
   });
 
   afterEach(async () => {
@@ -351,6 +359,12 @@ describe('runKtxSl', () => {
 
     expect(validateIo.stdout()).toBe('');
     expect(validateIo.stderr()).toBe('Semantic-layer source "missing_orders" was not found\n');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'sl validate', handled: true, fatal: false }),
+        projectDir,
+      }),
+    );
   });
 
   it('keeps scoped validation not-found wording', async () => {
@@ -550,6 +564,53 @@ joins: []
 
     expect(stdout.write).toHaveBeenCalledWith('select count(*) as order_count from public.orders\n');
     expect(stderr.write).not.toHaveBeenCalled();
+  });
+
+  it('reports sl query exceptions at the query catch boundary', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sl-anthropic-secret'); // pragma: allowlist secret
+    const projectDir = join(tempDir, 'missing-query-input');
+    await seedSlSource({ projectDir });
+    const config = parseKtxProjectConfig(await readFile(join(projectDir, 'ktx.yaml'), 'utf-8'));
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      serializeKtxProjectConfig({
+        ...config,
+        llm: {
+          ...config.llm,
+          provider: {
+            backend: 'anthropic',
+            anthropic: { api_key: 'env:ANTHROPIC_API_KEY' }, // pragma: allowlist secret
+          },
+          models: { default: 'claude-sonnet-4-6' },
+        },
+      }),
+      'utf-8',
+    );
+    const io = makeIo();
+
+    await expect(
+      runKtxSl(
+        {
+          command: 'query',
+          projectDir,
+          connectionId: 'warehouse',
+          format: 'json',
+          execute: false,
+          cliVersion: '0.2.0',
+          runtimeInstallPolicy: 'auto',
+        },
+        io.io,
+      ),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('sl query requires query input');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'sl query', handled: true, fatal: false }),
+        projectDir,
+        redactionSecrets: expect.arrayContaining(['sl-anthropic-secret']),
+      }),
+    );
   });
 
   it('emits debug telemetry for sl query without project paths', async () => {

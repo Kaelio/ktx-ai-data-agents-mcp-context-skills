@@ -85,7 +85,7 @@ test("product mechanics component explains ingestion outputs", async () => {
     "compile into SQL",
     '"use client"',
     "@xyflow/react",
-    "<ReactFlow",
+    "<FlowCanvas",
     "getSmoothStepPath",
     "animateMotion",
     "mechanics-particle",
@@ -97,21 +97,21 @@ test("product mechanics component explains ingestion outputs", async () => {
     );
   }
 
-  assert.match(
-    component,
+  // The ReactFlow canvas config lives in the shared FlowCanvas wrapper, which
+  // product-mechanics renders. Assert the static read-only behavior there.
+  const flowCanvas = await readDocsFile("components/flow-canvas.tsx");
+  for (const guard of [
     /nodesDraggable=\{false\}/,
-    "ReactFlow canvas should disable node dragging",
-  );
-  assert.match(
-    component,
-    /panOnDrag=\{false\}/,
-    "ReactFlow canvas should disable panning",
-  );
-  assert.match(
-    component,
+    /nodesConnectable=\{false\}/,
     /zoomOnScroll=\{false\}/,
-    "ReactFlow canvas should disable scroll zoom",
-  );
+    /elementsSelectable=\{false\}/,
+  ]) {
+    assert.match(
+      flowCanvas,
+      guard,
+      `shared FlowCanvas should enforce static read-only behavior: ${guard}`,
+    );
+  }
 
   assert.doesNotMatch(component, /raw-sources/);
   assert.doesNotMatch(component, /\.ktx/);

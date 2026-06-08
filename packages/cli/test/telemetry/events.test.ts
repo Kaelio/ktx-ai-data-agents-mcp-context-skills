@@ -37,6 +37,7 @@ describe('telemetry event schemas', () => {
       'daemon_stopped',
       'sl_plan_completed',
       'sql_gen_completed',
+      'query_history_filter_completed',
     ]);
   });
 

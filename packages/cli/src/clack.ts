@@ -3,6 +3,30 @@ import type { KtxCliIo } from './cli-runtime.js';
 
 const ESC = String.fromCharCode(0x1b);
 
+export interface CliStyleEnv {
+  NO_COLOR?: string;
+  TERM?: string;
+}
+
+function ansiEnabled(env: CliStyleEnv = process.env): boolean {
+  return !env.NO_COLOR && env.TERM !== 'dumb';
+}
+
+function ansiColor(text: string, open: number, close: number, env?: CliStyleEnv): string {
+  if (!ansiEnabled(env)) {
+    return text;
+  }
+  return `${ESC}[${open}m${text}${ESC}[${close}m`;
+}
+
+export function dim(text: string, env?: CliStyleEnv): string {
+  return ansiColor(text, 2, 22, env);
+}
+
+export function cyan(text: string, env?: CliStyleEnv): string {
+  return ansiColor(text, 36, 39, env);
+}
+
 export interface RailBufferedSource {
   stdoutText(): string;
   stderrText(): string;
@@ -61,11 +85,11 @@ export function createClackSpinner(): KtxCliSpinner {
 }
 
 function magenta(text: string): string {
-  return `${ESC}[35m${text}${ESC}[39m`;
+  return ansiColor(text, 35, 39);
 }
 
 function red(text: string): string {
-  return `${ESC}[31m${text}${ESC}[39m`;
+  return ansiColor(text, 31, 39);
 }
 
 export function createStaticCliSpinner(io: KtxCliSpinnerIo): KtxCliSpinner {

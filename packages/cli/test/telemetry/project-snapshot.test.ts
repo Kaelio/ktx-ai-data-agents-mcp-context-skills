@@ -34,6 +34,17 @@ describe('buildProjectStackSnapshotFields', () => {
           adapters: [],
           embeddings: { backend: 'sentence-transformers', dimensions: 384 },
           workUnits: { stepBudget: 40, maxConcurrency: 1, failureMode: 'continue' },
+          rateLimit: {
+            enabled: true,
+            throttleThreshold: 0.8,
+            minConcurrencyUnderPressure: 1,
+            retry: {
+              maxAttempts: 6,
+              baseDelayMs: 1_000,
+              maxDelayMs: 60_000,
+              jitter: true,
+            },
+          },
           profile: false,
         },
         llm: { provider: { backend: 'none' }, models: {}, promptCaching: {} },

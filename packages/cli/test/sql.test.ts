@@ -8,6 +8,12 @@ import type { SqlAnalysisPort } from '../src/context/sql-analysis/ports.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runKtxSql } from '../src/sql.js';
 
+const reportExceptionMock = vi.hoisted(() => vi.fn(async () => {}));
+
+vi.mock('../src/telemetry/exception.js', () => ({
+  reportException: reportExceptionMock,
+}));
+
 function makeIo(options: { isTTY?: boolean } = {}) {
   let stdout = '';
   let stderr = '';
@@ -76,6 +82,7 @@ describe('runKtxSql', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ktx-cli-sql-'));
+    reportExceptionMock.mockClear();
   });
 
   afterEach(async () => {
@@ -236,9 +243,10 @@ describe('runKtxSql', () => {
   });
 
   it('rejects non-read-only SQL before executing connector SQL', async () => {
+    vi.stubEnv('SQL_DB_PASSWORD', 'sql-db-password'); // pragma: allowlist secret
     const projectDir = join(tempDir, 'project');
     await initKtxProject({ projectDir });
-    await writeConnections(projectDir, { warehouse: { driver: 'sqlite', path: 'warehouse.db' } });
+    await writeConnections(projectDir, { warehouse: { driver: 'postgres', password: 'env:SQL_DB_PASSWORD' } }); // pragma: allowlist secret
     const connector = makeConnector();
     const io = makeIo();
 
@@ -265,6 +273,13 @@ describe('runKtxSql', () => {
     expect(connector.executeReadOnly).not.toHaveBeenCalled();
     expect(connector.cleanup).not.toHaveBeenCalled();
     expect(io.stderr()).toContain('SQL contains read/write operation: Delete');
+    expect(reportExceptionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ source: 'sql run', handled: true, fatal: false }),
+        projectDir,
+        redactionSecrets: expect.arrayContaining(['sql-db-password']),
+      }),
+    );
   });
 
   it('rejects missing connections', async () => {

@@ -146,6 +146,29 @@ describe('memory-flow schemas', () => {
     expect(parsed.events).toContainEqual({ type: 'stage_skipped', stage: 'actions', reason: 'requires LLM' });
   });
 
+  it('accepts rate-limit wait replay events', () => {
+    expect(
+      memoryFlowReplayInputSchema.parse({
+        ...snapshot(),
+        events: [
+          {
+            type: 'rate_limit_wait',
+            provider: 'claude-subscription',
+            rateLimitType: 'five_hour',
+            resumeAtMs: 2_000,
+            remainingMs: 1_000,
+          },
+        ],
+      }).events[0],
+    ).toEqual({
+      type: 'rate_limit_wait',
+      provider: 'claude-subscription',
+      rateLimitType: 'five_hour',
+      resumeAtMs: 2_000,
+      remainingMs: 1_000,
+    });
+  });
+
   it('parses snapshot and closed stream events', () => {
     expect(memoryFlowStreamEventSchema.parse({ type: 'snapshot', snapshot: snapshot({ status: 'done' }) })).toEqual({
       type: 'snapshot',

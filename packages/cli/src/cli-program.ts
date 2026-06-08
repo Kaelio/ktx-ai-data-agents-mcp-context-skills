@@ -16,6 +16,7 @@ import { renderMissingProjectMessage } from './doctor.js';
 import { findNearestKtxProjectDir, resolveKtxProjectDir } from './project-resolver.js';
 import { profileMark, profileSpan } from './startup-profile.js';
 import type { CommandOutcome } from './telemetry/index.js';
+import { prepareUpdateCheckNotice, type PrepareUpdateCheckNoticeOptions } from './update-check/update-check.js';
 
 profileMark('module:cli-program');
 
@@ -39,6 +40,8 @@ interface KtxCommanderProgramOptions {
   runInit: (args: { projectDir: string; force: boolean }, io: KtxCliIo) => Promise<number>;
 }
 
+type KtxCliUpdateCheckOptions = Pick<PrepareUpdateCheckNoticeOptions, 'env' | 'fetchDistTags' | 'homeDir' | 'now'>;
+
 export interface BuildKtxProgramOptions {
   io: KtxCliIo;
   deps: KtxCliDeps;
@@ -47,6 +50,7 @@ export interface BuildKtxProgramOptions {
   setExitCode?: (code: number) => void;
   argv?: string[];
   setTelemetryModule?: (telemetry: typeof import('./telemetry/index.js')) => void;
+  updateCheck?: KtxCliUpdateCheckOptions;
 }
 
 type CommanderExitLike = { exitCode: number; code: string; message: string };
@@ -431,16 +435,29 @@ export function collectCommandFlagsPresent(command: CommandUnknownOpts): Record<
 
 export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
   const program = createBaseProgram(options.packageInfo, options.io);
+  let pendingUpdateNotice: string | null = null;
+
   program.hook('preAction', async (_thisCommand, actionCommand) => {
     // The hidden completion command must stay silent and side-effect free: skip
-    // the telemetry notice, command span, and project checks entirely.
+    // the telemetry notice, command span, project checks, and update checks entirely.
     if (commandPath(actionCommand as CommandPathNode).includes('__complete')) {
       return;
     }
+    const commandNode = actionCommand as CommandPathNode;
+    const updateCheck = await prepareUpdateCheckNotice({
+      io: options.io,
+      env: options.updateCheck?.env,
+      fetchDistTags: options.updateCheck?.fetchDistTags,
+      homeDir: options.updateCheck?.homeDir,
+      installedVersion: options.packageInfo.version,
+      now: options.updateCheck?.now,
+      commandOptions: commandOptions(commandNode),
+    });
+    pendingUpdateNotice = updateCheck.notice;
+
     const telemetry = await import('./telemetry/index.js');
     options.setTelemetryModule?.(telemetry);
     await telemetry.showTelemetryNoticeIfNeeded(options.io, options.packageInfo);
-    const commandNode = actionCommand as CommandPathNode;
     const path = commandPath(commandNode);
     const projectDir = resolveCommandProjectDir(commandNode);
     const hasProject = ktxYamlExists(projectDir);
@@ -455,6 +472,13 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
     });
     writeProjectDir(options.io, commandNode);
     ensureProjectAvailable(options.io, commandNode);
+  });
+
+  program.hook('postAction', () => {
+    if (pendingUpdateNotice) {
+      options.io.stderr.write(pendingUpdateNotice);
+      pendingUpdateNotice = null;
+    }
   });
 
   const context: KtxCliCommandContext = {
@@ -529,6 +553,13 @@ export async function runCommanderKtxCli(
       try {
         return await runBareInteractiveCommand(program, io, context);
       } catch (error) {
+        const telemetry = await import('./telemetry/index.js');
+        await telemetry.reportException({
+          error,
+          context: { source: 'bare-interactive', handled: true, fatal: false },
+          packageInfo: info,
+          io,
+        });
         io.stderr.write(`${formatCliError(error)}\n`);
         return 1;
       }
@@ -563,6 +594,23 @@ export async function runCommanderKtxCli(
         outcome: commandOutcomeForParseResult(parseError, exitCode),
         error: parseError,
       });
+      if (
+        parseError &&
+        !isCommanderExit(parseError) &&
+        !isKtxProjectMissingAbortError(parseError)
+      ) {
+        await telemetryModule.reportException({
+          error: parseError,
+          context: {
+            source: completed?.commandPath.join(' ') ?? 'commander parseAsync',
+            handled: true,
+            fatal: false,
+          },
+          projectDir: completed?.projectGroupAttached ? completed.projectDir : undefined,
+          packageInfo: info,
+          io,
+        });
+      }
       await telemetryModule.emitCompletedCommand({ completed, packageInfo: info, io });
       await telemetryModule.shutdownTelemetryEmitter();
     }

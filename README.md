@@ -13,7 +13,7 @@
   <a href="https://docs.kaelio.com/ktx/docs/"><img src="https://img.shields.io/badge/docs-ktx-22c55e?style=flat-square" alt="Documentation" /></a>
   <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><img src="https://img.shields.io/badge/slack-join%20community-4A154B?style=flat-square&logo=slack&logoColor=white" alt="Join the ktx Slack community" /></a>
   <a href="https://github.com/Kaelio/ktx/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License" /></a>
-  <a href="https://www.ycombinator.com/companies?batch=P25"><img src="https://img.shields.io/badge/Y%20Combinator-P25-orange?style=flat-square" alt="Y Combinator P25" /></a>
+  <a href="https://www.ycombinator.com/companies/kaelio"><img src="https://img.shields.io/badge/Y%20Combinator-P25-orange?style=flat-square" alt="Y Combinator P25" /></a>
 </p>
 
 <p align="center">
@@ -21,6 +21,10 @@
   <a href="https://docs.kaelio.com/ktx/docs/cli-reference/ktx"><b>CLI Reference</b></a> ·
   <a href="https://docs.kaelio.com/ktx/docs/ai-resources/agent-quickstart"><b>Agent Setup</b></a> ·
   <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><b>Slack</b></a>
+</p>
+
+<p align="center">
+  <sub>Built and maintained by <a href="https://www.kaelio.com"><b>Kaelio</b></a></sub>
 </p>
 
 ---
@@ -247,11 +251,17 @@ uv run pytest -q
 
 ## Telemetry
 
-**ktx** collects anonymous usage telemetry from interactive CLI runs to
-improve setup, command reliability, and data-agent workflows. No file paths,
-hostnames, SQL, schema names, error messages, or argv are recorded. See
-[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the
-event catalog and opt-out options.
+**ktx** collects privacy-conscious usage telemetry to understand installs and
+improve setup, command reliability, and data-agent workflows. Catalog telemetry
+events do not record file paths, hostnames, SQL, schema names, table names,
+column names, error messages, raw environment values, or argv. Error reports use
+PostHog Error Tracking and can include stack frames and raw error messages,
+which may contain local file paths or the local username in those paths.
+**ktx** redacts secrets, credentials, database URLs, auth headers, argv, raw
+environment values, SQL text, row data, and user-typed prompt or MCP argument
+text from the explicit `$exception` payload. See
+[Telemetry](https://docs.kaelio.com/ktx/docs/community/telemetry) for the event
+catalog and opt-out options.
 
 ## License
 

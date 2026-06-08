@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, Response
 
 from ktx_daemon import VERSION
 from ktx_daemon.code_execution import (
@@ -65,9 +65,11 @@ from ktx_daemon.table_identifier import (
     ParseTableIdentifierBatchResponse,
     parse_table_identifier_response,
 )
-from ktx_daemon.telemetry import track_telemetry_event
+from ktx_daemon.telemetry import report_exception, track_telemetry_event
+from ktx_daemon.telemetry.daemon_lifecycle import emit_daemon_stopped_once
 
 logger = logging.getLogger(__name__)
+CREDENTIAL_KEYS = {"url", "password", "token", "api_key", "apikey", "auth_header"}
 
 
 class NumpyORJSONResponse(Response):
@@ -75,6 +77,36 @@ class NumpyORJSONResponse(Response):
 
     def render(self, content: Any) -> bytes:
         return dumps_numpy_json(content)
+
+
+def _route_source(request: Request) -> str:
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if isinstance(path, str) and path:
+        return f"app:{path}"
+    return f"app:{request.url.path}"
+
+
+def _secret_snapshot_from_payload(value: Any) -> list[str]:
+    secrets: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized_key = str(key).lower()
+            if normalized_key in CREDENTIAL_KEYS and isinstance(child, str) and child:
+                secrets.append(child)
+            secrets.extend(_secret_snapshot_from_payload(child))
+    elif isinstance(value, list):
+        for child in value:
+            secrets.extend(_secret_snapshot_from_payload(child))
+    return secrets
+
+
+async def _request_secret_snapshot(request: Request) -> list[str]:
+    try:
+        payload = await request.json()
+    except Exception:
+        return []
+    return _secret_snapshot_from_payload(payload)
 
 
 def create_app(
@@ -104,12 +136,9 @@ def create_app(
         try:
             yield
         finally:
-            track_telemetry_event(
-                "daemon_stopped",
-                {
-                    "reason": "request",
-                    "uptimeMs": max(0, (clock() - started_at) * 1000),
-                },
+            emit_daemon_stopped_once(
+                reason="request",
+                uptime_ms=max(0, (clock() - started_at) * 1000),
             )
 
     app = FastAPI(
@@ -118,6 +147,25 @@ def create_app(
         version=VERSION,
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def report_unhandled_exceptions(request: Request, call_next):
+        redaction_secrets = await _request_secret_snapshot(request)
+        try:
+            return await call_next(request)
+        except Exception as error:
+            logger.exception("Unhandled daemon request failed: %s", error)
+            report_exception(
+                error,
+                source=_route_source(request),
+                handled=True,
+                fatal=False,
+                redaction_secrets=redaction_secrets,
+            )
+            return JSONResponse(
+                status_code=500,
+                content={"detail": f"Daemon request failed: {error}"},
+            )
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -137,12 +185,6 @@ def create_app(
         except ValueError as error:
             logger.warning("Database introspection rejected: %s", error)
             raise HTTPException(status_code=400, detail=str(error)) from error
-        except Exception as error:
-            logger.exception("Database introspection failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database introspection failed: {error}",
-            ) from error
 
     @app.post("/embeddings/compute", response_model=ComputeEmbeddingResponse)
     async def embedding_compute(
@@ -156,12 +198,6 @@ def create_app(
         except ValueError as error:
             logger.warning("Embedding compute rejected: %s", error)
             raise HTTPException(status_code=400, detail=str(error)) from error
-        except Exception as error:
-            logger.exception("Embedding compute failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Embedding compute failed: {error}",
-            ) from error
 
     @app.post(
         "/embeddings/compute-bulk",
@@ -178,12 +214,6 @@ def create_app(
         except ValueError as error:
             logger.warning("Bulk embedding compute rejected: %s", error)
             raise HTTPException(status_code=400, detail=str(error)) from error
-        except Exception as error:
-            logger.exception("Bulk embedding compute failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Bulk embedding compute failed: {error}",
-            ) from error
 
     if enable_code_execution:
 
@@ -193,29 +223,15 @@ def create_app(
             response_class=NumpyORJSONResponse,
         )
         async def code_execute(request: ExecuteCodeRequest) -> ExecuteCodeResponse:
-            try:
-                return execute_code_response(
-                    request,
-                    nest_api_url=None,
-                    auth_header=None,
-                )
-            except Exception as error:
-                logger.exception("Code execution failed: %s", error)
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Code execution failed: {error}",
-                ) from error
+            return execute_code_response(
+                request,
+                nest_api_url=None,
+                auth_header=None,
+            )
 
     @app.post("/lookml/parse", response_model=ParseLookMLResponse)
     async def lookml_parse(request: ParseLookMLRequest) -> ParseLookMLResponse:
-        try:
-            return parse_lookml_project(request)
-        except Exception as error:
-            logger.exception("LookML parsing failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"LookML parsing failed: {error}",
-            ) from error
+        return parse_lookml_project(request)
 
     @app.post(
         "/sql/parse-table-identifier",
@@ -224,40 +240,19 @@ def create_app(
     async def sql_parse_table_identifier(
         request: ParseTableIdentifierBatchRequest,
     ) -> ParseTableIdentifierBatchResponse:
-        try:
-            return parse_table_identifier_response(request)
-        except Exception as error:
-            logger.exception("Table identifier parsing failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Table identifier parsing failed: {error}",
-            ) from error
+        return parse_table_identifier_response(request)
 
     @app.post("/sql/validate-read-only", response_model=ValidateReadOnlySqlResponse)
     async def sql_validate_read_only(
         request: ValidateReadOnlySqlRequest,
     ) -> ValidateReadOnlySqlResponse:
-        try:
-            return validate_read_only_sql_response(request)
-        except Exception as error:
-            logger.exception("SQL read-only validation failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"SQL read-only validation failed: {error}",
-            ) from error
+        return validate_read_only_sql_response(request)
 
     @app.post("/sql/analyze-batch", response_model=AnalyzeSqlBatchResponse)
     async def sql_analyze_batch(
         request: AnalyzeSqlBatchRequest,
     ) -> AnalyzeSqlBatchResponse:
-        try:
-            return analyze_sql_batch_response(request)
-        except Exception as error:
-            logger.exception("SQL batch analysis failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"SQL batch analysis failed: {error}",
-            ) from error
+        return analyze_sql_batch_response(request)
 
     @app.post(
         "/semantic-layer/generate-sources", response_model=GenerateSourcesResponse
@@ -265,14 +260,7 @@ def create_app(
     async def semantic_generate_sources(
         request: GenerateSourcesRequest,
     ) -> GenerateSourcesResponse:
-        try:
-            return generate_sources_response(request)
-        except Exception as error:
-            logger.exception("Semantic source generation failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Semantic source generation failed: {error}",
-            ) from error
+        return generate_sources_response(request)
 
     @app.post("/semantic-layer/query", response_model=SemanticLayerQueryResponse)
     async def semantic_query(
@@ -283,12 +271,6 @@ def create_app(
         except ValueError as error:
             logger.warning("Semantic query rejected: %s", error)
             raise HTTPException(status_code=400, detail=str(error)) from error
-        except Exception as error:
-            logger.exception("Semantic query failed: %s", error)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Semantic layer query failed: {error}",
-            ) from error
 
     @app.post("/semantic-layer/validate", response_model=ValidateSourcesResponse)
     async def semantic_validate(

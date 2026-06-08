@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../core/config.js';
+import { isAbortError, linkAbortSignal } from '../core/abort.js';
 import { isCompletedAgentStep, summarizeCodexExecEvents, type CodexExecEventSummary } from './codex-exec-events.js';
 import {
   startCodexRuntimeMcpServer,
@@ -8,6 +9,7 @@ import {
 import { resolveCodexModel } from './codex-models.js';
 import { buildCodexRuntimeConfig } from './codex-runtime-config.js';
 import { CodexSdkCliRunner, type CodexSdkRunner } from './codex-sdk-runner.js';
+import type { RateLimitGovernor } from './rate-limit-governor.js';
 import type {
   KtxGenerateObjectInput,
   KtxGenerateTextInput,
@@ -24,6 +26,7 @@ export interface CodexKtxLlmRuntimeDeps {
   runner?: CodexSdkRunner;
   startMcpServer?: (input: { projectDir: string; toolSet: KtxRuntimeToolSet }) => Promise<CodexRuntimeMcpServerHandle>;
   logger?: KtxLogger;
+  rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
 function modelForRole(modelSlots: CodexKtxLlmRuntimeDeps['modelSlots'], role: string): string {
@@ -159,6 +162,12 @@ function runtimeToolNames(toolSet: KtxRuntimeToolSet | undefined): string[] {
   return Object.values(toolSet ?? {}).map((descriptor) => descriptor.name);
 }
 
+const CODEX_RATE_LIMIT_MARKERS = /\b429\b|rate limit|too many requests|quota exceeded|temporarily overloaded/i;
+
+function isCodexRateLimitError(error: Error | undefined): boolean {
+  return !!error && CODEX_RATE_LIMIT_MARKERS.test(error.message);
+}
+
 export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
   private readonly runner: CodexSdkRunner;
   private readonly logger: KtxLogger;
@@ -166,6 +175,37 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
   constructor(private readonly deps: CodexKtxLlmRuntimeDeps) {
     this.runner = deps.runner ?? new CodexSdkCliRunner();
     this.logger = deps.logger ?? noopLogger;
+  }
+
+  private async runWithRateLimitRetry<T>(
+    abortSignal: AbortSignal | undefined,
+    run: () => Promise<T>,
+    getError: (result: T) => Error | undefined,
+  ): Promise<T> {
+    // maxRetryAttempts() returns 1 when no governor is present or pacing is
+    // disabled, so an opaque rate-limit failure surfaces on the first attempt
+    // instead of being retried with no backoff.
+    const maxAttempts = this.deps.rateLimitGovernor?.maxRetryAttempts() ?? 1;
+    for (let attempt = 0; ; attempt += 1) {
+      await this.deps.rateLimitGovernor?.waitForReady(abortSignal);
+      const lastAttempt = attempt >= maxAttempts - 1;
+      try {
+        const result = await run();
+        const error = getError(result);
+        if (!isCodexRateLimitError(error) || lastAttempt) {
+          return result;
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+        const err = error instanceof Error ? error : new Error(String(error));
+        if (!isCodexRateLimitError(err) || lastAttempt) {
+          throw error;
+        }
+      }
+      this.deps.rateLimitGovernor?.report({ provider: 'codex', status: 'rejected', rateLimitType: 'opaque' });
+    }
   }
 
   async generateText(input: KtxGenerateTextInput): Promise<string> {
@@ -190,18 +230,26 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const collected = await collectEvents(
-        await this.runner.runStreamed({
-          projectDir: this.deps.projectDir,
-          model,
-          prompt: promptWithSystem(input.system, input.prompt),
-          configOverrides: config.configOverrides,
-          env: config.env,
-        }),
+      const result = await this.runWithRateLimitRetry(
+        input.abortSignal,
+        async () => {
+          const collected = await collectEvents(
+            await this.runner.runStreamed({
+              projectDir: this.deps.projectDir,
+              model,
+              prompt: promptWithSystem(input.system, input.prompt),
+              configOverrides: config.configOverrides,
+              env: config.env,
+              ...(input.abortSignal ? { signal: input.abortSignal } : {}),
+            }),
+          );
+          const summary = summarizeCodexExecEvents(collected.events, { startedAt });
+          return { collected, summary };
+        },
+        ({ collected, summary }) => summaryError(summary, collected.streamError),
       );
-      const summary = summarizeCodexExecEvents(collected.events, { startedAt });
-      input.onMetrics?.(metrics(summary, startedAt));
-      return assertSuccessfulText(summary, collected.streamError);
+      input.onMetrics?.(metrics(result.summary, startedAt));
+      return assertSuccessfulText(result.summary, result.collected.streamError);
     } finally {
       await mcp?.close();
     }
@@ -231,19 +279,27 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const collected = await collectEvents(
-        await this.runner.runStreamed({
-          projectDir: this.deps.projectDir,
-          model,
-          prompt: promptWithSystem(input.system, input.prompt),
-          configOverrides: config.configOverrides,
-          env: config.env,
-          outputSchema: z.toJSONSchema(input.schema, { target: 'draft-7' }) as Record<string, unknown>,
-        }),
+      const result = await this.runWithRateLimitRetry(
+        input.abortSignal,
+        async () => {
+          const collected = await collectEvents(
+            await this.runner.runStreamed({
+              projectDir: this.deps.projectDir,
+              model,
+              prompt: promptWithSystem(input.system, input.prompt),
+              configOverrides: config.configOverrides,
+              env: config.env,
+              outputSchema: z.toJSONSchema(input.schema, { target: 'draft-7' }) as Record<string, unknown>,
+              ...(input.abortSignal ? { signal: input.abortSignal } : {}),
+            }),
+          );
+          const summary = summarizeCodexExecEvents(collected.events, { startedAt });
+          return { collected, summary };
+        },
+        ({ collected, summary }) => summaryError(summary, collected.streamError),
       );
-      const summary = summarizeCodexExecEvents(collected.events, { startedAt });
-      input.onMetrics?.(metrics(summary, startedAt));
-      return parseStructuredOutput(input.schema, assertSuccessfulText(summary, collected.streamError));
+      input.onMetrics?.(metrics(result.summary, startedAt));
+      return parseStructuredOutput(input.schema, assertSuccessfulText(result.summary, result.collected.streamError));
     } finally {
       await mcp?.close();
     }
@@ -272,7 +328,6 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const abortController = new AbortController();
       const onStep = async (stepIndex: number): Promise<void> => {
         try {
           await params.onStepFinish?.({ stepIndex, stepBudget: params.stepBudget });
@@ -282,31 +337,50 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
           );
         }
       };
-      const collected = await collectEvents(
-        await this.runner.runStreamed({
-          projectDir: this.deps.projectDir,
-          model,
-          prompt: promptWithSystem(params.systemPrompt, params.userPrompt),
-          configOverrides: config.configOverrides,
-          env: config.env,
-          signal: abortController.signal,
-        }),
-        { stepBudget: params.stepBudget, abortController, onStep },
+      const result = await this.runWithRateLimitRetry(
+        params.abortSignal,
+        async () => {
+          const linked = linkAbortSignal(params.abortSignal);
+          const abortController = linked.controller;
+          try {
+            const collected = await collectEvents(
+              await this.runner.runStreamed({
+                projectDir: this.deps.projectDir,
+                model,
+                prompt: promptWithSystem(params.systemPrompt, params.userPrompt),
+                configOverrides: config.configOverrides,
+                env: config.env,
+                signal: abortController.signal,
+              }),
+              { stepBudget: params.stepBudget, abortController, onStep },
+            );
+            const summary = summarizeCodexExecEvents(collected.events, { startedAt });
+            return { collected, summary };
+          } finally {
+            linked.dispose();
+          }
+        },
+        ({ collected, summary }) => summaryError(summary, collected.streamError),
       );
-      const summary = summarizeCodexExecEvents(collected.events, { startedAt });
-      const error = summaryError(summary, collected.streamError);
-      const stopReason = collected.budgetExceeded ? 'budget' : error ? 'error' : summary.stopReason;
+      const error = summaryError(result.summary, result.collected.streamError);
+      if (isAbortError(error)) {
+        throw error;
+      }
+      const stopReason = result.collected.budgetExceeded ? 'budget' : error ? 'error' : result.summary.stopReason;
       return {
         stopReason,
         ...(stopReason === 'error' && error ? { error } : {}),
         metrics: {
           totalMs: Date.now() - startedAt,
-          usage: summary.usage,
-          stepCount: summary.stepCount,
-          stepBoundariesMs: summary.stepBoundariesMs,
+          usage: result.summary.usage,
+          stepCount: result.summary.stepCount,
+          stepBoundariesMs: result.summary.stepBoundariesMs,
         },
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       return {
         stopReason: 'error',

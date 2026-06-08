@@ -23,6 +23,7 @@ export interface QueryHistoryFilterProposal {
   consideredRoleCount: number;
   skipped: { reason: 'no-llm' | 'no-daemon' | 'no-in-scope-history' | 'user-block-present' } | null;
   warnings: string[];
+  parseFailedTemplateIds: string[];
 }
 
 export interface ProposeQueryHistoryServiceAccountFiltersInput {
@@ -74,7 +75,7 @@ const queryHistoryFilterAdjudicationSchema = z.object({
 type QueryHistoryFilterAdjudication = z.infer<typeof queryHistoryFilterAdjudicationSchema>;
 
 function emptyProposal(skipped: QueryHistoryFilterProposal['skipped'], warnings: string[] = []): QueryHistoryFilterProposal {
-  return { excludedRoles: [], consideredRoleCount: 0, skipped, warnings };
+  return { excludedRoles: [], consideredRoleCount: 0, skipped, warnings, parseFailedTemplateIds: [] };
 }
 
 function displayTableRef(ref: KtxTableRef): string {
@@ -180,6 +181,7 @@ export async function proposeQueryHistoryServiceAccountFilters(
   const windowDays = 'windowDays' in config ? config.windowDays : 90;
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const warnings: string[] = [];
+  const parseFailedTemplateIds: string[] = [];
   const snapshot: AggregatedTemplate[] = [];
 
   try {
@@ -212,7 +214,7 @@ export async function proposeQueryHistoryServiceAccountFilters(
   for (const template of snapshot) {
     const parsed = analysis.get(template.templateId);
     if (!parsed || parsed.error) {
-      warnings.push(`query_history_filter_picker_parse_failed:${template.templateId}`);
+      parseFailedTemplateIds.push(template.templateId);
       continue;
     }
     const tablesTouched = [...new Map(parsed.tablesTouched.map((ref) => [tableRefKey(ref), ref])).values()]
@@ -236,6 +238,7 @@ export async function proposeQueryHistoryServiceAccountFilters(
       consideredRoleCount: records.length,
       skipped: { reason: 'no-in-scope-history' },
       warnings,
+      parseFailedTemplateIds,
     };
   }
 
@@ -256,6 +259,7 @@ export async function proposeQueryHistoryServiceAccountFilters(
         ...warnings,
         `query_history_filter_picker_llm_failed:${error instanceof Error ? error.message : String(error)}`,
       ],
+      parseFailedTemplateIds,
     };
   }
 
@@ -274,5 +278,6 @@ export async function proposeQueryHistoryServiceAccountFilters(
     consideredRoleCount: records.length,
     skipped: input.userServiceAccountsPresent ? { reason: 'user-block-present' } : null,
     warnings,
+    parseFailedTemplateIds,
   };
 }

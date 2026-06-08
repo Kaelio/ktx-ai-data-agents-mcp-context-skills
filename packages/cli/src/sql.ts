@@ -7,7 +7,8 @@ import { createKtxCliScanConnector } from './local-scan-connectors.js';
 import { createManagedDaemonSqlAnalysisPort } from './managed-python-http.js';
 import { profileMark } from './startup-profile.js';
 import { isDemoConnection } from './telemetry/demo-detect.js';
-import { emitTelemetryEvent } from './telemetry/index.js';
+import { emitTelemetryEvent, reportException } from './telemetry/index.js';
+import { collectTelemetryRedactionSecrets } from './telemetry/redaction-secrets.js';
 import { scrubErrorClass } from './telemetry/scrubber.js';
 
 profileMark('module:sql');
@@ -142,8 +143,9 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
   const startedAt = performance.now();
   let driver = 'unknown';
   let demoConnection = false;
+  let project: KtxLocalProject | undefined;
   try {
-    const project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
+    project = await (deps.loadProject ?? loadKtxProject)({ projectDir: args.projectDir });
     const connection = project.config.connections[args.connectionId];
     if (!connection) {
       throw new Error(`Connection "${args.connectionId}" is not configured in ktx.yaml`);
@@ -171,7 +173,7 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
     const createScanConnector = deps.createScanConnector ?? createKtxCliScanConnector;
     let connector: KtxScanConnector | null = null;
     try {
-      connector = await createScanConnector(project as KtxLocalProject, args.connectionId);
+      connector = await createScanConnector(project, args.connectionId);
       if (!connector.capabilities.readOnlySql || !connector.executeReadOnly) {
         throw new Error(`Connection "${args.connectionId}" does not support read-only SQL execution.`);
       }
@@ -217,6 +219,20 @@ export async function runKtxSql(args: KtxSqlArgs, io: KtxCliIo = process, deps: 
         outcome: 'error',
         ...(errorClass ? { errorClass } : {}),
       },
+    });
+    await reportException({
+      error,
+      context: { source: 'sql run', handled: true, fatal: false },
+      projectDir: args.projectDir,
+      io,
+      redactionSecrets: await collectTelemetryRedactionSecrets({
+        project,
+        projectDir: args.projectDir,
+        connectionId: args.connectionId,
+        includeLlm: false,
+        includeEmbeddings: false,
+        env: process.env,
+      }),
     });
     io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;

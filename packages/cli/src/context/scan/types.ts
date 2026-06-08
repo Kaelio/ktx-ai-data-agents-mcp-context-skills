@@ -303,9 +303,29 @@ export interface KtxTableListEntry {
   kind: 'table' | 'view';
 }
 
-interface KtxConnectorTestResult {
+export interface KtxConnectorTestResult {
   success: boolean;
   error?: string;
+  /**
+   * The original error thrown by the driver, preserved unflattened so the
+   * connection-test path can re-throw it. Keeping the real error object lets
+   * telemetry record the driver's actual error class (e.g. `ConnectionError`)
+   * and `.code` (e.g. `ELOGIN`) instead of collapsing every failure to `Error`.
+   */
+  cause?: unknown;
+}
+
+/**
+ * Single source of truth for a failed connector test result. Captures the
+ * driver's message for display while preserving the original error as `cause`
+ * so callers can surface its real class and code.
+ */
+export function connectorTestFailure(error: unknown): KtxConnectorTestResult {
+  return {
+    success: false,
+    error: error instanceof Error ? error.message : String(error),
+    cause: error,
+  };
 }
 
 export interface KtxScanConnector {

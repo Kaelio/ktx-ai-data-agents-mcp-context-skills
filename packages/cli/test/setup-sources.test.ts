@@ -447,8 +447,8 @@ describe('setup sources step', () => {
     expect(testPrompts.select).toHaveBeenCalledWith({
       message: 'Which Notion pages should KTX ingest?',
       options: [
-        { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
         { value: 'all_accessible', label: 'All pages the integration can access' },
+        { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -891,8 +891,8 @@ describe('setup sources step', () => {
     expect(testPrompts.select).toHaveBeenCalledWith({
       message: 'This repo requires authentication.',
       options: [
-        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'paste', label: 'Paste a token and save it as a local secret file' },
+        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'skip', label: 'Skip — try without authentication' },
         { value: 'back', label: 'Back' },
       ],
@@ -1407,8 +1407,8 @@ describe('setup sources step', () => {
       message: 'How should KTX find your Notion integration token?',
       options: [
         { value: 'keep', label: 'Keep existing credential' },
-        { value: 'env', label: 'Use NOTION_TOKEN from the environment' },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'env', label: 'Use NOTION_TOKEN from the environment' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -1476,8 +1476,8 @@ describe('setup sources step', () => {
       message: 'How should KTX find your Metabase API key?',
       options: [
         { value: 'keep', label: 'Keep existing credential' },
-        { value: 'env', label: 'Use METABASE_API_KEY from the environment' },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+        { value: 'env', label: 'Use METABASE_API_KEY from the environment' },
         { value: 'back', label: 'Back' },
       ],
     });
@@ -1582,8 +1582,8 @@ describe('setup sources step', () => {
       message: 'This MetricFlow repo requires authentication.',
       options: [
         { value: 'keep', label: 'Keep existing credential' },
-        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'paste', label: 'Paste a token and save it as a local secret file' },
+        { value: 'env', label: 'Use GITHUB_TOKEN from the environment' },
         { value: 'skip', label: 'Skip — try without authentication' },
         { value: 'back', label: 'Back' },
       ],
@@ -1627,7 +1627,7 @@ describe('setup sources step', () => {
     expect(testPrompts.select).toHaveBeenCalledWith({
       message: '1 context source configured (dbt-main). Add another?',
       options: [
-        { value: 'done', label: 'Done — continue to context build' },
+        { value: 'done', label: 'Done adding context sources' },
         { value: 'edit', label: 'Edit an existing context source' },
         { value: 'add', label: 'Add another context source' },
       ],

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { KtxCliIo } from '../../src/cli-runtime.js';
+import { createGlobalExceptionReporter, type KtxCliIo } from '../../src/cli-runtime.js';
 import { beginCommandSpan, emitAbortedCommandAndShutdown, emitTelemetryEvent } from '../../src/telemetry/index.js';
 import { resetCommandSpan } from '../../src/telemetry/command-hook.js';
 
@@ -118,5 +118,38 @@ describe('emitAbortedCommandAndShutdown', () => {
     await emitAbortedCommandAndShutdown({ packageInfo: pkg, io: secondIo.io });
 
     expect(secondIo.stderr()).not.toContain('"event":"command"');
+  });
+});
+
+describe('global exception reporting contract', () => {
+  let homeDir: string;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(join(tmpdir(), 'ktx-telemetry-global-exception-'));
+    vi.stubEnv('HOME', homeDir);
+    vi.stubEnv('KTX_TELEMETRY_DEBUG', '1');
+    vi.stubEnv('KTX_TELEMETRY_DISABLED', '1');
+    vi.stubEnv('DO_NOT_TRACK', '');
+    vi.stubEnv('CI', '');
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
+  it('reports uncaughtException through the fatal debug payload', async () => {
+    const testIo = makeIo();
+    const report = createGlobalExceptionReporter(testIo.io, {
+      name: '@kaelio/ktx',
+      version: '0.0.0-test',
+    });
+
+    await report('uncaughtException', new Error('global boom'));
+
+    expect(testIo.stderr()).toContain('[telemetry-exception]');
+    expect(testIo.stderr()).toContain('"source":"uncaughtException"');
+    expect(testIo.stderr()).toContain('"handled":false');
+    expect(testIo.stderr()).toContain('"fatal":true');
   });
 });

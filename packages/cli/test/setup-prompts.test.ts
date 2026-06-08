@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
     autocomplete: vi.fn(),
     autocompleteMultiselect: vi.fn(),
     note: vi.fn(),
-    password: vi.fn(),
+    revealPassword: vi.fn(),
     select: vi.fn(),
     text: vi.fn(),
     withSetupInterruptConfirmation: vi.fn((prompt: () => Promise<unknown>) => prompt()),
@@ -34,9 +34,12 @@ vi.mock('@clack/prompts', () => ({
   autocomplete: mocks.autocomplete,
   autocompleteMultiselect: mocks.autocompleteMultiselect,
   note: mocks.note,
-  password: mocks.password,
   select: mocks.select,
   text: mocks.text,
+}));
+
+vi.mock('../src/reveal-password-prompt.js', () => ({
+  revealPassword: mocks.revealPassword,
 }));
 
 vi.mock('../src/setup-interrupt.js', () => ({
@@ -54,7 +57,7 @@ describe('setup prompt adapter', () => {
     mocks.autocomplete.mockReset();
     mocks.autocompleteMultiselect.mockReset();
     mocks.note.mockReset();
-    mocks.password.mockReset();
+    mocks.revealPassword.mockReset();
     mocks.select.mockReset();
     mocks.text.mockReset();
     mocks.withSetupInterruptConfirmation.mockClear();
@@ -96,7 +99,7 @@ describe('setup prompt adapter', () => {
 
   it('decorates text and password prompts with setup navigation copy', async () => {
     mocks.text.mockResolvedValueOnce('analytics-ktx');
-    mocks.password.mockResolvedValueOnce('secret');
+    mocks.revealPassword.mockResolvedValueOnce('secret');
     const adapter = createKtxSetupPromptAdapter({ selectCancelValue: 'back' });
 
     await expect(adapter.text({ message: 'Project folder path', placeholder: './analytics-ktx' })).resolves.toBe(
@@ -108,7 +111,7 @@ describe('setup prompt adapter', () => {
       message: 'Project folder path\n│  Press Escape to go back.\n│',
       placeholder: './analytics-ktx',
     });
-    expect(mocks.password).toHaveBeenCalledWith({
+    expect(mocks.revealPassword).toHaveBeenCalledWith({
       message: 'Anthropic API key\n│  Press Escape to go back.\n│',
     });
   });

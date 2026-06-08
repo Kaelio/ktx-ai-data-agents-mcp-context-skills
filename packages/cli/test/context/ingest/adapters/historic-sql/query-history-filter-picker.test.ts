@@ -64,6 +64,27 @@ function sqlAnalysis(tablesById: Record<string, Array<{ catalog: string | null; 
   };
 }
 
+function sqlAnalysisWithErrors(
+  tablesById: Record<string, Array<{ catalog: string | null; db: string | null; name: string }>>,
+  errorIds: string[],
+): SqlAnalysisPort {
+  const errors = new Set(errorIds);
+  return {
+    analyzeForFingerprint: vi.fn(),
+    analyzeBatch: vi.fn(async (items: SqlAnalysisBatchItem[]): Promise<Map<string, SqlAnalysisBatchResult>> =>
+      new Map<string, SqlAnalysisBatchResult>(
+        items.map((item) => [
+          item.id,
+          errors.has(item.id)
+            ? { tablesTouched: [], columnsByClause: {}, error: 'parse boom' }
+            : { tablesTouched: tablesById[item.id] ?? [], columnsByClause: {} },
+        ]),
+      ),
+    ),
+    validateReadOnly: vi.fn(async () => ({ ok: true })),
+  };
+}
+
 function llm(decisions: Array<{ role: string; exclude: boolean; reason: string }>): KtxLlmRuntimePort {
   const generateObject = vi.fn(async () => ({ roles: decisions })) as KtxLlmRuntimePort['generateObject'];
   return {
@@ -198,6 +219,7 @@ describe('query-history filter picker', () => {
       consideredRoleCount: 0,
       skipped: { reason: 'no-llm' },
       warnings: [],
+      parseFailedTemplateIds: [],
     });
   });
 
@@ -225,6 +247,32 @@ describe('query-history filter picker', () => {
     expect(runtime.generateObject).not.toHaveBeenCalled();
     expect(proposal.excludedRoles).toEqual([]);
     expect(proposal.skipped).toEqual({ reason: 'no-in-scope-history' });
+  });
+
+  it('records parse failures as template ids, not warnings', async () => {
+    const proposal = await proposeQueryHistoryServiceAccountFilters({
+      connectionId: 'warehouse',
+      dialect: 'postgres',
+      queryClient: {},
+      reader: reader(
+        aggregate({
+          templateId: 'good',
+          canonicalSql: 'select * from analytics.orders',
+          topUsers: [{ user: 'analyst', executions: 30 }],
+        }),
+        aggregate({
+          templateId: 'broken',
+          canonicalSql: 'select * from where',
+          topUsers: [{ user: 'analyst', executions: 5 }],
+        }),
+      ),
+      sqlAnalysis: sqlAnalysisWithErrors({ good: [{ catalog: null, db: 'analytics', name: 'orders' }] }, ['broken']),
+      llmRuntime: llm([]),
+      pullConfig: { dialect: 'postgres', enabledSchemas: ['analytics'], filters: { dropTrivialProbes: true } },
+    });
+
+    expect(proposal.parseFailedTemplateIds).toEqual(['broken']);
+    expect(proposal.warnings).toEqual([]);
   });
 
   it('keeps clean in-scope history when the model excludes nothing', async () => {

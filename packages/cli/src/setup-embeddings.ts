@@ -222,8 +222,8 @@ async function chooseCredentialRef(
   const choice = await prompts.select({
     message: `How should KTX find your ${embeddingBackendDisplayName(backend)} embedding API key?`,
     options: [
-      { value: 'env', label: `Use ${defaultEnv} from the environment` },
       { value: 'paste', label: 'Paste a key and save it as a local secret file' },
+      { value: 'env', label: `Use ${defaultEnv} from the environment` },
       { value: 'back', label: 'Back' },
     ],
   });
