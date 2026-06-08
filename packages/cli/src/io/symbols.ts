@@ -17,6 +17,8 @@ const unicode = detectUnicodeSupport();
 export const SYMBOLS = {
   middot: unicode ? '·' : '-',
   emDash: unicode ? '—' : '--',
+  star: unicode ? '★' : '*',
+  rightArrow: unicode ? '→' : '->',
 } as const;
 
 export function dim(text: string): string {
