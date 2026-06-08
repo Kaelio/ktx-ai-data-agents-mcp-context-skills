@@ -68,7 +68,6 @@ const connectionFixtures: Record<KtxConnectionDriver, FixtureFactory> = {
 
 const allowedScopeKeys = new Set(['dataset_ids', 'databases', 'schemas', 'schema_names']);
 const historicSqlReaderDrivers = new Set<KtxConnectionDriver>(['postgres', 'bigquery', 'snowflake']);
-const localExecutorDrivers = new Set<KtxConnectionDriver>(['postgres', 'sqlite']);
 
 function assertExportedRegistryBoundaryTypes(input: {
   scopeConfigKey: KtxScopeConfigKey;
@@ -140,6 +139,5 @@ describe('driverRegistrations', () => {
       expect(allowedScopeKeys.has(registration.scopeConfigKey ?? '')).toBe(true);
     }
     expect(registration.hasHistoricSqlReader).toBe(historicSqlReaderDrivers.has(registration.driver));
-    expect(registration.hasLocalQueryExecutor).toBe(localExecutorDrivers.has(registration.driver));
   });
 });

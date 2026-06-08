@@ -17,7 +17,6 @@ export interface KtxDriverRegistration {
   readonly driver: KtxConnectionDriver;
   readonly scopeConfigKey: KtxScopeConfigKey | null;
   readonly hasHistoricSqlReader: boolean;
-  readonly hasLocalQueryExecutor: boolean;
   load(): Promise<KtxDriverConnectorModule>;
 }
 
@@ -31,7 +30,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'bigquery',
     scopeConfigKey: 'dataset_ids',
     hasHistoricSqlReader: true,
-    hasLocalQueryExecutor: false,
     load: async () => {
       const m = await import('../../connectors/bigquery/connector.js');
       return {
@@ -53,7 +51,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'clickhouse',
     scopeConfigKey: 'databases',
     hasHistoricSqlReader: false,
-    hasLocalQueryExecutor: false,
     load: async () => {
       const m = await import('../../connectors/clickhouse/connector.js');
       return {
@@ -75,7 +72,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'mysql',
     scopeConfigKey: 'schemas',
     hasHistoricSqlReader: false,
-    hasLocalQueryExecutor: false,
     load: async () => {
       const m = await import('../../connectors/mysql/connector.js');
       return {
@@ -97,7 +93,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'postgres',
     scopeConfigKey: 'schemas',
     hasHistoricSqlReader: true,
-    hasLocalQueryExecutor: true,
     load: async () => {
       const m = await import('../../connectors/postgres/connector.js');
       return {
@@ -119,7 +114,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'sqlite',
     scopeConfigKey: null,
     hasHistoricSqlReader: false,
-    hasLocalQueryExecutor: true,
     load: async () => {
       const m = await import('../../connectors/sqlite/connector.js');
       return {
@@ -141,7 +135,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'snowflake',
     scopeConfigKey: 'schema_names',
     hasHistoricSqlReader: true,
-    hasLocalQueryExecutor: false,
     load: async () => {
       const m = await import('../../connectors/snowflake/connector.js');
       return {
@@ -163,7 +156,6 @@ export const driverRegistrations: Record<KtxConnectionDriver, KtxDriverRegistrat
     driver: 'sqlserver',
     scopeConfigKey: 'schemas',
     hasHistoricSqlReader: false,
-    hasLocalQueryExecutor: false,
     load: async () => {
       const m = await import('../../connectors/sqlserver/connector.js');
       return {

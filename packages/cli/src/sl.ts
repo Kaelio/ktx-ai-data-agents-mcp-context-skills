@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createDefaultLocalQueryExecutor } from './context/connections/local-query-executor.js';
 import type { KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
 import { KtxIngestEmbeddingPortAdapter } from './context/llm/embedding-port.js';
 import type { KtxEmbeddingPort } from './context/core/embedding.js';
@@ -20,6 +19,7 @@ import {
   resolveProjectEmbeddingProvider,
   type EmbeddingProviderResolution,
 } from './embedding-resolution.js';
+import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import type { PrintListColumn } from './io/print-list.js';
 import {
   createManagedPythonSemanticLayerComputePort,
@@ -81,7 +81,7 @@ interface KtxSlDeps {
     io: KtxSlIo;
     projectDir?: string;
   }) => Promise<KtxSemanticLayerComputePort>;
-  createQueryExecutor?: () => KtxSqlQueryExecutorPort;
+  createQueryExecutor?: (project: KtxLocalProject) => KtxSqlQueryExecutorPort;
 }
 
 function resolutionToEmbeddingPort(resolution: EmbeddingProviderResolution): KtxEmbeddingPort | null {
@@ -321,7 +321,7 @@ export async function runKtxSl(args: KtxSlArgs, io: KtxSlIo = process, deps: Ktx
             io,
             projectDir: args.projectDir,
           });
-      const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createDefaultLocalQueryExecutor)() : undefined;
+      const queryExecutor = args.execute ? (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(project) : undefined;
       const result = await compileLocalSlQuery(project, {
         connectionId: args.connectionId,
         query,
