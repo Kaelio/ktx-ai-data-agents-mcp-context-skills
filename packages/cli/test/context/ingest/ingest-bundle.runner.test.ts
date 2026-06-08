@@ -904,7 +904,11 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
     });
     deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
       if (params.telemetryTags.operationName === 'ingest-bundle-wu') {
-        await params.onStepFinish?.({ stepIndex: 1, stepBudget: params.stepBudget });
+        // A real tool call drives the live work_unit_step heartbeat.
+        await params.toolSet.record_verification_ledger.execute(
+          { summary: 'Captured order context.', verifiedIdentifiers: [], unverifiedIdentifiers: [] },
+          { toolCallId: 'ledger-1', messages: [] },
+        );
         currentToolSession.actions.push({
           target: 'wiki',
           type: 'created',
@@ -948,9 +952,8 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
           type: 'work_unit_started',
           unitKey: 'u1',
           skills: ['ingest_triage', 'sl_capture', 'wiki_capture'],
-          stepBudget: 40,
         }),
-        expect.objectContaining({ type: 'work_unit_step', unitKey: 'u1', stepIndex: 1, stepBudget: 40 }),
+        expect.objectContaining({ type: 'work_unit_step', unitKey: 'u1', toolCalls: 1 }),
         expect.objectContaining({
           type: 'candidate_action',
           unitKey: 'u1',
@@ -2226,22 +2229,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
 
   it('emits a monotonically non-decreasing progress sequence reaching 1.0, covering all 7 stages', async () => {
     const deps = makeDeps();
-    // Simulate an agent that calls onStepFinish a few times so stage 3 and 4 emit per-step progress.
-    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
-      if (params.onStepFinish) {
-        for (let i = 1; i <= 3; i++) {
-          await params.onStepFinish({ stepIndex: i, stepBudget: params.stepBudget });
-        }
-      }
-      return { stopReason: 'natural' };
-    });
-    // Trigger Stage 4 reconciliation by having at least one action.
-    deps.agentRunner.runLoop.mockImplementation(async (params: any) => {
-      if (params.onStepFinish) {
-        await params.onStepFinish({ stepIndex: 1, stepBudget: params.stepBudget });
-      }
-      return { stopReason: 'natural' };
-    });
+    deps.agentRunner.runLoop.mockImplementation(async () => ({ stopReason: 'natural' }));
 
     const runner = buildRunner(deps);
     (runner as any).stageRawFilesStage1 = vi.fn().mockResolvedValue({

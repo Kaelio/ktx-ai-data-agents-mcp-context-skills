@@ -8,7 +8,6 @@ vi.mock('ai', () => ({
 
 import { generateText } from 'ai';
 import { AiSdkKtxLlmRuntime } from '../../../src/context/llm/ai-sdk-runtime.js';
-import type { RunLoopStepInfo } from '../../../src/context/llm/runtime-port.js';
 
 describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
   let runtime: AiSdkKtxLlmRuntime;
@@ -367,37 +366,11 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
     expect(result.metrics?.usage).toEqual({});
   });
 
-  it('invokes caller onStepFinish with incrementing stepIndex and total budget', async () => {
-    const calls: RunLoopStepInfo[] = [];
+  it('counts model round-trips into metrics.stepCount', async () => {
     (generateText as any).mockImplementation(async (opts: any) => {
       for (let i = 0; i < 3; i++) {
-        await opts.onStepFinish({});
+        opts.onStepFinish({});
       }
-      return { text: 'ok', toolCalls: [], steps: [] };
-    });
-
-    await runtime.runAgentLoop({
-      modelRole: 'candidateExtraction',
-      systemPrompt: '',
-      userPrompt: '',
-      toolSet: {},
-      stepBudget: 10,
-      telemetryTags: {},
-      onStepFinish: (info) => {
-        calls.push(info);
-      },
-    });
-
-    expect(calls).toEqual([
-      { stepIndex: 1, stepBudget: 10 },
-      { stepIndex: 2, stepBudget: 10 },
-      { stepIndex: 3, stepBudget: 10 },
-    ]);
-  });
-
-  it('swallows errors thrown from caller onStepFinish without aborting the loop', async () => {
-    (generateText as any).mockImplementation(async (opts: any) => {
-      await opts.onStepFinish({});
       return { text: 'ok', toolCalls: [], steps: [] };
     });
 
@@ -408,12 +381,10 @@ describe('AiSdkKtxLlmRuntime.runAgentLoop', () => {
       toolSet: {},
       stepBudget: 10,
       telemetryTags: {},
-      onStepFinish: () => {
-        throw new Error('boom');
-      },
     });
 
-    expect(result.stopReason).toBe('natural');
+    expect(result.metrics?.stepCount).toBe(3);
+    expect(result.metrics?.stepBoundariesMs).toHaveLength(3);
   });
 
   it('forwards telemetryTags.source through experimental_telemetry metadata', async () => {

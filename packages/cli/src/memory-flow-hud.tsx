@@ -139,31 +139,21 @@ function sourceDescription(input: MemoryFlowReplayInput): SourceInfo {
   return { type: info.type, name: conn, sourceCount: count, itemNounPlural: info.plural, readingVerb: info.verb, ingestDescription: info.description };
 }
 
-function activeWorkUnits(
-  input: MemoryFlowReplayInput,
-): Array<{ unitKey: string; stepIndex: number; stepBudget: number }> {
+function activeWorkUnits(input: MemoryFlowReplayInput): string[] {
   const finishedKeys = new Set<string>();
-  const unitMap = new Map<string, { stepIndex: number; stepBudget: number }>();
-
   for (const e of input.events) {
-    if (e.type === 'work_unit_started') {
-      unitMap.set(e.unitKey, { stepIndex: 0, stepBudget: e.stepBudget });
-    }
-    if (e.type === 'work_unit_step') {
-      const existing = unitMap.get(e.unitKey);
-      if (existing) {
-        existing.stepIndex = e.stepIndex;
-        existing.stepBudget = e.stepBudget;
-      }
-    }
     if (e.type === 'work_unit_finished') finishedKeys.add(e.unitKey);
   }
 
-  const result: Array<{ unitKey: string; stepIndex: number; stepBudget: number }> = [];
-  for (const [unitKey, data] of unitMap) {
-    if (!finishedKeys.has(unitKey)) result.push({ unitKey, ...data });
+  const active: string[] = [];
+  const seen = new Set<string>();
+  for (const e of input.events) {
+    if (e.type === 'work_unit_started' && !finishedKeys.has(e.unitKey) && !seen.has(e.unitKey)) {
+      seen.add(e.unitKey);
+      active.push(e.unitKey);
+    }
   }
-  return result;
+  return active;
 }
 
 function queuedWorkUnits(input: MemoryFlowReplayInput): string[] {

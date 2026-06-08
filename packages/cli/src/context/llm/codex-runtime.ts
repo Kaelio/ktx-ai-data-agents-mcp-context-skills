@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { noopLogger, type KtxLogger } from '../core/config.js';
 import { isAbortError, linkAbortSignal } from '../core/abort.js';
 import { isCompletedAgentStep, summarizeCodexExecEvents, type CodexExecEventSummary } from './codex-exec-events.js';
 import {
@@ -25,7 +24,6 @@ export interface CodexKtxLlmRuntimeDeps {
   modelSlots: { default: string } & Partial<Record<string, string>>;
   runner?: CodexSdkRunner;
   startMcpServer?: (input: { projectDir: string; toolSet: KtxRuntimeToolSet }) => Promise<CodexRuntimeMcpServerHandle>;
-  logger?: KtxLogger;
   rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
@@ -40,7 +38,6 @@ function promptWithSystem(system: string | undefined, prompt: string): string {
 interface CollectCodexEventsOptions {
   stepBudget?: number;
   abortController?: AbortController;
-  onStep?: (stepIndex: number) => void | Promise<void>;
 }
 
 interface CollectCodexEventsResult {
@@ -58,8 +55,8 @@ function isTurnCompleted(event: unknown): boolean {
 }
 
 /**
- * Drains the Codex stream once, emitting a step as each agent action completes
- * so callers see live progress and the step budget is enforced mid-run. Every
+ * Drains the Codex stream once, counting each completed agent action so the
+ * step budget is enforced mid-run. Every
  * completed agent-action item counts (see {@link isCompletedAgentStep}), so
  * built-in `command_execution` steps decrement the budget the same as
  * `mcp_tool_call`s. A turn that produced no actions still counts as one step,
@@ -93,7 +90,6 @@ async function collectEvents(
       }
 
       completedSteps += 1;
-      await options.onStep?.(completedSteps);
       if (isActionStep && options.stepBudget !== undefined && completedSteps >= options.stepBudget) {
         budgetExceeded = true;
         options.abortController?.abort();
@@ -170,11 +166,9 @@ function isCodexRateLimitError(error: Error | undefined): boolean {
 
 export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
   private readonly runner: CodexSdkRunner;
-  private readonly logger: KtxLogger;
 
   constructor(private readonly deps: CodexKtxLlmRuntimeDeps) {
     this.runner = deps.runner ?? new CodexSdkCliRunner();
-    this.logger = deps.logger ?? noopLogger;
   }
 
   private async runWithRateLimitRetry<T>(
@@ -328,15 +322,6 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
             }
           : {}),
       });
-      const onStep = async (stepIndex: number): Promise<void> => {
-        try {
-          await params.onStepFinish?.({ stepIndex, stepBudget: params.stepBudget });
-        } catch (error) {
-          this.logger.warn(
-            `[codex-runner] onStepFinish callback threw; ignoring: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      };
       const result = await this.runWithRateLimitRetry(
         params.abortSignal,
         async () => {
@@ -352,7 +337,7 @@ export class CodexKtxLlmRuntime implements KtxLlmRuntimePort {
                 env: config.env,
                 signal: abortController.signal,
               }),
-              { stepBudget: params.stepBudget, abortController, onStep },
+              { stepBudget: params.stepBudget, abortController },
             );
             const summary = summarizeCodexExecEvents(collected.events, { startedAt });
             return { collected, summary };

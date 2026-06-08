@@ -28,7 +28,6 @@ export interface WorkUnitExecutionDeps {
   sourceKey: string;
   connectionId: string;
   jobId: string;
-  onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
   abortSignal?: AbortSignal;
   toolFailureCount?: (unitKey: string) => number;
 }
@@ -107,7 +106,6 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
         unitKey: wu.unitKey,
         jobId: deps.jobId,
       },
-      onStepFinish: deps.onStepFinish,
       abortSignal: deps.abortSignal,
     });
   } catch (error) {

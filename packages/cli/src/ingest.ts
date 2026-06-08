@@ -398,9 +398,8 @@ function plainIngestEventProgress(
       const total = plannedWorkUnitCountThrough(snapshot, eventIndex);
       const completed = completedWorkUnitCountThrough(snapshot, eventIndex);
       const active = activeWorkUnitCountThrough(snapshot, eventIndex);
-      const stepFraction = event.stepBudget > 0 ? Math.min(1, event.stepIndex / event.stepBudget) : 0;
-      const percent = total > 0 ? 55 + Math.ceil(((completed + stepFraction) / total) * 25) : 55;
-      const latest = `${event.unitKey} step ${event.stepIndex}/${event.stepBudget}`;
+      const percent = total > 0 ? 55 + Math.ceil((completed / total) * 25) : 55;
+      const latest = `${event.unitKey} · ${pluralize(event.toolCalls, 'action')}`;
       return {
         percent,
         message: `Processing tasks: ${completed}/${total} complete, ${active} active; latest ${latest}`,

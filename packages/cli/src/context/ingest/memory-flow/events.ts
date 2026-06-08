@@ -174,7 +174,7 @@ export function ingestReportToMemoryFlowReplay(
 
   const actions = allReportActions(report);
   const workUnitEvents: MemoryFlowEvent[] = report.body.workUnits.flatMap((workUnit) => [
-    { type: 'work_unit_started', unitKey: workUnit.unitKey, skills: [], stepBudget: 0 } satisfies MemoryFlowEvent,
+    { type: 'work_unit_started', unitKey: workUnit.unitKey, skills: [] } satisfies MemoryFlowEvent,
     ...workUnit.actions.map(
       (action): MemoryFlowEvent => ({
         type: 'candidate_action',

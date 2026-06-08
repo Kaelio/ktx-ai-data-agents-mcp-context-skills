@@ -71,13 +71,11 @@ type MemoryFlowEventPayload =
       type: 'work_unit_started';
       unitKey: string;
       skills: string[];
-      stepBudget: number;
     }
   | {
       type: 'work_unit_step';
       unitKey: string;
-      stepIndex: number;
-      stepBudget: number;
+      toolCalls: number;
     }
   | {
       type: 'candidate_action';

@@ -322,21 +322,11 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
         messages: promptMessages.messages,
         tools: built.tools as ToolSet,
         ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
-        onStepFinish: async () => {
+        // Count model round-trips locally for metrics. `stepCountIs(stepBudget)`
+        // caps the loop, so this counter never exceeds the budget.
+        onStepFinish: () => {
           stepIndex += 1;
           stepBoundariesMs.push(Date.now() - startedAt);
-          if (!params.onStepFinish) {
-            return;
-          }
-          try {
-            await params.onStepFinish({ stepIndex, stepBudget: params.stepBudget });
-          } catch (err) {
-            this.logger.warn(
-              `[agent-runner] onStepFinish callback threw; ignoring: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-            );
-          }
         },
       };
       const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), params.abortSignal, () => generateText(request));
