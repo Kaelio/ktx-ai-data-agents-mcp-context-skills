@@ -12,6 +12,13 @@ import { buildPublicIngestPlan, executePublicIngestTarget, publicProgressMessage
 import { createAggregateProgressPort } from './progress-port-adapter.js';
 import { formatDuration } from './demo-metrics.js';
 import { profileMark } from './startup-profile.js';
+import {
+  isFreshStarCountCache,
+  readStarCountCache,
+  writeStarCountCache,
+} from './star-prompt/cache.js';
+import { fetchGitHubStarCount as defaultFetchGitHubStarCount } from './star-prompt/star-count.js';
+import { renderStarPromptLine } from './star-prompt/star-line.js';
 
 profileMark('module:context-build-view');
 
@@ -79,6 +86,7 @@ export interface ContextBuildViewState {
   frame: number;
   startedAt: number | null;
   totalElapsedMs: number;
+  starCount: number | null;
 }
 
 export interface ContextBuildArgs {
@@ -121,6 +129,8 @@ interface CompletedItemName {
 interface ContextBuildRenderOptions {
   styled?: boolean;
   showHint?: boolean;
+  showStarPrompt?: boolean;
+  columns?: number;
   hintText?: string;
   projectDir?: string;
   title?: string;
@@ -138,6 +148,15 @@ export interface ContextBuildDeps {
   now?: () => number;
   onSourceProgress?: (sources: ContextBuildSourceProgressUpdate[]) => void;
   sourceProgressThrottleMs?: number;
+  fetchStarCount?: typeof defaultFetchGitHubStarCount;
+  starPromptEnv?: StarPromptEnv;
+  starPromptHomeDir?: string;
+}
+
+interface StarPromptEnv extends NodeJS.ProcessEnv {
+  CI?: string;
+  DO_NOT_TRACK?: string;
+  KTX_NO_STAR?: string;
 }
 
 // --- Rendering ---
@@ -427,6 +446,14 @@ export function renderContextBuildView(
     lines.push('');
   }
 
+  if (options.showStarPrompt && hasActive) {
+    const starPrompt = renderStarPromptLine({
+      count: state.starCount,
+      columns: options.columns ?? 80,
+    });
+    lines.push(styled ? dim(starPrompt) : starPrompt);
+  }
+
   if (options.showHint && hasActive) {
     const hintContent = options.hintText ?? 'Ctrl+C to stop';
     const hint = `  ${hintContent}`;
@@ -584,6 +611,7 @@ export function viewStateFromSourceProgress(
     frame: 0,
     startedAt: startedAtMs ?? null,
     totalElapsedMs: startedAtMs ? now - startedAtMs : 0,
+    starCount: null,
   };
 }
 
@@ -630,6 +658,9 @@ export function createRepainter(io: KtxCliIo) {
       io.stdout.write(`${ESC}[J`);
       hasPainted = true;
       lastCursorUpRows = cursorUpRowsAfterWrite(content);
+    },
+    columns() {
+      return terminalColumns();
     },
   };
 }
@@ -806,6 +837,7 @@ export function initViewState(targets: KtxPublicIngestPlanTarget[]): ContextBuil
     frame: 0,
     startedAt: null,
     totalElapsedMs: 0,
+    starCount: null,
   };
 }
 
@@ -815,6 +847,50 @@ function formatProgressDetail(
 ): string {
   const percent = Math.max(0, Math.min(100, Math.round(update.percent)));
   return `[${percent}%] ${publicProgressMessage(update.message, target)}`;
+}
+
+const STAR_COUNT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function envFlag(value: string | undefined): boolean {
+  return value !== undefined && value !== '' && value !== '0' && value !== 'false';
+}
+
+function shouldSuppressStarPrompt(env: StarPromptEnv): boolean {
+  return envFlag(env.CI) || envFlag(env.DO_NOT_TRACK) || envFlag(env.KTX_NO_STAR);
+}
+
+function startStarPromptCountRefresh(input: {
+  fetchStarCount: typeof defaultFetchGitHubStarCount;
+  homeDir?: string;
+  now: () => number;
+  paint: () => void;
+  state: ContextBuildViewState;
+}): void {
+  const cached = readStarCountCache({ homeDir: input.homeDir });
+  if (cached) {
+    input.state.starCount = cached.count;
+  }
+
+  if (isFreshStarCountCache(cached, new Date(input.now()), STAR_COUNT_CACHE_TTL_MS)) {
+    return;
+  }
+
+  void input.fetchStarCount()
+    .then((count) => {
+      if (typeof count !== 'number' || !Number.isFinite(count)) {
+        return;
+      }
+      input.state.starCount = count;
+      input.paint();
+      void writeStarCountCache(
+        {
+          count,
+          fetchedAt: new Date(input.now()).toISOString(),
+        },
+        { homeDir: input.homeDir },
+      );
+    })
+    .catch(() => undefined);
 }
 
 export async function runContextBuild(
@@ -838,13 +914,31 @@ export async function runContextBuild(
   state.startedAt = nowFn();
 
   const repainter = isTTY ? createRepainter(io) : null;
+  const starPromptEnabled = repainter !== null && !shouldSuppressStarPrompt(deps.starPromptEnv ?? process.env);
   const viewOpts = {
     styled: true,
     projectDir: args.projectDir,
     notices: plan.notices ?? [],
     warnings: plan.warnings,
   };
-  const paint = (hint: boolean) => repainter?.paint(renderContextBuildView(state, { ...viewOpts, showHint: hint }));
+  const paint = (hint: boolean) =>
+    repainter?.paint(
+      renderContextBuildView(state, {
+        ...viewOpts,
+        showHint: hint,
+        showStarPrompt: starPromptEnabled && hint,
+        columns: repainter.columns(),
+      }),
+    );
+  if (starPromptEnabled) {
+    startStarPromptCountRefresh({
+      fetchStarCount: deps.fetchStarCount ?? defaultFetchGitHubStarCount,
+      homeDir: deps.starPromptHomeDir,
+      now: nowFn,
+      paint: () => paint(true),
+      state,
+    });
+  }
   paint(true);
 
   let spinnerInterval: ReturnType<typeof setInterval> | null = null;

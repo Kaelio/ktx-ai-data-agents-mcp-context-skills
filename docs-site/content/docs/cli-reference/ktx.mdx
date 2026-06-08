@@ -112,6 +112,18 @@ pnpm add -g @kaelio/ktx
 yarn global add @kaelio/ktx
 ```
 
+## Build-view star prompt
+
+During an interactive context build, `ktx setup` and `ktx ingest` can show a dim
+GitHub star reminder above the `Ctrl+C to stop` hint. **ktx** skips this prompt
+for CI, non-TTY output, and `DO_NOT_TRACK=1`.
+
+To suppress only this prompt while keeping other notices enabled, set:
+
+```bash
+KTX_NO_STAR=1
+```
+
 ## Project resolution
 
 Most commands are project-aware. Pass `--project-dir <path>` when scripting or

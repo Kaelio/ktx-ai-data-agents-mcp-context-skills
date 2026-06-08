@@ -1,5 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildDefaultKtxProjectConfig, type KtxProjectConfig } from '../src/context/project/config.js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { KtxPublicIngestProject, KtxPublicIngestTargetResult } from '../src/public-ingest.js';
 import {
   type ContextBuildTargetState,
@@ -12,6 +15,7 @@ import {
   runContextBuild,
   viewStateFromSourceProgress,
 } from '../src/context-build-view.js';
+import { writeStarCountCache } from '../src/star-prompt/cache.js';
 
 function makeIo(options: { isTTY?: boolean; columns?: number } = {}) {
   let stdout = '';
@@ -426,6 +430,64 @@ describe('renderContextBuildView', () => {
     expect(rendered).not.toContain('resume');
   });
 
+  it('renders the star prompt directly above the stop hint while active', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
+    ]);
+    state.primarySources[0].status = 'running';
+    state.starCount = 1234;
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      showHint: true,
+      showStarPrompt: true,
+      columns: 120,
+    });
+
+    expect(rendered).toContain(
+      '  ★  This takes a few minutes - mind giving ktx a star while you wait?  github.com/Kaelio/ktx · 1,234 ★',
+    );
+    expect(rendered.indexOf('mind giving ktx a star')).toBeLessThan(rendered.indexOf('Ctrl+C to stop'));
+  });
+
+  it('renders the star prompt without a count while active', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
+    ]);
+    state.primarySources[0].status = 'running';
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      showHint: true,
+      showStarPrompt: true,
+      columns: 120,
+    });
+
+    expect(rendered).toContain(
+      '  ★  This takes a few minutes - mind giving ktx a star while you wait?  github.com/Kaelio/ktx',
+    );
+    expect(rendered).not.toContain('1,234');
+  });
+
+  it('omits the star prompt after the build finishes', () => {
+    const state = initViewState([
+      { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
+    ]);
+    state.primarySources[0].status = 'done';
+    state.totalElapsedMs = 5000;
+    state.starCount = 1234;
+
+    const rendered = renderContextBuildView(state, {
+      styled: false,
+      showHint: true,
+      showStarPrompt: true,
+      columns: 120,
+    });
+
+    expect(rendered).not.toContain('mind giving ktx a star');
+    expect(rendered).not.toContain('Ctrl+C to stop');
+  });
+
   it('omits detach hint when all targets are done', () => {
     const state = initViewState([
       { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
@@ -608,9 +670,140 @@ describe('createRepainter', () => {
     const cursorMoves = [...io.stdout().matchAll(/\[(\d+)A/g)].map((m) => Number(m[1]));
     expect(cursorMoves).toEqual([2]);
   });
+
+  it('exposes the same terminal columns used for visual row calculations', () => {
+    const io = makeIo({ isTTY: true, columns: 44 });
+    const repainter = createRepainter(io.io);
+
+    expect(repainter.columns()).toBe(44);
+  });
 });
 
 describe('runContextBuild', () => {
+  let starPromptHomeDir: string;
+
+  beforeEach(async () => {
+    starPromptHomeDir = await mkdtemp(join(tmpdir(), 'ktx-star-prompt-run-'));
+  });
+
+  afterEach(async () => {
+    await rm(starPromptHomeDir, { recursive: true, force: true });
+  });
+
+  it('seeds the interactive star prompt from a fresh cached count without fetching', async () => {
+    await writeStarCountCache(
+      { count: 1234, fetchedAt: '2026-06-08T10:00:00.000Z' },
+      { homeDir: starPromptHomeDir },
+    );
+    const io = makeIo({ isTTY: true, columns: 120 });
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const fetchStarCount = vi.fn(async () => 9999);
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      {
+        executeTarget,
+        fetchStarCount,
+        now: () => Date.parse('2026-06-08T11:00:00.000Z'),
+        starPromptEnv: {},
+        starPromptHomeDir,
+      },
+    );
+
+    expect(fetchStarCount).not.toHaveBeenCalled();
+    expect(io.stdout()).toContain('mind giving ktx a star');
+    expect(io.stdout()).toContain('1,234 ★');
+  });
+
+  it('refreshes a stale cached count while the interactive build is active', async () => {
+    await writeStarCountCache(
+      { count: 1234, fetchedAt: '2026-06-06T10:00:00.000Z' },
+      { homeDir: starPromptHomeDir },
+    );
+    const io = makeIo({ isTTY: true, columns: 120 });
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const fetchStarCount = vi.fn(async () => 5678);
+    let finishTarget!: () => void;
+    const targetFinished = new Promise<KtxPublicIngestTargetResult>((resolve) => {
+      finishTarget = () => {
+        resolve(successResult('warehouse', 'postgres', 'database-ingest'));
+      };
+    });
+    const executeTarget = vi.fn(async () => targetFinished);
+
+    const run = runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      {
+        executeTarget,
+        fetchStarCount,
+        now: () => Date.parse('2026-06-08T11:00:00.000Z'),
+        starPromptEnv: {},
+        starPromptHomeDir,
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(fetchStarCount).toHaveBeenCalledTimes(1);
+      expect(io.stdout()).toContain('5,678 ★');
+    });
+    finishTarget();
+    await expect(run).resolves.toMatchObject({ exitCode: 0 });
+  });
+
+  it.each([
+    ['DO_NOT_TRACK', { DO_NOT_TRACK: '1' }],
+    ['KTX_NO_STAR', { KTX_NO_STAR: '1' }],
+    ['CI', { CI: '1' }],
+  ])('suppresses the star prompt and fetch for %s', async (_name, starPromptEnv) => {
+    const io = makeIo({ isTTY: true, columns: 120 });
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const fetchStarCount = vi.fn(async () => 1234);
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      {
+        executeTarget,
+        fetchStarCount,
+        now: () => Date.parse('2026-06-08T11:00:00.000Z'),
+        starPromptEnv,
+        starPromptHomeDir,
+      },
+    );
+
+    expect(fetchStarCount).not.toHaveBeenCalled();
+    expect(io.stdout()).not.toContain('mind giving ktx a star');
+  });
+
+  it('suppresses the star prompt and fetch for non-TTY output', async () => {
+    const io = makeIo({ isTTY: false, columns: 120 });
+    const project = projectWithConnections({ warehouse: { driver: 'postgres' } });
+    const fetchStarCount = vi.fn(async () => 1234);
+    const executeTarget = vi.fn(async (target) => successResult(target.connectionId, target.driver, target.operation));
+
+    await runContextBuild(
+      project,
+      { projectDir: '/tmp/project', inputMode: 'disabled' },
+      io.io,
+      {
+        executeTarget,
+        fetchStarCount,
+        now: () => Date.parse('2026-06-08T11:00:00.000Z'),
+        starPromptHomeDir,
+      },
+    );
+
+    expect(fetchStarCount).not.toHaveBeenCalled();
+    expect(io.stdout()).not.toContain('mind giving ktx a star');
+  });
+
   it('executes scan targets before source-ingest targets', async () => {
     const io = makeIo();
     const project = projectWithConnections({

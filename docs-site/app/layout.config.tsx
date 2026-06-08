@@ -1,5 +1,4 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
-import { GitHubIcon } from "@/components/github-icon";
 import { Logo } from "@/components/logo";
 import { SlackIcon } from "@/components/slack-icon";
 
@@ -25,14 +24,6 @@ export const baseOptions: BaseLayoutProps = {
           external: true,
         },
       ],
-    },
-    {
-      type: "icon",
-      label: "GitHub",
-      icon: <GitHubIcon />,
-      text: "GitHub",
-      url: "https://github.com/kaelio/ktx",
-      external: true,
     },
     {
       type: "icon",
