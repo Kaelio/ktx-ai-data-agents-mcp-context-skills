@@ -60,7 +60,7 @@ function replayInput(): MemoryFlowReplayInput {
       { type: 'raw_snapshot_written', syncId: 'sync-1', rawFileCount: 2 },
       { type: 'diff_computed', added: 1, modified: 1, deleted: 0, unchanged: 3 },
       { type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 },
-      { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'], stepBudget: 40 },
+      { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'] },
       { type: 'candidate_action', unitKey: 'orders', target: 'wiki', action: 'created', key: 'wiki/orders.md' },
       { type: 'candidate_action', unitKey: 'orders', target: 'sl', action: 'updated', key: 'warehouse.orders' },
       { type: 'work_unit_finished', unitKey: 'orders', status: 'success' },
@@ -159,7 +159,7 @@ describe('buildMemoryFlowViewModel', () => {
         { type: 'source_acquired', adapter: 'looker', trigger: 'demo_seeded', fileCount: 7 },
         { type: 'source_acquired', adapter: 'notion', trigger: 'demo_seeded', fileCount: 8 },
         { type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 },
-        { type: 'work_unit_started', unitKey: 'revenue-and-contracts', skills: ['wiki_capture'], stepBudget: 40 },
+        { type: 'work_unit_started', unitKey: 'revenue-and-contracts', skills: ['wiki_capture'] },
         {
           type: 'candidate_action',
           unitKey: 'revenue-and-contracts',
@@ -376,7 +376,7 @@ describe('buildMemoryFlowViewModel', () => {
           { type: 'raw_snapshot_written', syncId: 'sync-errors', rawFileCount: 2 },
           { type: 'diff_computed', added: 2, modified: 0, deleted: 0, unchanged: 0 },
           { type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 },
-          { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'], stepBudget: 40 },
+          { type: 'work_unit_started', unitKey: 'orders', skills: ['wiki_capture'] },
           { type: 'candidate_action', unitKey: 'orders', target: 'sl', action: 'updated', key: 'warehouse.orders' },
           {
             type: 'work_unit_finished',
@@ -402,7 +402,7 @@ describe('buildMemoryFlowViewModel', () => {
         events: [
           { type: 'source_acquired', adapter: 'metricflow', trigger: 'manual_resync', fileCount: 1 },
           { type: 'chunks_planned', chunkCount: 1, workUnitCount: 1, evictionCount: 0 },
-          { type: 'work_unit_started', unitKey: 'docs', skills: ['wiki_capture'], stepBudget: 40 },
+          { type: 'work_unit_started', unitKey: 'docs', skills: ['wiki_capture'] },
           { type: 'work_unit_finished', unitKey: 'docs', status: 'failed', reason: 'agent step budget exhausted' },
         ],
         plannedWorkUnits: [{ unitKey: 'docs', rawFiles: ['docs.md'], peerFileCount: 0, dependencyCount: 0 }],

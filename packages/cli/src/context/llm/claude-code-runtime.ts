@@ -6,7 +6,6 @@ import {
   type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import { createAbortError, isAbortError, throwIfAborted } from '../core/abort.js';
 import { createKtxClaudeCodeEnv } from './claude-code-env.js';
 import { resolveClaudeCodeModel } from './claude-code-models.js';
@@ -53,7 +52,6 @@ export interface ClaudeCodeKtxLlmRuntimeDeps {
   modelSlots: { default: string } & Partial<Record<string, string>>;
   query?: QueryFn;
   env?: NodeJS.ProcessEnv;
-  logger?: KtxLogger;
   rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
 }
 
@@ -83,22 +81,6 @@ const STRUCTURED_OUTPUT_TOOL_NAME = 'StructuredOutput';
 
 function isResult(message: SDKMessage): message is SDKResultMessage {
   return message.type === 'result';
-}
-
-// Skip emissions the SDK does not count toward `num_turns`: `pause_turn` continuations and
-// errored partials (e.g. `max_output_tokens`) it retries internally. Without this, the
-// runtime's step counter outruns `maxTurns` and the HUD renders e.g. `step 69/40`.
-function countsAsAssistantTurn(message: SDKMessage): boolean {
-  if (message.type !== 'assistant' || message.parent_tool_use_id !== null) {
-    return false;
-  }
-  if (message.error !== undefined) {
-    return false;
-  }
-  if (message.message.stop_reason === 'pause_turn') {
-    return false;
-  }
-  return true;
 }
 
 function resultError(result: SDKResultMessage): Error | undefined {
@@ -296,7 +278,6 @@ async function collectResult(params: {
   options: Options;
   allowedToolIds: Set<string>;
   expectedMcpServerNames: Set<string>;
-  onAssistantTurn?: () => Promise<void>;
   rateLimitGovernor?: Pick<RateLimitGovernor, 'waitForReady' | 'report' | 'maxRetryAttempts'>;
   abortSignal?: AbortSignal;
 }): Promise<ClaudeQueryOutcome> {
@@ -321,9 +302,6 @@ async function collectResult(params: {
         params.rateLimitGovernor?.report(rateLimitSignal);
       }
       assertInitIsolation(message, params.allowedToolIds, params.expectedMcpServerNames);
-      if (countsAsAssistantTurn(message)) {
-        await params.onAssistantTurn?.();
-      }
       if (isResult(message)) {
         result = message;
       }
@@ -358,11 +336,9 @@ async function collectResultWithRateLimitRetry(params: Parameters<typeof collect
 
 export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
   private readonly runQuery: QueryFn;
-  private readonly logger: KtxLogger;
 
   constructor(private readonly deps: ClaudeCodeKtxLlmRuntimeDeps) {
     this.runQuery = deps.query ?? defaultQuery;
-    this.logger = deps.logger ?? noopLogger;
   }
 
   async generateText(input: KtxGenerateTextInput): Promise<string> {
@@ -434,9 +410,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
   }
 
   async runAgentLoop(params: RunLoopParams): Promise<RunLoopResult> {
-    let stepIndex = 0;
     const startedAt = Date.now();
-    const stepBoundariesMs: number[] = [];
     try {
       const options = baseOptions({
         projectDir: this.deps.projectDir,
@@ -453,22 +427,6 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         expectedMcpServerNames: expectedMcpServerNames(params.toolSet),
         rateLimitGovernor: this.deps.rateLimitGovernor,
         abortSignal: params.abortSignal,
-        onAssistantTurn: async () => {
-          stepIndex += 1;
-          stepBoundariesMs.push(Date.now() - startedAt);
-          if (!params.onStepFinish) {
-            return;
-          }
-          try {
-            await params.onStepFinish({ stepIndex, stepBudget: params.stepBudget });
-          } catch (error) {
-            this.logger.warn(
-              `[claude-code-runner] onStepFinish callback threw; ignoring: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-          }
-        },
       });
       const stopReason = mapClaudeCodeStopReason(result);
       const error = resultError(result);
@@ -477,8 +435,12 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
         ...(stopReason === 'error' && error ? { error } : {}),
         metrics: {
           totalMs: Date.now() - startedAt,
-          stepCount: stepIndex,
-          stepBoundariesMs,
+          // Authoritative turn count from the SDK result. The runtime no longer
+          // re-derives a per-turn counter: it could not match the SDK's `num_turns`
+          // and overshot `maxTurns` (the source of the misleading `step 70/40`).
+          // Per-step boundaries require that counter and are not consumed anywhere.
+          stepCount: result.num_turns,
+          stepBoundariesMs: [],
           usage: claudeTokenUsage(result),
         },
       };
@@ -490,7 +452,7 @@ export class ClaudeCodeKtxLlmRuntime implements KtxLlmRuntimePort {
       return {
         stopReason: 'error',
         error: err,
-        metrics: { totalMs: Date.now() - startedAt, stepCount: stepIndex, stepBoundariesMs, usage: {} },
+        metrics: { totalMs: Date.now() - startedAt, stepCount: 0, stepBoundariesMs: [], usage: {} },
       };
     }
   }

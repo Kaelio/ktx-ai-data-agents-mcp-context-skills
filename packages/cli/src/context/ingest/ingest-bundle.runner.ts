@@ -939,14 +939,13 @@ export class IngestBundleRunner {
     workUnitSettings: { maxConcurrency: number; stepBudget: number; failureMode: 'abort' | 'continue' };
     transcriptDir: string;
     transcriptSummaries: Map<string, MutableToolTranscriptSummary>;
-    recordTranscriptEntry(path: string): (entry: ToolCallLogEntry) => void;
+    recordTranscriptEntry(path: string): (entry: ToolCallLogEntry) => MutableToolTranscriptSummary;
     stageIndex: StageIndex;
     includeContextEvidenceTools: boolean;
     currentTableExists(tableRef: string): Promise<boolean>;
     memoryFlow?: MemoryFlowEventSink;
     abortSignal?: AbortSignal;
     wuSkillNames: string[];
-    onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
   }): Promise<WorkUnitOutcome> {
     const session: CaptureSession = {
       userId: 'system',
@@ -1050,7 +1049,6 @@ export class IngestBundleRunner {
       type: 'work_unit_started',
       unitKey: input.wu.unitKey,
       skills: input.wuSkillNames,
-      stepBudget: input.workUnitSettings.stepBudget,
     });
     return executeWorkUnit(
       {
@@ -1074,8 +1072,10 @@ export class IngestBundleRunner {
             slIndex: input.slIndex,
             priorProvenance: input.priorProvenance,
           }),
-        buildToolSet: (wuInner) =>
-          wrapToolsWithLogger(
+        buildToolSet: (wuInner) => {
+          const transcriptPath = join(input.transcriptDir, `${wuInner.unitKey}.jsonl`);
+          const record = input.recordTranscriptEntry(transcriptPath);
+          return wrapToolsWithLogger(
             buildWuToolSet({
               sourceKey: input.job.sourceKey,
               stagedDir: input.stagedDir,
@@ -1084,10 +1084,23 @@ export class IngestBundleRunner {
               emitUnmappedFallbackTool: wuEmitUnmappedFallbackTool,
               toolsetTools: wuToolset.toRuntimeTools(wuToolContext),
             }),
-            join(input.transcriptDir, `${wuInner.unitKey}.jsonl`),
+            transcriptPath,
             wuInner.unitKey,
-            { onEntry: input.recordTranscriptEntry(join(input.transcriptDir, `${wuInner.unitKey}.jsonl`)) },
-          ),
+            {
+              // Drive the live HUD heartbeat from real tool calls: each invocation
+              // ticks the running per-unit count. This is an observed signal, not a
+              // re-derived turn count, so it can never overshoot a budget.
+              onEntry: (entry) => {
+                const summary = record(entry);
+                input.memoryFlow?.emit({
+                  type: 'work_unit_step',
+                  unitKey: wuInner.unitKey,
+                  toolCalls: summary.toolCallCount,
+                });
+              },
+            },
+          );
+        },
         captureSession: session,
         sessionActions,
         modelRole: 'candidateExtraction',
@@ -1096,7 +1109,6 @@ export class IngestBundleRunner {
         connectionId: input.job.connectionId,
         jobId: input.job.jobId,
         toolFailureCount: (unitKey) => input.transcriptSummaries.get(unitKey)?.fatalErrorCount ?? 0,
-        onStepFinish: input.onStepFinish,
         abortSignal: input.abortSignal,
       },
       input.wu,
@@ -1166,11 +1178,12 @@ export class IngestBundleRunner {
     const transcriptDir = this.deps.storage.resolveTranscriptDir(job.jobId);
     const recordTranscriptEntry =
       (path: string) =>
-      (entry: ToolCallLogEntry): void => {
+      (entry: ToolCallLogEntry): MutableToolTranscriptSummary => {
         const current =
           transcriptSummaries.get(entry.wuKey) ?? createMutableToolTranscriptSummary(entry.wuKey, path);
         recordToolTranscriptEntry(current, entry);
         transcriptSummaries.set(entry.wuKey, current);
+        return current;
       };
     const overrideReport = await this.loadOverrideReport(job);
 
@@ -1639,9 +1652,6 @@ export class IngestBundleRunner {
                       abortSignal: ctx?.abortSignal,
                       memoryFlow,
                       wuSkillNames,
-                      onStepFinish: ({ stepIndex, stepBudget }) => {
-                        memoryFlow?.emit({ type: 'work_unit_step', unitKey: wu.unitKey, stepIndex, stepBudget });
-                      },
                     });
                   },
                 });
@@ -2013,6 +2023,45 @@ export class IngestBundleRunner {
       let curatorWarnings: string[] = [];
       let reconcileOutcome: Awaited<ReturnType<typeof runReconciliationStage4>>;
 
+      // Reconcile shares the work-unit liveness model: the HUD heartbeat is driven
+      // by real tool calls (a monotonic, observed count), not a re-derived turn
+      // counter. The soft cap only paces the phase progress bar; it is never shown
+      // to the user, so it cannot read as a misleading "X/Y" fraction.
+      const reconcileTranscriptPath = join(transcriptDir, 'reconcile.jsonl');
+      const reconcileProgressSoftCap = 40;
+      const buildReconcileToolSetWithHeartbeat = (): KtxRuntimeToolSet => {
+        const record = recordTranscriptEntry(reconcileTranscriptPath);
+        return wrapToolsWithLogger(
+          buildReconcileToolSet({
+            loadSkillTool: rcLoadSkill,
+            stageListTool: rcStageListTool,
+            stageDiffTool: rcStageDiffTool,
+            evictionListTool: rcEvictionListTool,
+            emitConflictResolutionTool: rcEmitConflictResolutionTool,
+            emitEvictionDecisionTool: rcEmitEvictionDecisionTool,
+            emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
+            emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
+            readRawSpanTool: rcRawSpanTool,
+            toolsetTools: rcToolset.toRuntimeTools(rcToolContext),
+          }),
+          reconcileTranscriptPath,
+          'reconcile',
+          {
+            onEntry: (entry) => {
+              const summary = record(entry);
+              if (!stage4) {
+                return;
+              }
+              const label = `Reconciling results · ${summary.toolCallCount} action${
+                summary.toolCallCount === 1 ? '' : 's'
+              }`;
+              emitStageProgress('reconciliation', 85, label, { transient: true });
+              void stage4.updateProgress(Math.min(0.95, summary.toolCallCount / reconcileProgressSoftCap), label);
+            },
+          },
+        );
+      };
+
       const reconcileStartedAt = Date.now();
       const reconcileMode = contextReport && this.deps.curatorPagination ? 'curator' : 'single';
       if (contextReport && this.deps.curatorPagination) {
@@ -2035,39 +2084,8 @@ export class IngestBundleRunner {
             }),
           buildUserPrompt: ({ summary, items, runState }) =>
             buildReconcileUserPrompt(stageIndex, eviction, { summary, items }, reconcileNotes, runState),
-          buildToolSet: (_passNumber) =>
-            wrapToolsWithLogger(
-              buildReconcileToolSet({
-                loadSkillTool: rcLoadSkill,
-                stageListTool: rcStageListTool,
-                stageDiffTool: rcStageDiffTool,
-                evictionListTool: rcEvictionListTool,
-                emitConflictResolutionTool: rcEmitConflictResolutionTool,
-                emitEvictionDecisionTool: rcEmitEvictionDecisionTool,
-                emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
-                emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
-                readRawSpanTool: rcRawSpanTool,
-                toolsetTools: rcToolset.toRuntimeTools(rcToolContext),
-              }),
-              join(transcriptDir, 'reconcile.jsonl'),
-              'reconcile',
-              { onEntry: recordTranscriptEntry(join(transcriptDir, 'reconcile.jsonl')) },
-            ),
+          buildToolSet: (_passNumber) => buildReconcileToolSetWithHeartbeat(),
           getReconciliationActions: () => reconcileActions,
-          onStepFinish: stage4
-            ? ({ passNumber, stepIndex, stepBudget }) => {
-                emitStageProgress(
-                  'reconciliation',
-                  85,
-                  `Reconciling results: pass ${passNumber} step ${stepIndex}/${stepBudget}`,
-                  { transient: true },
-                );
-                void stage4.updateProgress(
-                  stepIndex / stepBudget,
-                  `Reconciling results · pass ${passNumber} step ${stepIndex}`,
-                );
-              }
-            : undefined,
           abortSignal: ctx?.abortSignal,
         });
         curatorReport = curatorOutcome.report;
@@ -2091,38 +2109,13 @@ export class IngestBundleRunner {
               canonicalPins: relevantCanonicalPins,
             }),
           buildUserPrompt: (idx, ev) => buildReconcileUserPrompt(idx, ev, undefined, reconcileNotes),
-          buildToolSet: () =>
-            wrapToolsWithLogger(
-              buildReconcileToolSet({
-                loadSkillTool: rcLoadSkill,
-                stageListTool: rcStageListTool,
-                stageDiffTool: rcStageDiffTool,
-                evictionListTool: rcEvictionListTool,
-                emitConflictResolutionTool: rcEmitConflictResolutionTool,
-                emitEvictionDecisionTool: rcEmitEvictionDecisionTool,
-                emitArtifactResolutionTool: rcEmitArtifactResolutionTool,
-                emitUnmappedFallbackTool: rcEmitUnmappedFallbackTool,
-                readRawSpanTool: rcRawSpanTool,
-                toolsetTools: rcToolset.toRuntimeTools(rcToolContext),
-              }),
-              join(transcriptDir, 'reconcile.jsonl'),
-              'reconcile',
-              { onEntry: recordTranscriptEntry(join(transcriptDir, 'reconcile.jsonl')) },
-            ),
+          buildToolSet: () => buildReconcileToolSetWithHeartbeat(),
           modelRole: 'reconcile',
           stepBudget: 60,
           sourceKey: job.sourceKey,
           jobId: job.jobId,
           force: !!overrideReport,
           abortSignal: ctx?.abortSignal,
-          onStepFinish: stage4
-            ? ({ stepIndex, stepBudget }) => {
-                emitStageProgress('reconciliation', 85, `Reconciling results: step ${stepIndex}/${stepBudget}`, {
-                  transient: true,
-                });
-                void stage4.updateProgress(stepIndex / stepBudget, `Reconciling results · step ${stepIndex}`);
-              }
-            : undefined,
         });
       }
       await runTrace.event(

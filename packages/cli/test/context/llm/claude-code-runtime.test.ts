@@ -382,7 +382,6 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       query,
       env: {},
     });
-    const onStepFinish = vi.fn();
 
     await runtime.runAgentLoop({
       modelRole: 'default',
@@ -398,7 +397,6 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       },
       stepBudget: 1,
       telemetryTags: { operationName: 'test' },
-      onStepFinish,
     });
 
     const options = query.mock.calls[0][0].options;
@@ -416,7 +414,6 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       behavior: 'deny',
       toolUseID: '2',
     });
-    expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 1 });
   });
 
   it('treats host-discovered commands skills and agents as non-fatal init metadata for text and auth probe', async () => {
@@ -664,108 +661,6 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     );
   });
 
-  it('counts only assistant turns the SDK counts toward num_turns', async () => {
-    const assistantMessage = (
-      overrides: Partial<Extract<SDKMessage, { type: 'assistant' }>> & { uuid: string },
-    ): SDKMessage =>
-      ({
-        type: 'assistant',
-        message: { role: 'assistant', content: [], stop_reason: 'end_turn' },
-        parent_tool_use_id: null,
-        session_id: 'session-id',
-        ...overrides,
-      }) as unknown as SDKMessage;
-
-    const query = vi.fn((_input: any) =>
-      stream([
-        initMessage(),
-        assistantMessage({
-          uuid: '00000000-0000-4000-8000-0000000000a1',
-          error: 'max_output_tokens',
-        }),
-        assistantMessage({
-          uuid: '00000000-0000-4000-8000-0000000000a2',
-          message: { role: 'assistant', content: [], stop_reason: 'pause_turn' } as never,
-        }),
-        assistantMessage({ uuid: '00000000-0000-4000-8000-0000000000a3' }),
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [], stop_reason: 'end_turn' },
-          parent_tool_use_id: 'tool-use-1',
-          uuid: '00000000-0000-4000-8000-0000000000a4',
-          session_id: 'session-id',
-        } as unknown as SDKMessage,
-        resultMessage({ subtype: 'success', terminal_reason: 'completed' }),
-      ]),
-    );
-    const runtime = new ClaudeCodeKtxLlmRuntime({
-      projectDir: '/tmp/project',
-      modelSlots: { default: 'sonnet' },
-      query,
-      env: {},
-    });
-    const onStepFinish = vi.fn();
-
-    await expect(
-      runtime.runAgentLoop({
-        modelRole: 'default',
-        systemPrompt: 'system',
-        userPrompt: 'user',
-        toolSet: {},
-        stepBudget: 40,
-        telemetryTags: { operationName: 'test' },
-        onStepFinish,
-      }),
-    ).resolves.toMatchObject({ stopReason: 'natural' });
-
-    expect(onStepFinish).toHaveBeenCalledTimes(1);
-    expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 40 });
-  });
-
-  it('logs and ignores onStepFinish callback errors', async () => {
-    const query = vi.fn((_input: any) =>
-      stream([
-        initMessage(),
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [] },
-          parent_tool_use_id: null,
-          uuid: '00000000-0000-4000-8000-000000000005',
-          session_id: 'session-id',
-        } as unknown as SDKMessage,
-        resultMessage({ subtype: 'success', terminal_reason: 'completed' }),
-      ]),
-    );
-    const logger = {
-      debug: vi.fn(),
-      log: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    };
-    const runtime = new ClaudeCodeKtxLlmRuntime({
-      projectDir: '/tmp/project',
-      modelSlots: { default: 'sonnet' },
-      query,
-      env: {},
-      logger,
-    });
-
-    await expect(
-      runtime.runAgentLoop({
-        modelRole: 'default',
-        systemPrompt: 'system',
-        userPrompt: 'user',
-        toolSet: {},
-        stepBudget: 1,
-        telemetryTags: { operationName: 'test' },
-        onStepFinish: async () => {
-          throw new Error('callback exploded');
-        },
-      }),
-    ).resolves.toMatchObject({ stopReason: 'natural' });
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('callback exploded'));
-  });
-
   it('maps max-turn terminal reasons to budget', () => {
     expect(mapClaudeCodeStopReason(resultMessage({ subtype: 'error_max_turns' }))).toBe('budget');
     expect(mapClaudeCodeStopReason(resultMessage({ terminal_reason: 'max_turns' }))).toBe('budget');
@@ -774,20 +669,14 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     expect(mapClaudeCodeStopReason(resultMessage({ subtype: 'error_during_execution' }))).toBe('error');
   });
 
-  it('returns loop metrics including step count and mapped token usage', async () => {
+  it('reports stepCount from the SDK result num_turns and mapped token usage', async () => {
     const query = vi.fn((_input: any) =>
       stream([
         initMessage(),
-        {
-          type: 'assistant',
-          message: { role: 'assistant', content: [] },
-          parent_tool_use_id: null,
-          uuid: '00000000-0000-4000-8000-000000000006',
-          session_id: 'session-id',
-        } as unknown as SDKMessage,
         resultMessage({
           subtype: 'success',
           terminal_reason: 'completed',
+          num_turns: 3,
           usage: { input_tokens: 50, output_tokens: 10 } as never,
         }),
       ]),
@@ -808,8 +697,9 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
       telemetryTags: { operationName: 'test' },
     });
 
-    expect(result.metrics?.stepCount).toBe(1);
-    expect(result.metrics?.stepBoundariesMs).toHaveLength(1);
+    // Authoritative SDK count, not a re-derived per-message tally.
+    expect(result.metrics?.stepCount).toBe(3);
+    expect(result.metrics?.stepBoundariesMs).toEqual([]);
     expect(result.metrics?.usage).toEqual({ inputTokens: 50, outputTokens: 10, totalTokens: 60 });
   });
 

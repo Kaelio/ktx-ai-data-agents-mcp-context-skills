@@ -294,7 +294,6 @@ describe('CodexKtxLlmRuntime', () => {
       runner: fakeRunner,
       startMcpServer,
     });
-    const onStepFinish = vi.fn();
 
     const result = await runtime.runAgentLoop({
       modelRole: 'default',
@@ -302,7 +301,6 @@ describe('CodexKtxLlmRuntime', () => {
       userPrompt: 'user',
       stepBudget: 5,
       telemetryTags: {},
-      onStepFinish,
       toolSet: {
         aliased_wiki_tool: {
           name: 'wiki_search',
@@ -315,7 +313,6 @@ describe('CodexKtxLlmRuntime', () => {
 
     expect(result.stopReason).toBe('natural');
     expect(result.metrics).toMatchObject({ stepCount: 1, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
-    expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 5 });
     expect(startMcpServer).toHaveBeenCalledWith({ projectDir: '/tmp/project', toolSet: expect.any(Object) });
     expect(fakeRunner.runStreamed).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -399,7 +396,6 @@ describe('CodexKtxLlmRuntime', () => {
       modelSlots: { default: 'codex' },
       runner: fakeRunner,
     });
-    const onStepFinish = vi.fn();
 
     const result = await runtime.runAgentLoop({
       modelRole: 'default',
@@ -407,7 +403,6 @@ describe('CodexKtxLlmRuntime', () => {
       userPrompt: 'user',
       stepBudget: 1,
       telemetryTags: {},
-      onStepFinish,
       toolSet: {
         first: {
           name: 'first',
@@ -421,8 +416,6 @@ describe('CodexKtxLlmRuntime', () => {
     expect(result.stopReason).toBe('budget');
     expect(result.error).toBeUndefined();
     expect(result.metrics).toMatchObject({ stepCount: 1 });
-    expect(onStepFinish).toHaveBeenCalledTimes(1);
-    expect(onStepFinish).toHaveBeenCalledWith({ stepIndex: 1, stepBudget: 1 });
     expect(fakeRunner.observedSignal()?.aborted).toBe(true);
   });
 
@@ -448,7 +441,6 @@ describe('CodexKtxLlmRuntime', () => {
       modelSlots: { default: 'codex' },
       runner: fakeRunner,
     });
-    const onStepFinish = vi.fn();
 
     const result = await runtime.runAgentLoop({
       modelRole: 'default',
@@ -456,51 +448,13 @@ describe('CodexKtxLlmRuntime', () => {
       userPrompt: 'user',
       stepBudget: 2,
       telemetryTags: {},
-      onStepFinish,
       toolSet: {},
     });
 
     expect(result.stopReason).toBe('budget');
     expect(result.error).toBeUndefined();
     expect(result.metrics).toMatchObject({ stepCount: 2 });
-    expect(onStepFinish).toHaveBeenCalledTimes(2);
-    expect(onStepFinish).toHaveBeenLastCalledWith({ stepIndex: 2, stepBudget: 2 });
     expect(fakeRunner.observedSignal()?.aborted).toBe(true);
-  });
-
-  it('fires onStepFinish live as each step completes, before the stream drains', async () => {
-    const order: string[] = [];
-    async function* liveEvents() {
-      yield { type: 'turn.started' };
-      yield { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'a', status: 'completed' } };
-      order.push('yielded-after-step-1');
-      yield { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'ktx', tool: 'b', status: 'completed' } };
-      order.push('yielded-after-step-2');
-      yield { type: 'item.completed', item: { type: 'agent_message', text: 'done' } };
-      yield { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } };
-    }
-    const fakeRunner = { runStreamed: vi.fn(async () => liveEvents()) };
-    const runtime = new CodexKtxLlmRuntime({
-      projectDir: '/tmp/project',
-      modelSlots: { default: 'codex' },
-      runner: fakeRunner,
-    });
-
-    const result = await runtime.runAgentLoop({
-      modelRole: 'default',
-      systemPrompt: 'system',
-      userPrompt: 'user',
-      stepBudget: 10,
-      telemetryTags: {},
-      onStepFinish: ({ stepIndex }) => {
-        order.push(`step-${stepIndex}`);
-      },
-      toolSet: {},
-    });
-
-    expect(result.stopReason).toBe('natural');
-    expect(result.metrics).toMatchObject({ stepCount: 2 });
-    expect(order).toEqual(['step-1', 'yielded-after-step-1', 'step-2', 'yielded-after-step-2']);
   });
 
   it('surfaces the real Codex error event even when the SDK stream throws afterward', async () => {

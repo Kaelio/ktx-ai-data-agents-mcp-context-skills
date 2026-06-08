@@ -27,13 +27,13 @@ function snapshot(events: MemoryFlowEvent[], overrides: Partial<MemoryFlowReplay
 }
 
 describe('buildDemoMetrics', () => {
-  it('estimates elapsed, agent steps, tool calls, and cost from event stream', () => {
+  it('estimates elapsed, tool calls, and cost from event stream', () => {
     const start = Date.UTC(2026, 0, 1, 0, 0, 0);
     const input = snapshot(
       [
         { type: 'source_acquired', adapter: 'live-database', trigger: 'demo_full', fileCount: 5, emittedAt: new Date(start).toISOString() },
-        { type: 'work_unit_started', unitKey: 'orders', skills: [], stepBudget: 40, emittedAt: new Date(start + 1000).toISOString() },
-        { type: 'work_unit_step', unitKey: 'orders', stepIndex: 6, stepBudget: 40, emittedAt: new Date(start + 6000).toISOString() },
+        { type: 'work_unit_started', unitKey: 'orders', skills: [], emittedAt: new Date(start + 1000).toISOString() },
+        { type: 'work_unit_step', unitKey: 'orders', toolCalls: 6, emittedAt: new Date(start + 6000).toISOString() },
       ],
       {
         plannedWorkUnits: [
@@ -51,8 +51,6 @@ describe('buildDemoMetrics', () => {
     const metrics = buildDemoMetrics(input, { now: () => start + 10_000 });
 
     expect(metrics.elapsedMs).toBe(10_000);
-    expect(metrics.agentSteps).toBe(6);
-    expect(metrics.agentStepBudget).toBe(40);
     expect(metrics.toolCalls).toBe(3);
     expect(metrics.workUnitsTotal).toBe(2);
     expect(metrics.estimatedTokens).toBeGreaterThan(0);
@@ -71,7 +69,7 @@ describe('buildDemoMetrics', () => {
     const input = snapshot(
       [
         { type: 'source_acquired', adapter: 'a', trigger: 't', fileCount: 1, emittedAt: new Date(start).toISOString() },
-        { type: 'work_unit_started', unitKey: 'a', skills: [], stepBudget: 10, emittedAt: new Date(start + 1000).toISOString() },
+        { type: 'work_unit_started', unitKey: 'a', skills: [], emittedAt: new Date(start + 1000).toISOString() },
         { type: 'work_unit_finished', unitKey: 'a', status: 'success', emittedAt: new Date(start + 5000).toISOString() },
       ],
       {

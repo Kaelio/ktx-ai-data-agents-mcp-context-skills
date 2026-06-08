@@ -176,8 +176,8 @@ describe('runKtxIngest', () => {
     const runLocal = vi.fn(async (input: RunLocalIngestOptions): Promise<LocalIngestResult> => {
       input.memoryFlow?.emit({ type: 'source_acquired', adapter: 'fake', trigger: 'manual_resync', fileCount: 2 });
       input.memoryFlow?.emit({ type: 'chunks_planned', chunkCount: 2, workUnitCount: 2, evictionCount: 0 });
-      input.memoryFlow?.emit({ type: 'work_unit_started', unitKey: 'orders', skills: [], stepBudget: 4 });
-      input.memoryFlow?.emit({ type: 'work_unit_step', unitKey: 'orders', stepIndex: 2, stepBudget: 4 });
+      input.memoryFlow?.emit({ type: 'work_unit_started', unitKey: 'orders', skills: [] });
+      input.memoryFlow?.emit({ type: 'work_unit_step', unitKey: 'orders', toolCalls: 2 });
       return completedLocalBundleRun(input, 'cli-local-progress-1');
     });
     const io = makeIo();
@@ -206,7 +206,7 @@ describe('runKtxIngest', () => {
         { percent: 15, message: 'Fetched 2 source files from fake' },
         { percent: 45, message: 'Planned 2 tasks' },
         expect.objectContaining({
-          message: 'Processing tasks: 0/2 complete, 1 active; latest orders step 2/4',
+          message: 'Processing tasks: 0/2 complete, 1 active; latest orders · 2 actions',
           transient: true,
         }),
       ]),
@@ -776,13 +776,11 @@ describe('runKtxIngest', () => {
               type: 'work_unit_started',
               unitKey: 'metabase-col-6',
               skills: ['sl_capture'],
-              stepBudget: 40,
             });
             input.memoryFlow?.emit({
               type: 'work_unit_step',
               unitKey: 'metabase-col-6',
-              stepIndex: 7,
-              stepBudget: 40,
+              toolCalls: 7,
             });
             input.memoryFlow?.emit({
               type: 'stage_progress',
@@ -806,7 +804,6 @@ describe('runKtxIngest', () => {
               type: 'work_unit_started',
               unitKey: 'metabase-col-7',
               skills: ['sl_capture'],
-              stepBudget: 40,
             });
             input.progress?.onMetabaseChildCompleted?.({
               metabaseConnectionId: 'prod-metabase',
@@ -831,8 +828,8 @@ describe('runKtxIngest', () => {
         { percent: 45, message: 'Planned 1 task' },
         { percent: 55, message: 'Processing 1/1 tasks: metabase-col-6' },
         {
-          percent: 60,
-          message: 'Processing tasks: 0/1 complete, 1 active; latest metabase-col-6 step 7/40',
+          percent: 55,
+          message: 'Processing tasks: 0/1 complete, 1 active; latest metabase-col-6 · 7 actions',
           transient: true,
         },
         { percent: 81, message: 'Resolving text conflict for metabase-col-6' },
@@ -1733,7 +1730,6 @@ describe('runKtxIngest', () => {
         type: 'work_unit_started',
         unitKey: 'historic-sql-table-public-orders',
         skills: ['historic_sql_table_digest'],
-        stepBudget: 40,
       });
       input.memoryFlow?.emit({
         type: 'work_unit_finished',
@@ -1856,13 +1852,11 @@ describe('runKtxIngest', () => {
         type: 'work_unit_started',
         unitKey: 'historic-sql-table-public-orders',
         skills: ['historic_sql_table_digest'],
-        stepBudget: 40,
       });
       input.memoryFlow?.emit({
         type: 'work_unit_step',
         unitKey: 'historic-sql-table-public-orders',
-        stepIndex: 7,
-        stepBudget: 40,
+        toolCalls: 7,
       });
       input.memoryFlow?.emit({
         type: 'work_unit_finished',
@@ -1897,7 +1891,7 @@ describe('runKtxIngest', () => {
     expect(stderr).toContain('[45%] Planned 2 tasks');
     expect(stderr).toContain('[55%] Processing 1/2 tasks: historic-sql-table-public-orders');
     expect(stderr).toContain(
-      '\r[58%] Processing tasks: 0/2 complete, 1 active; latest historic-sql-table-public-orders step 7/40\u001b[K',
+      '\r[55%] Processing tasks: 0/2 complete, 1 active; latest historic-sql-table-public-orders · 7 actions\u001b[K',
     );
     expect(stderr).toContain('[68%] Processed 1/2 tasks');
   });
@@ -1954,11 +1948,10 @@ describe('runKtxIngest', () => {
           type: 'work_unit_started',
           unitKey,
           skills: ['historic_sql_table_digest'],
-          stepBudget: 40,
         });
       }
       for (const unitKey of workUnitKeys) {
-        input.memoryFlow?.emit({ type: 'work_unit_step', unitKey, stepIndex: 1, stepBudget: 40 });
+        input.memoryFlow?.emit({ type: 'work_unit_step', unitKey, toolCalls: 1 });
       }
       input.memoryFlow?.finish('done');
       return completedLocalBundleRun(input, input.jobId ?? 'historic-concurrent-progress-job');
@@ -1986,10 +1979,10 @@ describe('runKtxIngest', () => {
 
     const stderr = io.stderr();
     expect(stderr).toContain(
-      '\r[56%] Processing tasks: 0/6 complete, 6 active; latest historic-sql-table-public-suppliers step 1/40\u001b[K',
+      '\r[55%] Processing tasks: 0/6 complete, 6 active; latest historic-sql-table-public-suppliers · 1 action\u001b[K',
     );
     expect(stderr).not.toContain(
-      '\n[56%] Processing 6/6 tasks: historic-sql-table-public-suppliers step 1/40\n',
+      '\n[55%] Processing 6/6 tasks: historic-sql-table-public-suppliers · 1 action\n',
     );
     expect(stderr).toContain('\n[100%] Ingest completed\n');
   });

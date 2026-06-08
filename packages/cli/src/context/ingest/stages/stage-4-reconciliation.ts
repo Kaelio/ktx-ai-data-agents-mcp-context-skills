@@ -15,7 +15,6 @@ export interface ReconciliationContext {
   sourceKey: string;
   jobId: string;
   force?: boolean;
-  onStepFinish?: (info: { stepIndex: number; stepBudget: number }) => void;
   abortSignal?: AbortSignal;
   forceRun?: boolean;
 }
@@ -40,7 +39,6 @@ export async function runReconciliationStage4(ctx: ReconciliationContext): Promi
     toolSet: ctx.buildToolSet(),
     stepBudget: ctx.stepBudget,
     telemetryTags: { operationName: 'ingest-bundle-reconcile', source: ctx.sourceKey, jobId: ctx.jobId },
-    onStepFinish: ctx.onStepFinish,
     abortSignal: ctx.abortSignal,
   });
   return { skipped: false, stopReason: run.stopReason, error: run.error, ...(run.metrics ? { metrics: run.metrics } : {}) };

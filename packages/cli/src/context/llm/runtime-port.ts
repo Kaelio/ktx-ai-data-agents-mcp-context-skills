@@ -17,12 +17,6 @@ export type KtxRuntimeToolSet = Record<string, KtxRuntimeToolDescriptor>;
 
 export type RunLoopStopReason = 'budget' | 'natural' | 'error';
 
-/** @internal */
-export interface RunLoopStepInfo {
-  stepIndex: number;
-  stepBudget: number;
-}
-
 export interface LlmTokenUsage {
   inputTokens?: number;
   outputTokens?: number;
@@ -48,7 +42,6 @@ export interface RunLoopParams {
   toolSet: KtxRuntimeToolSet;
   stepBudget: number;
   telemetryTags: Record<string, string>;
-  onStepFinish?: (info: RunLoopStepInfo) => void | Promise<void>;
   abortSignal?: AbortSignal;
 }
 

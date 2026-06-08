@@ -15,8 +15,6 @@ interface DemoMetricsTuning {
 interface DemoMetricsSnapshot {
   elapsedMs: number;
   etaMs: number | null;
-  agentSteps: number;
-  agentStepBudget: number;
   toolCalls: number;
   workUnitsStarted: number;
   workUnitsFinished: number;
@@ -35,18 +33,6 @@ function eventsOf<T extends MemoryFlowEvent['type']>(
   type: T,
 ): Array<Extract<MemoryFlowEvent, { type: T }>> {
   return events.filter((event): event is Extract<MemoryFlowEvent, { type: T }> => event.type === type);
-}
-
-function maxAgentStep(events: MemoryFlowEvent[]): { step: number; budget: number } {
-  const steps = eventsOf(events, 'work_unit_step');
-  const started = eventsOf(events, 'work_unit_started');
-  const stepIndex = steps.reduce((max, event) => Math.max(max, event.stepIndex), 0);
-  const stepBudget = Math.max(
-    0,
-    ...steps.map((event) => event.stepBudget),
-    ...started.map((event) => event.stepBudget),
-  );
-  return { step: stepIndex, budget: stepBudget };
 }
 
 function totalToolCalls(input: MemoryFlowReplayInput): number {
@@ -96,11 +82,10 @@ export function buildDemoMetrics(
   const nowMs = (options.now ?? Date.now)();
   const elapsedMs = elapsedMsFromEvents(input.events, nowMs);
 
-  const { step, budget } = maxAgentStep(input.events);
   const toolCalls = totalToolCalls(input);
   const progress = workUnitProgress(input);
   const finishedCount = eventsOf(input.events, 'work_unit_finished').length;
-  const stepDriver = Math.max(step, toolCalls, finishedCount * 4);
+  const stepDriver = Math.max(toolCalls, finishedCount * 4);
 
   const inputTokens = stepDriver * inputTokensPerStep;
   const outputTokens = stepDriver * outputTokensPerStep;
@@ -113,8 +98,6 @@ export function buildDemoMetrics(
   return {
     elapsedMs,
     etaMs: estimateEtaMs(elapsedMs, progress.finished, progress.total, input.status),
-    agentSteps: step,
-    agentStepBudget: budget,
     toolCalls,
     workUnitsStarted: progress.started,
     workUnitsFinished: progress.finished,

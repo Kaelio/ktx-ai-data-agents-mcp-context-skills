@@ -81,13 +81,11 @@ const memoryFlowEventSchema = z.discriminatedUnion('type', [
     type: z.literal('work_unit_started'),
     unitKey: z.string().min(1),
     skills: z.array(z.string().min(1)),
-    stepBudget: z.number().int().min(0),
   }),
   eventSchema({
     type: z.literal('work_unit_step'),
     unitKey: z.string().min(1),
-    stepIndex: z.number().int().min(0),
-    stepBudget: z.number().int().min(0),
+    toolCalls: z.number().int().min(0),
   }),
   eventSchema({
     type: z.literal('candidate_action'),
