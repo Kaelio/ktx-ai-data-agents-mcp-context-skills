@@ -50,13 +50,6 @@ function humanizeIdentifier(value: string): string {
     .toLowerCase();
 }
 
-function formatCount(count: number, singular: string, plural = `${singular}s`): string | null {
-  if (count <= 0) {
-    return null;
-  }
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 function sourceFallback(source: Record<string, unknown>, sourceName: string): string {
   const table = cleanText(source.table);
   const sql = cleanText(source.sql);
@@ -66,15 +59,10 @@ function sourceFallback(source: Record<string, unknown>, sourceName: string): st
   if (sql) {
     return `Semantic-layer source for ${sourceName} backed by curated SQL.`;
   }
-
-  const counts = [
-    formatCount(Array.isArray(source.measures) ? source.measures.length : 0, 'measure'),
-    formatCount(Array.isArray(source.segments) ? source.segments.length : 0, 'segment'),
-    formatCount(Array.isArray(source.columns) ? source.columns.length : 0, 'computed column'),
-  ].filter((item): item is string => Boolean(item));
-  return counts.length > 0
-    ? `Semantic-layer overlay for ${sourceName} defining ${counts.join(', ')}.`
-    : `Semantic-layer overlay for ${sourceName}.`;
+  // Measure/segment/column counts are rendered live from the body at list/read
+  // time, so baking them into stored prose freezes a derived value that drifts
+  // as the source later gains measures. Keep the auto fallback count-free.
+  return `Semantic-layer overlay for ${sourceName}.`;
 }
 
 function columnFallback(column: Record<string, unknown>, sourceName: string): string {
