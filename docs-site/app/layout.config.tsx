@@ -5,10 +5,27 @@ import { SlackIcon } from "@/components/slack-icon";
 
 export const baseOptions: BaseLayoutProps = {
   nav: {
-    title: <Logo />,
+    title: Logo,
     transparentMode: "top",
   },
   links: [
+    {
+      type: "menu",
+      text: "Products",
+      items: [
+        {
+          text: "ktx",
+          description: "The ktx CLI & toolkit docs",
+          url: "/docs",
+        },
+        {
+          text: "Kaelio Platform",
+          description: "Docs for the Kaelio platform",
+          url: "https://docs.kaelio.com/agent/docs",
+          external: true,
+        },
+      ],
+    },
     {
       type: "icon",
       label: "GitHub",
