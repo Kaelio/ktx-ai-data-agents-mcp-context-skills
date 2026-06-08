@@ -192,6 +192,19 @@ autonomously — without being asked the leading question — is the bar.
   next stack. The only acceptable static patterns are genuinely universal
   invariants (e.g. DB-engine system catalogs) and ktx's own self-emitted
   signatures.
+- **MUST**: Give each capability one implementation and route every caller
+  through it. When some behavior — running a query, resolving a credential or
+  config reference, authenticating, selecting a dialect, loading config —
+  already has a working implementation that some call sites use, make new or
+  divergent call sites depend on that path instead of standing up a second one.
+  Parallel implementations of one capability drift apart silently: a fix, a
+  newly supported input, or an added case lands on one path and not the other,
+  so one entry point (a CLI command, an MCP tool, an ingest stage) succeeds
+  while another fails on the same input. When two paths already do the same
+  job, collapse onto the shared one and delete the duplicate instead of
+  keeping both. When fixing a defect that lives on one path, fix the shared
+  implementation; do not patch the symptom on a forked branch, which preserves
+  the divergence you set out to remove.
 - **SHOULD**: Before inventing an abstraction or hand-rolling structural logic,
   search for what already exists and reuse it — the codebase's canonical
   representation (a structured ref/key type) instead of a parallel string scheme,
@@ -212,6 +225,10 @@ Before presenting a design, answer these explicitly:
    instead of building or parsing my own?
 5. Am I discarding the better option on a weak or misapplied constraint
    (one-time vs recurring cost, "more surface area", "more work now")?
+6. Does another entry point already perform this operation through a shared
+   implementation? If so, am I routing through that path instead of forking a
+   parallel one — and if I'm fixing a bug, am I fixing the shared layer rather
+   than one branch?
 
 A user question that nudges toward an alternative ("would X help?", "should I
 always do Y?", "will you hardcode Z?") is a signal that a better option exists.
