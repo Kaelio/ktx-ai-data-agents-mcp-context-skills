@@ -708,6 +708,7 @@ describe('runContextBuild', () => {
         executeTarget,
         fetchStarCount,
         now: () => Date.parse('2026-06-08T11:00:00.000Z'),
+        starPromptEnv: {},
         starPromptHomeDir,
       },
     );
@@ -741,6 +742,7 @@ describe('runContextBuild', () => {
         executeTarget,
         fetchStarCount,
         now: () => Date.parse('2026-06-08T11:00:00.000Z'),
+        starPromptEnv: {},
         starPromptHomeDir,
       },
     );
