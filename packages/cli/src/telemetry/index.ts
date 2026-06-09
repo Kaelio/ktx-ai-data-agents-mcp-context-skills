@@ -1,6 +1,7 @@
 import { getKtxCliPackageInfo, type KtxCliIo, type KtxCliPackageInfo } from '../cli-runtime.js';
 import { loadKtxProject } from '../context/project/project.js';
 import {
+  annotateCommandOutcome,
   beginCommandSpan,
   completeCommandSpan,
   type CommandOutcome,
@@ -18,7 +19,7 @@ import {
 import { computeTelemetryProjectId, loadTelemetryIdentity } from './identity.js';
 import { buildProjectStackSnapshotFields } from './project-snapshot.js';
 
-export { beginCommandSpan, completeCommandSpan, reportException, shutdownTelemetryEmitter };
+export { annotateCommandOutcome, beginCommandSpan, completeCommandSpan, reportException, shutdownTelemetryEmitter };
 export type { CommandOutcome, CompletedCommandSpan, ExceptionContext };
 
 export async function showTelemetryNoticeIfNeeded(io: KtxCliIo, packageInfo: KtxCliPackageInfo): Promise<void> {

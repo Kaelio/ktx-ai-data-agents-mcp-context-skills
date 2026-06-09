@@ -121,6 +121,57 @@ describe('runCommanderKtxCli telemetry', () => {
     expect(io.stderr()).not.toContain(missingProjectDir);
   });
 
+  it('emits aborted (not error) when setup exits non-zero after the user abandons the wizard', async () => {
+    const io = makeIo(true);
+    const deps: KtxCliDeps = {
+      setup: async () => {
+        // What runKtxSetup does when an interactive step is abandoned: it
+        // annotates the span and returns a non-zero exit code without throwing.
+        const { annotateCommandOutcome } = await import('../src/telemetry/index.js');
+        annotateCommandOutcome({ outcome: 'aborted' });
+        return 1;
+      },
+    };
+
+    await expect(
+      runCommanderKtxCli(['--project-dir', tempDir, 'setup'], io.io, deps, info, { runInit: async () => 0 }),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('"event":"command"');
+    expect(io.stderr()).toContain('"commandPath":["ktx","setup"]');
+    // The non-zero exit alone would have produced a blank "error"; the
+    // annotation reclassifies it as a user abort that leaves the error view.
+    expect(io.stderr()).toContain('"outcome":"aborted"');
+    expect(io.stderr()).not.toContain('"outcome":"error"');
+    expect(reportExceptionMock).not.toHaveBeenCalled();
+  });
+
+  it('emits a self-diagnosing error reason when a setup step genuinely fails without throwing', async () => {
+    const io = makeIo(true);
+    const deps: KtxCliDeps = {
+      setup: async () => {
+        const { annotateCommandOutcome } = await import('../src/telemetry/index.js');
+        annotateCommandOutcome({
+          outcome: 'error',
+          errorClass: 'KtxSetupStepFailed',
+          errorDetail: 'runtime setup step failed',
+        });
+        return 1;
+      },
+    };
+
+    await expect(
+      runCommanderKtxCli(['--project-dir', tempDir, 'setup'], io.io, deps, info, { runInit: async () => 0 }),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain('"outcome":"error"');
+    expect(io.stderr()).toContain('"errorClass":"KtxSetupStepFailed"');
+    expect(io.stderr()).toContain('"errorDetail":"runtime setup step failed"');
+    // Non-throwing failures have no exception twin; the command event carries
+    // the reason on its own.
+    expect(reportExceptionMock).not.toHaveBeenCalled();
+  });
+
   it('does not import or emit telemetry for help, version, bare non-TTY, or unknown top-level command', async () => {
     const helpIo = makeIo(true);
     await expect(runCommanderKtxCli(['--help'], helpIo.io, {}, info, { runInit: async () => 0 })).resolves.toBe(0);

@@ -11,6 +11,7 @@ import { runtimeInstallPolicyFromFlags } from './managed-python-command.js';
 import { readManagedPythonRuntimeStatus } from './managed-python-runtime.js';
 import { resolveProjectRuntimeRequirements } from './runtime-requirements.js';
 import { isKtxSetupExitError } from './setup-interrupt.js';
+import type { CommandOutcome } from './telemetry/index.js';
 import {
   type KtxAgentScope,
   type KtxAgentTarget,
@@ -208,6 +209,73 @@ function setupTelemetryOutcome(
   if (status === 'ready') return 'completed';
   if (status === 'skipped') return 'skipped';
   return 'abandoned';
+}
+
+interface SetupCommandAnnotation {
+  outcome: CommandOutcome;
+  errorClass?: string;
+  errorDetail?: string;
+}
+
+/**
+ * Classify a terminal non-ready setup status into the `command` telemetry
+ * outcome. The setup flow is the decision-maker and knows the difference:
+ * - `failed` is a genuine error; attach a step-scoped reason so the dashboard
+ *   shows an actionable signature instead of a blank.
+ * - `missing-input` in `--no-input` mode is an automation error (required flags
+ *   absent); attach a reason too.
+ * - `missing-input` from an interactive prompt, or a project `cancelled`, is the
+ *   user backing out of the wizard — an abort, not a failure. Keep it out of
+ *   error telemetry so it stops inflating the error count.
+ *
+ * Reasons are synthetic, step-scoped strings (no user input), so they satisfy
+ * the telemetry privacy rules. The step's own `errorDetail`, when present, has
+ * already been vetted for the `setup_step` event and is safe to reuse.
+ */
+function setupCommandOutcomeAnnotation(input: {
+  status: 'failed' | 'missing-input' | 'cancelled';
+  step: TelemetrySetupStep;
+  inputMode: 'auto' | 'disabled';
+  errorDetail?: string;
+}): SetupCommandAnnotation {
+  if (input.status === 'failed') {
+    return {
+      outcome: 'error',
+      errorClass: 'KtxSetupStepFailed',
+      errorDetail: input.errorDetail ?? `${input.step} setup step failed`,
+    };
+  }
+  if (input.status === 'missing-input' && input.inputMode === 'disabled') {
+    return {
+      outcome: 'error',
+      errorClass: 'KtxSetupMissingInput',
+      errorDetail: `${input.step} setup step needs input not supplied with --no-input`,
+    };
+  }
+  return { outcome: 'aborted' };
+}
+
+/**
+ * Single source of truth for how a non-ready setup step ends: the process exit
+ * code and the telemetry annotation are both derived from one classification,
+ * so they can never disagree. A genuine failure (`error`) exits non-zero; an
+ * abort — the user leaving an interactive wizard — exits 0, matching the entry
+ * menu's "Exit", a project cancellation, and a confirmed Ctrl+C.
+ */
+/** @internal */
+export function setupTerminalOutcome(input: {
+  status: 'failed' | 'missing-input' | 'cancelled';
+  step: TelemetrySetupStep;
+  inputMode: 'auto' | 'disabled';
+  errorDetail?: string;
+}): { exitCode: number; annotation: SetupCommandAnnotation } {
+  const annotation = setupCommandOutcomeAnnotation(input);
+  return { exitCode: annotation.outcome === 'error' ? 1 : 0, annotation };
+}
+
+async function annotateSetupCommandOutcome(annotation: SetupCommandAnnotation): Promise<void> {
+  const { annotateCommandOutcome } = await import('./telemetry/index.js');
+  annotateCommandOutcome(annotation);
 }
 
 async function recordSetupStep(input: {
@@ -618,7 +686,13 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     }
 
     if (projectResult.status !== 'ready') {
-      return projectResult.status === 'cancelled' ? 0 : 1;
+      const terminal = setupTerminalOutcome({
+        status: projectResult.status,
+        step: 'project',
+        inputMode: args.inputMode,
+      });
+      await annotateSetupCommandOutcome(terminal.annotation);
+      return terminal.exitCode;
     }
 
     const agentsRequested = args.agents || entryAction === 'agents';
@@ -855,11 +929,15 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         ...(stepResult.errorDetail ? { errorDetail: stepResult.errorDetail } : {}),
       });
 
-      if (stepResult.status === 'failed') {
-        return 1;
-      }
-      if (stepResult.status === 'missing-input') {
-        return 1;
+      if (stepResult.status === 'failed' || stepResult.status === 'missing-input') {
+        const terminal = setupTerminalOutcome({
+          status: stepResult.status,
+          step,
+          inputMode: args.inputMode,
+          ...(stepResult.errorDetail ? { errorDetail: stepResult.errorDetail } : {}),
+        });
+        await annotateSetupCommandOutcome(terminal.annotation);
+        return terminal.exitCode;
       }
       if (stepResult.status === 'back') {
         const previousIndex = previousNavigableStepIndex(stepIndex);

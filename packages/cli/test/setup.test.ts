@@ -7,9 +7,16 @@ import { writeKtxSetupState } from '../src/context/project/setup-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localFakeBundleReport, persistLocalBundleReport } from './ingest.test-utils.js';
+import { beginCommandSpan, completeCommandSpan, resetCommandSpan } from '../src/telemetry/command-hook.js';
 import { contextBuildCommands, writeKtxSetupContextState } from '../src/setup-context.js';
 import { runDemoTour } from '../src/setup-demo-tour.js';
-import { formatKtxSetupCompletionSummary, formatKtxSetupStatus, readKtxSetupStatus, runKtxSetup } from '../src/setup.js';
+import {
+  formatKtxSetupCompletionSummary,
+  formatKtxSetupStatus,
+  readKtxSetupStatus,
+  runKtxSetup,
+  setupTerminalOutcome,
+} from '../src/setup.js';
 
 vi.mock('../src/setup-demo-tour.js', () => ({
   runDemoTour: vi.fn(async () => 0),
@@ -2663,5 +2670,170 @@ describe('setup status', () => {
 
     expect(model).toHaveBeenCalledTimes(1);
     expect(embeddings).not.toHaveBeenCalled();
+  });
+});
+
+describe('setupTerminalOutcome', () => {
+  it('exits non-zero and reports a self-diagnosing error for a genuine step failure', () => {
+    expect(setupTerminalOutcome({ status: 'failed', step: 'runtime', inputMode: 'auto' })).toEqual({
+      exitCode: 1,
+      annotation: {
+        outcome: 'error',
+        errorClass: 'KtxSetupStepFailed',
+        errorDetail: 'runtime setup step failed',
+      },
+    });
+  });
+
+  it('reuses a step-provided errorDetail for failures', () => {
+    expect(
+      setupTerminalOutcome({
+        status: 'failed',
+        step: 'sources',
+        inputMode: 'auto',
+        errorDetail: 'metabase source ingest failed',
+      }),
+    ).toEqual({
+      exitCode: 1,
+      annotation: {
+        outcome: 'error',
+        errorClass: 'KtxSetupStepFailed',
+        errorDetail: 'metabase source ingest failed',
+      },
+    });
+  });
+
+  it('exits non-zero for missing input in --no-input mode (an automation error)', () => {
+    expect(setupTerminalOutcome({ status: 'missing-input', step: 'models', inputMode: 'disabled' })).toEqual({
+      exitCode: 1,
+      annotation: {
+        outcome: 'error',
+        errorClass: 'KtxSetupMissingInput',
+        errorDetail: 'models setup step needs input not supplied with --no-input',
+      },
+    });
+  });
+
+  it('exits zero and aborts (not errors) when the user leaves an interactive prompt', () => {
+    expect(setupTerminalOutcome({ status: 'missing-input', step: 'models', inputMode: 'auto' })).toEqual({
+      exitCode: 0,
+      annotation: { outcome: 'aborted' },
+    });
+  });
+
+  it('exits zero and aborts on a project cancellation', () => {
+    expect(setupTerminalOutcome({ status: 'cancelled', step: 'project', inputMode: 'auto' })).toEqual({
+      exitCode: 0,
+      annotation: { outcome: 'aborted' },
+    });
+  });
+});
+
+describe('runKtxSetup command-span annotation', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'ktx-setup-span-'));
+  });
+
+  afterEach(async () => {
+    resetCommandSpan();
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('annotates the active command span with the step-failure reason on a non-throwing exit', async () => {
+    resetCommandSpan();
+    beginCommandSpan({
+      commandPath: ['ktx', 'setup'],
+      flagsPresent: {},
+      hasProject: false,
+      attachProjectGroup: true,
+      startedAt: 0,
+    });
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: true,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          model: async () => ({ status: 'skipped', projectDir: tempDir }),
+          embeddings: async () => ({ status: 'skipped', projectDir: tempDir }),
+          databases: async () => ({ status: 'skipped', projectDir: tempDir }),
+          sources: async () => ({ status: 'skipped', projectDir: tempDir }),
+          runtime: async () => ({
+            status: 'failed',
+            projectDir: tempDir,
+            requirements: { features: ['core'], requirements: [] },
+          }),
+        },
+      ),
+    ).resolves.toBe(1);
+
+    // The wrapper would derive a blank 'error' from the non-zero exit; the
+    // annotation supplies the actionable reason instead.
+    const completed = completeCommandSpan({ completedAt: 1, outcome: 'error' });
+    expect(completed?.outcome).toBe('error');
+    expect(completed?.errorClass).toBe('KtxSetupStepFailed');
+    expect(completed?.errorDetail).toBe('runtime setup step failed');
+  });
+
+  it('exits zero and marks the span aborted when the user abandons an interactive step', async () => {
+    resetCommandSpan();
+    beginCommandSpan({
+      commandPath: ['ktx', 'setup'],
+      flagsPresent: {},
+      hasProject: true,
+      attachProjectGroup: true,
+      startedAt: 0,
+    });
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          agentScope: 'project',
+          skipAgents: true,
+          inputMode: 'auto',
+          yes: false,
+          cliVersion: '0.2.0',
+          skipLlm: true,
+          skipEmbeddings: false,
+          databaseSchemas: [],
+          skipDatabases: true,
+          skipSources: true,
+        },
+        testIo.io,
+        {
+          // The user backs out of the embeddings prompt (interactive
+          // missing-input). That is an abort, not a failure.
+          embeddings: async () => ({ status: 'missing-input', projectDir: tempDir }),
+        },
+      ),
+    ).resolves.toBe(0);
+
+    const completed = completeCommandSpan({ completedAt: 1, outcome: 'error' });
+    expect(completed?.outcome).toBe('aborted');
+    expect(completed?.errorClass).toBeUndefined();
+    expect(completed?.errorDetail).toBeUndefined();
   });
 });
