@@ -15,6 +15,19 @@ describe('assertReadOnlySql', () => {
       'Only read-only SELECT/WITH queries can be executed locally',
     );
   });
+
+  it('accepts read-only queries that begin with leading comments', () => {
+    expect(assertReadOnlySql('-- signups per day\nselect count(*) from public.signed_up')).toBe(
+      'select count(*) from public.signed_up',
+    );
+    expect(assertReadOnlySql('/* block */\n  with paid as (select 1) select * from paid')).toContain('with paid');
+  });
+
+  it('still rejects mutating statements hidden behind leading comments', () => {
+    expect(() => assertReadOnlySql('-- harmless\n  delete from orders')).toThrow(
+      'Only read-only SELECT/WITH queries can be executed locally',
+    );
+  });
 });
 
 describe('limitSqlForExecution', () => {
@@ -26,5 +39,11 @@ describe('limitSqlForExecution', () => {
 
   it('returns the trimmed SQL when no maxRows value is provided', () => {
     expect(limitSqlForExecution('select * from orders; ', undefined)).toBe('select * from orders');
+  });
+
+  it('strips leading comments before wrapping with a row limit', () => {
+    expect(limitSqlForExecution('-- top customers\nselect * from public.orders', 25)).toBe(
+      'select * from (select * from public.orders) as ktx_query_result limit 25',
+    );
   });
 });

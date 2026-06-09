@@ -690,7 +690,54 @@ describe('createLocalProjectMcpContextPorts', () => {
     });
   });
 
-  it('rejects path traversal keys before touching the project directory', async () => {
+  it('reads manifest-backed sources with uppercase warehouse identifiers', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      [
+        'tables:',
+        '  SIGNED_UP:',
+        '    table: PUBLIC.SIGNED_UP',
+        '    columns:',
+        '      - name: ID',
+        '        type: number',
+        '        pk: true',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'seed uppercase manifest shard',
+    );
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
+
+    await expect(
+      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'SIGNED_UP' }),
+    ).resolves.toMatchObject({
+      sourceName: 'SIGNED_UP',
+      yaml: expect.stringContaining('table: PUBLIC.SIGNED_UP'),
+    });
+  });
+
+  it('returns a standalone source verbatim even when its YAML is currently broken', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      'name: orders\nmeasures:\n  - name: revenue\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed broken source mid-edit',
+    );
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
+
+    await expect(
+      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'orders' }),
+    ).resolves.toMatchObject({
+      sourceName: 'orders',
+      yaml: expect.stringContaining('[unterminated'),
+    });
+  });
+
+  it('keeps path-traversal keys away from the project directory', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
     const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
@@ -701,12 +748,14 @@ describe('createLocalProjectMcpContextPorts', () => {
       }),
     ).rejects.toThrow('Invalid wiki key "../outside". Wiki keys must be flat; use "outside".');
 
+    // Source reads never derive a file path from the name; a traversal-style
+    // name simply matches no record.
     await expect(
       ports.semanticLayer?.readSource({
         connectionId: 'warehouse',
         sourceName: '../orders',
       }),
-    ).rejects.toThrow('Unsafe semantic-layer source name');
+    ).resolves.toBeNull();
   });
 
   it('uses semantic compute for compile-only sl_query when supplied', async () => {

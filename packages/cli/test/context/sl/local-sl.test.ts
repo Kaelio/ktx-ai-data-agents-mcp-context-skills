@@ -261,6 +261,119 @@ describe('local semantic-layer helpers', () => {
     );
   });
 
+  it('reads manifest-backed scan sources whose warehouse identifiers are uppercase', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      `tables:
+  SIGNED_UP:
+    table: PUBLIC.SIGNED_UP
+    columns:
+      - name: ID
+        type: number
+        pk: true
+      - name: EMAIL
+        type: string
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add uppercase manifest shard',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'SIGNED_UP' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'SIGNED_UP',
+        path: 'semantic-layer/warehouse/_schema/PUBLIC.yaml#SIGNED_UP',
+        yaml: expect.stringContaining('table: PUBLIC.SIGNED_UP'),
+      }),
+    );
+  });
+
+  it('reads manifest-backed sources whose names are not filename-safe', async () => {
+    // Snowflake and Postgres unquoted identifiers allow `$`; manifest keys
+    // carry the warehouse name verbatim, so the lookup must accept it.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      `tables:
+  EVENT$LOG:
+    table: PUBLIC.EVENT$LOG
+    columns:
+      - name: ID
+        type: number
+        pk: true
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add manifest shard with dollar-sign table name',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'EVENT$LOG' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'EVENT$LOG',
+        path: 'semantic-layer/warehouse/_schema/PUBLIC.yaml#EVENT$LOG',
+        yaml: expect.stringContaining('table: PUBLIC.EVENT$LOG'),
+      }),
+    );
+  });
+
+  it('reads a manifest-backed source while a sibling standalone file has broken YAML', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      `tables:
+  SIGNED_UP:
+    table: PUBLIC.SIGNED_UP
+    columns:
+      - name: ID
+        type: number
+        pk: true
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add manifest shard',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      'name: orders\nmeasures:\n  - name: revenue\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed a sibling source mid-edit with broken YAML',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'SIGNED_UP' })).resolves.toEqual(
+      expect.objectContaining({
+        name: 'SIGNED_UP',
+        yaml: expect.stringContaining('table: PUBLIC.SIGNED_UP'),
+      }),
+    );
+
+    // The broken sibling stays visible in listings instead of hiding or
+    // failing the whole connection.
+    await expect(listLocalSlSources(project, { connectionId: 'warehouse' })).resolves.toEqual([
+      expect.objectContaining({ name: 'orders', columnCount: 0 }),
+      expect.objectContaining({ name: 'SIGNED_UP', columnCount: 1 }),
+    ]);
+  });
+
+  it('returns the raw YAML of a standalone source whose content no longer parses', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      'name: orders\nmeasures:\n  - name: revenue\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed a source mid-edit with broken YAML',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'orders' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'orders',
+        path: 'semantic-layer/warehouse/orders.yaml',
+        yaml: expect.stringContaining('[unterminated'),
+      }),
+    );
+  });
+
   it('expands manifest-backed scan sources when listing all connections', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/public.yaml',
@@ -506,11 +619,21 @@ describe('local semantic-layer helpers', () => {
     });
   });
 
-  it('rejects unsafe source paths', async () => {
+  it('never derives a file path from a traversal-style source name', async () => {
+    // Reads match names against loaded records, so a traversal-style name is
+    // simply not found; writes build a file path from the name and must throw.
     await expect(
       readLocalSlSource(project, {
         connectionId: 'warehouse',
         sourceName: '../orders',
+      }),
+    ).resolves.toBeNull();
+
+    await expect(
+      writeLocalSlSource(project, {
+        connectionId: 'warehouse',
+        sourceName: '../orders',
+        yaml: ORDERS_YAML.replace('name: orders', 'name: ../orders'),
       }),
     ).rejects.toThrow('Unsafe semantic-layer source name');
   });

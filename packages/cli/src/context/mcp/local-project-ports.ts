@@ -10,6 +10,7 @@ import { createKtxDiscoverDataService } from '../../context/search/discover.js';
 import type { SqlAnalysisDialect, SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import { compileLocalSlQuery } from '../../context/sl/local-query.js';
 import { createKtxDictionarySearchService } from '../../context/sl/dictionary-search.js';
+import { readLocalSlSource } from '../../context/sl/local-sl.js';
 import { readLocalKnowledgePage, searchLocalKnowledgePages } from '../wiki/local-knowledge.js';
 import type { KtxMcpContextPorts, KtxMcpProgressCallback, KtxSqlExecutionResponse } from './types.js';
 
@@ -62,21 +63,10 @@ function assertSafeConnectionId(connectionId: string): string {
   return assertSafePathToken('connection id', connectionId);
 }
 
-function assertSafeSourceName(sourceName: string): string {
-  if (!/^[a-z0-9][a-z0-9_]*$/.test(sourceName)) {
-    throw new Error(`Unsafe semantic-layer source name: ${sourceName}`);
-  }
-  return assertSafePathToken('semantic-layer source name', sourceName);
-}
-
 async function cleanupConnector(connector: KtxScanConnector | null): Promise<void> {
   if (connector?.cleanup) {
     await connector.cleanup();
   }
-}
-
-function slPath(connectionId: string, sourceName: string): string {
-  return `semantic-layer/${assertSafeConnectionId(connectionId)}/${assertSafeSourceName(sourceName)}.yaml`;
 }
 
 async function executeValidatedReadOnlySql(
@@ -188,13 +178,11 @@ export function createLocalProjectMcpContextPorts(
     },
     semanticLayer: {
       async readSource(input) {
-        const path = slPath(input.connectionId, input.sourceName);
-        try {
-          const result = await project.fileStore.readFile(path);
-          return { sourceName: input.sourceName, yaml: result.content };
-        } catch {
-          return null;
-        }
+        const source = await readLocalSlSource(project, {
+          connectionId: input.connectionId,
+          sourceName: input.sourceName,
+        });
+        return source ? { sourceName: source.name, yaml: source.yaml } : null;
       },
       async query(input, executionOptions) {
         if (!options.semanticLayerCompute) {

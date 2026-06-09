@@ -97,8 +97,17 @@ function isSafeConnectionId(connectionId: string | undefined): connectionId is s
   return typeof connectionId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId);
 }
 
+// Standalone files live at a path derived from the source name, so only
+// conservative filename-safe names may reach `slPath`. Source names themselves
+// mirror the warehouse identifier verbatim (Snowflake's uppercase `SIGNED_UP`
+// or `EVENT$LOG`); manifest-backed sources are matched by name in memory and
+// must never be gated on this filename rule.
+function isSafeSourceName(sourceName: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9_]*$/.test(sourceName);
+}
+
 function assertSafeSourceName(sourceName: string): string {
-  if (!/^[a-z0-9][a-z0-9_]*$/.test(sourceName)) {
+  if (!isSafeSourceName(sourceName)) {
     throw new Error(`Unsafe semantic-layer source name: ${sourceName}`);
   }
   return assertSafePathToken('semantic-layer source name', sourceName);
@@ -220,7 +229,12 @@ export async function loadLocalSlSourceRecords(
 
   for (const path of paths.filter((file) => file.startsWith(`${schemaDir}/`))) {
     const raw = await project.fileStore.readFile(path);
-    const tables = manifestTables(parseYamlRecord(raw.content));
+    let tables: Record<string, ManifestTableEntry> | null;
+    try {
+      tables = manifestTables(parseYamlRecord(raw.content));
+    } catch (error) {
+      throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+    }
     if (!tables) {
       continue;
     }
@@ -237,7 +251,26 @@ export async function loadLocalSlSourceRecords(
 
   for (const path of paths.filter((file) => !file.startsWith(`${schemaDir}/`))) {
     const raw = await project.fileStore.readFile(path);
-    const parsed = parseYamlRecord(raw.content);
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = parseYamlRecord(raw.content);
+    } catch {
+      // A source mid-edit (e.g. an agent saved half-written YAML) must not take
+      // down reads, listings, or search for its siblings. Keep the file visible
+      // under its filename and surface the raw content for repair.
+      const brokenName = sourceNameFromPath(path);
+      sources.set(brokenName, {
+        connectionId,
+        name: brokenName,
+        path,
+        columnCount: 0,
+        measureCount: 0,
+        joinCount: 0,
+        yaml: raw.content,
+        source: { name: brokenName, grain: [], columns: [], joins: [], measures: [] },
+      });
+      continue;
+    }
     const name = typeof parsed.name === 'string' && parsed.name.length > 0 ? parsed.name : sourceNameFromPath(path);
     if (parsed.table || parsed.sql) {
       const source = parsedStandaloneSource(parsed, name);
@@ -317,25 +350,35 @@ export async function writeLocalSlSource(
   );
 }
 
-/** @internal */
 export async function readLocalSlSource(
   project: KtxLocalProject,
   input: { connectionId: string; sourceName: string },
 ): Promise<LocalSlSource | null> {
-  const path = slPath(input.connectionId, input.sourceName);
-  try {
-    const result = await project.fileStore.readFile(path);
-    return {
-      ...summarizeSource({ connectionId: input.connectionId, path, raw: result.content }),
-      yaml: result.content,
-    };
-  } catch {
-    const records = await loadLocalSlSourceRecords(project, {
-      connectionId: input.connectionId,
-    });
-    const record = records.find((source) => source.name === input.sourceName);
-    return record ? { ...record } : null;
+  // Only filename-safe names can have a standalone file; manifest-backed
+  // sources mirror raw warehouse identifiers (e.g. `EVENT$LOG`) and are found
+  // by the record lookup below, which never derives a path from the name.
+  if (isSafeSourceName(input.sourceName)) {
+    const path = slPath(input.connectionId, input.sourceName);
+    try {
+      const result = await project.fileStore.readFile(path);
+      return {
+        ...summarizeSource({ connectionId: input.connectionId, path, raw: result.content }),
+        yaml: result.content,
+      };
+    } catch {
+      // Missing or mid-edit standalone file — the record loader covers both:
+      // it skips absent files and represents a file whose YAML no longer
+      // parses verbatim, so readers — `ktx sl read`, `ktx sl validate`, and
+      // the `sl_read_source` MCP tool — can surface the broken content for
+      // repair instead of failing on it.
+    }
   }
+
+  const records = await loadLocalSlSourceRecords(project, {
+    connectionId: input.connectionId,
+  });
+  const record = records.find((source) => source.name === input.sourceName);
+  return record ? { ...record } : null;
 }
 
 export async function resolveLocalSlSource(
