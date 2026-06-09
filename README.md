@@ -151,9 +151,6 @@ Re-run the global install with the `@latest` tag:
 npm install -g @kaelio/ktx@latest
 ```
 
-**ktx** also prints an update notice after a command when a newer release is
-available.
-
 ## First commands
 
 | Command | Purpose |
