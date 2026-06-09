@@ -664,6 +664,38 @@ describe('setup status', () => {
     expect(testIo.stderr()).toBe('');
   });
 
+  it('fails clearly when a non-interactive run has an agent target but no LLM backend', async () => {
+    const testIo = makeIo();
+
+    // --target selects agent integration, not the LLM provider. A non-interactive
+    // run with no --llm-backend must say so plainly instead of assuming Anthropic.
+    await expect(
+      runKtxSetup(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          mode: 'auto',
+          agents: false,
+          target: 'claude-code',
+          skipAgents: true,
+          inputMode: 'disabled',
+          yes: true,
+          cliVersion: '0.2.0',
+          skipLlm: false,
+          skipEmbeddings: true,
+          skipDatabases: true,
+          skipSources: true,
+          databaseSchemas: [],
+        },
+        testIo.io,
+      ),
+    ).resolves.toBe(1);
+
+    const stderr = testIo.stderr();
+    expect(stderr).toContain('Missing LLM backend: pass --llm-backend');
+    expect(stderr).not.toContain('Missing Anthropic API key');
+  });
+
   it('preserves a newly created missing project directory when a later setup step fails', async () => {
     const projectDir = join(tempDir, 'missing-project');
     const testIo = makeIo();

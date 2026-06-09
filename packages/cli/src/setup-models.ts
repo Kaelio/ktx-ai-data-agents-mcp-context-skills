@@ -135,7 +135,18 @@ const execFileAsync = promisify(execFile);
 
 type ChooseBackendResult =
   | { status: 'ready'; backend: KtxSetupLlmBackend; prompted: boolean }
-  | { status: 'back' };
+  | { status: 'back' }
+  | { status: 'missing-input' };
+
+// Non-interactive setup cannot pick a provider safely: every backend needs
+// something the user must supply (an API key, gcloud ADC, or a logged-in local
+// CLI), so there is no credential-free default to fall back to. Name the hidden
+// --llm-backend flag and its choices here instead, mirroring how the other
+// automation errors guide users to the flag they need.
+const MISSING_LLM_BACKEND_MESSAGE =
+  'Missing LLM backend: pass --llm-backend with one of claude-code, codex, anthropic, or vertex. ' +
+  'claude-code and codex use local CLI authentication; anthropic also needs --anthropic-api-key-env or ' +
+  '--anthropic-api-key-file, and vertex also needs --vertex-project.';
 
 type VertexConfigChoice =
   | {
@@ -446,7 +457,8 @@ async function chooseBackend(
     return { status: 'ready', backend: explicit, prompted: false };
   }
   if (args.inputMode === 'disabled') {
-    return { status: 'ready', backend: 'anthropic', prompted: false };
+    io.stderr.write(`${MISSING_LLM_BACKEND_MESSAGE}\n`);
+    return { status: 'missing-input' };
   }
 
   const prompts = deps.prompts ?? createPromptAdapter();
