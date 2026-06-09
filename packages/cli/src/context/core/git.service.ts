@@ -48,8 +48,11 @@ function isNodeErrnoException(error: unknown): error is NodeJS.ErrnoException {
 /**
  * Classify whether ktx may own a git repository rooted exactly at `dir`.
  *
- * - `unowned`: no `<dir>/.git` exists → ktx can `git init` here. Covers a fresh
- *   standalone directory and a fresh directory nested inside a parent repo.
+ * - `unowned`: there is no git repository for ktx to avoid here → ktx may
+ *   `git init`. Covers a fresh standalone directory, a fresh directory nested
+ *   inside a parent repo, a path that does not exist yet, and a path that is not
+ *   a directory at all (whether the path is a usable project directory is a
+ *   separate concern for the caller to validate).
  * - `ktx-managed`: `<dir>/.git` is a directory carrying ktx's ownership marker.
  * - `foreign`: a repo ktx did not create — a `.git` directory without the marker,
  *   or a `.git` *file* (a linked worktree). ktx must never adopt or mutate it.
@@ -64,7 +67,9 @@ export async function classifyKtxRepoOwnership(dir: string): Promise<KtxRepoOwne
   try {
     dotGitIsDirectory = (await fs.lstat(join(dir, '.git'))).isDirectory();
   } catch (error) {
-    if (isNodeErrnoException(error) && error.code === 'ENOENT') {
+    // ENOENT: `<dir>/.git` is absent. ENOTDIR: `<dir>` itself is a file, so it
+    // can hold no repo. Either way there is nothing for ktx to avoid here.
+    if (isNodeErrnoException(error) && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
       return 'unowned';
     }
     throw error;

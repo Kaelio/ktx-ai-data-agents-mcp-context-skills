@@ -344,6 +344,24 @@ describe('setup project step', () => {
     await expect(stat(join(projectDir, 'ktx.yaml'))).rejects.toThrow();
   });
 
+  it('rejects a custom path that points at an existing file without crashing', async () => {
+    const startDir = join(tempDir, 'start');
+    await mkdir(startDir, { recursive: true });
+    await writeFile(join(startDir, 'notes.txt'), 'a file, not a folder\n', 'utf-8');
+    const prompts = makePromptAdapter({ choices: ['new-custom'], textValue: 'notes.txt' });
+    const testIo = makeIo({ stdoutIsTty: true });
+
+    await expect(
+      runKtxSetupProjectStep(
+        { projectDir: startDir, mode: 'auto', inputMode: 'auto', yes: false },
+        testIo.io,
+        { prompts },
+      ),
+    ).resolves.toMatchObject({ status: 'missing-input', projectDir: startDir });
+
+    expect(testIo.stderr()).toContain('exists and is not a directory');
+  });
+
   it('prompts to exit and returns cancelled in interactive auto mode', async () => {
     const projectDir = join(tempDir, 'warehouse');
     const prompts = makePromptAdapter({ choice: 'exit' });

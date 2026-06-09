@@ -151,4 +151,10 @@ describe('classifyKtxRepoOwnership', () => {
     await writeFile(join(dir, '.git'), 'gitdir: ../actual.git\n', 'utf-8');
     expect(await classifyKtxRepoOwnership(dir)).toBe('foreign');
   });
+
+  it('reports unowned when the path is itself a file', async () => {
+    const filePath = join(tempDir, 'notes.txt');
+    await writeFile(filePath, 'a file, not a folder\n', 'utf-8');
+    expect(await classifyKtxRepoOwnership(filePath)).toBe('unowned');
+  });
 });
