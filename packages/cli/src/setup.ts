@@ -222,11 +222,18 @@ interface SetupCommandAnnotation {
  * outcome. The setup flow is the decision-maker and knows the difference:
  * - `failed` is a genuine error; attach a step-scoped reason so the dashboard
  *   shows an actionable signature instead of a blank.
- * - `missing-input` in `--no-input` mode is an automation error (required flags
- *   absent); attach a reason too.
+ * - `missing-input` from a *non-interactive* run is an automation error
+ *   (required flags absent and no prompt was possible); attach a reason too.
  * - `missing-input` from an interactive prompt, or a project `cancelled`, is the
  *   user backing out of the wizard — an abort, not a failure. Keep it out of
  *   error telemetry so it stops inflating the error count.
+ *
+ * `interactive` must reflect whether a prompt could actually be shown — input
+ * is enabled AND a TTY is attached. `inputMode: 'auto'` alone is not enough: a
+ * piped/CI run without `--no-input` is still non-interactive, and steps such as
+ * the project step return `missing-input` ("pass --yes …") there without ever
+ * prompting. Treating that as an abort would make a broken automation run exit
+ * 0, so it must classify as an error.
  *
  * Reasons are synthetic, step-scoped strings (no user input), so they satisfy
  * the telemetry privacy rules. The step's own `errorDetail`, when present, has
@@ -235,7 +242,7 @@ interface SetupCommandAnnotation {
 function setupCommandOutcomeAnnotation(input: {
   status: 'failed' | 'missing-input' | 'cancelled';
   step: TelemetrySetupStep;
-  inputMode: 'auto' | 'disabled';
+  interactive: boolean;
   errorDetail?: string;
 }): SetupCommandAnnotation {
   if (input.status === 'failed') {
@@ -245,11 +252,11 @@ function setupCommandOutcomeAnnotation(input: {
       errorDetail: input.errorDetail ?? `${input.step} setup step failed`,
     };
   }
-  if (input.status === 'missing-input' && input.inputMode === 'disabled') {
+  if (input.status === 'missing-input' && !input.interactive) {
     return {
       outcome: 'error',
       errorClass: 'KtxSetupMissingInput',
-      errorDetail: `${input.step} setup step needs input not supplied with --no-input`,
+      errorDetail: `${input.step} setup step requires input not provided in a non-interactive run`,
     };
   }
   return { outcome: 'aborted' };
@@ -266,7 +273,7 @@ function setupCommandOutcomeAnnotation(input: {
 export function setupTerminalOutcome(input: {
   status: 'failed' | 'missing-input' | 'cancelled';
   step: TelemetrySetupStep;
-  inputMode: 'auto' | 'disabled';
+  interactive: boolean;
   errorDetail?: string;
 }): { exitCode: number; annotation: SetupCommandAnnotation } {
   const annotation = setupCommandOutcomeAnnotation(input);
@@ -640,6 +647,10 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     args.inputMode !== 'disabled' &&
     !args.agents &&
     (io.stdout.isTTY === true || deps.entryMenuDeps?.prompts !== undefined);
+  // A prompt is only possible when input is enabled AND a TTY is attached. A
+  // piped/CI `ktx setup` without `--no-input` is still `inputMode: 'auto'` but
+  // cannot prompt, so its `missing-input` is an automation error, not an abort.
+  const interactive = args.inputMode !== 'disabled' && io.stdout.isTTY === true;
 
   setupLoop: while (true) {
     entryAction = undefined;
@@ -689,7 +700,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       const terminal = setupTerminalOutcome({
         status: projectResult.status,
         step: 'project',
-        inputMode: args.inputMode,
+        interactive,
       });
       await annotateSetupCommandOutcome(terminal.annotation);
       return terminal.exitCode;
@@ -933,7 +944,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
         const terminal = setupTerminalOutcome({
           status: stepResult.status,
           step,
-          inputMode: args.inputMode,
+          interactive,
           ...(stepResult.errorDetail ? { errorDetail: stepResult.errorDetail } : {}),
         });
         await annotateSetupCommandOutcome(terminal.annotation);
