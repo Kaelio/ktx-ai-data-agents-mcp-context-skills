@@ -2,7 +2,7 @@ import { type Command, InvalidArgumentError, Option } from '@commander-js/extra-
 import type { KtxCliCommandContext } from '../cli-program.js';
 import { resolveCommandProjectDir } from '../cli-program.js';
 import type { KtxSetupDatabaseDriver } from '../setup-databases.js';
-import type { KtxSetupLlmBackend } from '../setup-models.js';
+import { isKtxSetupLlmBackend, type KtxSetupLlmBackend } from '../setup-models.js';
 import type { KtxSetupSourceType } from '../setup-sources.js';
 
 async function runSetupArgs(
@@ -29,7 +29,7 @@ function embeddingBackend(value: string): 'openai' | 'sentence-transformers' {
 }
 
 function llmBackend(value: string): KtxSetupLlmBackend {
-  if (value === 'anthropic' || value === 'vertex' || value === 'claude-code' || value === 'codex') {
+  if (isKtxSetupLlmBackend(value)) {
     return value;
   }
   throw new InvalidArgumentError(`invalid choice '${value}'`);
