@@ -40,6 +40,7 @@ interface BuiltMocks {
   slValidator: any;
   toolsetFactory: any;
   logger: any;
+  autoCommit: boolean;
 }
 
 const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
@@ -111,6 +112,9 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
     gitService: {
       revParseHead: vi.fn().mockResolvedValue('basesha'),
       squashMergeIntoMain: vi.fn().mockResolvedValue({ ok: true, squashSha: 'cafebabe', touchedPaths: ['a.yaml'] }),
+      stageSquashMergeIntoMain: vi
+        .fn()
+        .mockResolvedValue({ ok: true, touchedPaths: ['a.yaml'], stagedTree: 'deadbeeftree' }),
     },
     lockingService: {
       withLock: vi.fn().mockImplementation((_key: string, fn: () => Promise<unknown>) => fn()),
@@ -134,6 +138,7 @@ const buildMocks = (overrides: Partial<BuiltMocks> = {}): BuiltMocks => {
       }),
     },
     logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    autoCommit: true,
   };
 
   return { ...defaults, ...overrides };
@@ -151,6 +156,7 @@ const buildService = (mocks: BuiltMocks): MemoryAgentService =>
       llm: {
         memoryIngestionModel: mocks.appSettings.settings.llm.memoryIngestionModel,
       },
+      autoCommit: mocks.autoCommit,
     },
     promptService: mocks.prompt,
     skillsRegistry: mocks.skillsRegistry,
@@ -240,6 +246,26 @@ describe('MemoryAgentService.ingest — session-branch orchestration', () => {
     );
 
     expect(result.commitHash).toBe('cafebabe');
+  });
+
+  it('with auto_commit disabled, stages the session on main without committing or enqueuing a note', async () => {
+    const mocks = buildMocks({ autoCommit: false });
+    const svc = buildService(mocks);
+
+    const result = await svc.ingest(baseInput);
+
+    // Applied to main via the staging path, never the committing path.
+    expect(mocks.gitService.stageSquashMergeIntoMain).toHaveBeenCalledWith('session/chat-1');
+    expect(mocks.gitService.squashMergeIntoMain).not.toHaveBeenCalled();
+    // No commit means no commit-message enhancement job.
+    expect(mocks.configService.enqueueCommitMessageJobForExternalCommit).not.toHaveBeenCalled();
+    // The session still applied successfully; there is just no commit hash.
+    expect(result.commitHash).toBeNull();
+    expect(mocks.sessionWorktreeService.cleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ chatId: 'chat-1' }),
+      'success',
+      expect.any(Object),
+    );
   });
 
   it('normalizes load_skill output to markdown while preserving structured payload', async () => {

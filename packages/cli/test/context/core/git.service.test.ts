@@ -400,6 +400,66 @@ describe('GitService', () => {
     });
   });
 
+  describe('stageSquashMergeIntoMain', () => {
+    it('applies the branch to main without committing, leaving the changes staged', async () => {
+      const { commitHash: baseSha } = await writeAndCommit('seed.md', 'seed');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-stage`);
+      await service.addWorktree(wtDir, 'session/stage', baseSha);
+
+      const scoped = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'a.yaml'), 'one: 1\n', 'utf-8');
+      await scoped.commitFile('a.yaml', 'wip a', 'System User', 'system@example.com');
+
+      const result = await service.stageSquashMergeIntoMain('session/stage');
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        throw new Error('unreachable');
+      }
+      expect(result.touchedPaths).toEqual(['a.yaml']);
+      expect(result.stagedTree).toMatch(/^[0-9a-f]{40}$/);
+
+      // HEAD did not advance: no commit was created.
+      expect(await service.revParseHead()).toBe(baseSha);
+      // The change is in main's working tree...
+      await expect(readFile(join(tempDir, 'a.yaml'), 'utf-8')).resolves.toBe('one: 1\n');
+      // ...and staged in the index for the user to commit.
+      const stagedNames = await createSimpleGit(tempDir).raw(['diff', '--cached', '--name-only']);
+      expect(stagedNames).toContain('a.yaml');
+      // The staged tree is usable as a diff/read ref for DB sync.
+      const treeListing = await createSimpleGit(tempDir).raw(['ls-tree', '-r', '--name-only', result.stagedTree]);
+      expect(treeListing).toContain('a.yaml');
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
+
+    it('reports conflicts without committing or mutating main', async () => {
+      const { commitHash: baseSha } = await writeAndCommit('conflict.md', 'base\n');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-stage-conflict`);
+      await service.addWorktree(wtDir, 'session/stage-conflict', baseSha);
+      const scoped = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'conflict.md'), 'from-branch\n', 'utf-8');
+      await scoped.commitFile('conflict.md', 'branch edit', 'System User', 'system@example.com');
+
+      // Move main ahead with a conflicting change.
+      await writeAndCommit('conflict.md', 'from-main\n');
+      const mainHead = await service.revParseHead();
+
+      const result = await service.stageSquashMergeIntoMain('session/stage-conflict');
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        throw new Error('unreachable');
+      }
+      expect(result.conflictPaths).toContain('conflict.md');
+      expect(await service.revParseHead()).toBe(mainHead);
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
+  });
+
   describe('squashMergeIntoMain', () => {
     it('merges a session branch as one commit on main, returning the new SHA + touched paths', async () => {
       const { commitHash: baseSha } = await writeAndCommit('seed.md', 'seed');

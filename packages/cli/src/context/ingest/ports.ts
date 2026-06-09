@@ -159,6 +159,11 @@ interface IngestGitAuthor {
 export interface IngestStoragePort {
   homeDir: string;
   systemGitAuthor: IngestGitAuthor;
+  /**
+   * Mirror of config `storage.git.auto_commit`. When false, an ingest run applies its squash
+   * onto the project's working tree and leaves it staged instead of committing it.
+   */
+  autoCommit: boolean;
   resolveUploadDir(uploadId: string): string;
   resolvePullDir(jobId: string): string;
   resolveTranscriptDir(jobId: string): string;

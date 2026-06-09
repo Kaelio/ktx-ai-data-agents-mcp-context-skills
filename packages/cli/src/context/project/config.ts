@@ -230,7 +230,12 @@ const setupSchema = z
 
 const storageGitSchema = z
   .strictObject({
-    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits state changes to the local Git-backed store.'),
+    auto_commit: z
+      .boolean()
+      .default(true)
+      .describe(
+        'When true, a context-source ingest run (`ktx ingest <connection>`) commits its changes to the local Git-backed store. When false, the changes are applied to the working tree and left staged for you to commit.',
+      ),
     author: z
       .string()
       .min(1)
@@ -278,7 +283,12 @@ const agentSchema = z
 
 const memorySchema = z
   .strictObject({
-    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits memory updates to the Git-backed store.'),
+    auto_commit: z
+      .boolean()
+      .default(true)
+      .describe(
+        'When true, a memory/wiki ingest run commits its updates to the Git-backed store. When false, the updates are applied to the working tree and left staged for you to commit.',
+      ),
   })
   .describe('Memory subsystem configuration.');
 

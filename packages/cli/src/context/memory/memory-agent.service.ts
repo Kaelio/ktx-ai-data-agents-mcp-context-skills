@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
 import { type KtxLogger, noopLogger } from '../../context/core/config.js';
+import type { SquashMergeResult, StageSquashResult } from '../../context/core/git.service.js';
 import type { KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
 import { revertSourceToPreHead, type SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
 import type { SemanticLayerSource } from '../../context/sl/types.js';
@@ -253,13 +254,20 @@ export class MemoryAgentService {
         reconciledCrossRefs,
         gateRevertedSources,
       );
-      const mergeResult = await this.deps.lockingService.withLock('config:repo', () =>
-        this.deps.gitService.squashMergeIntoMain(
-          sessionWorktree.branch,
-          SYSTEM_GIT_AUTHOR.name,
-          SYSTEM_GIT_AUTHOR.email,
-          squashMessage,
-        ),
+      // With auto-commit disabled, apply the session to main's working tree and leave it
+      // staged rather than committing. The knowledge/SL DB is written eagerly during the
+      // session (and rolled back on conflict below), so search stays consistent with the
+      // staged files; we only skip the git commit and its message-enhancement job.
+      const autoCommit = this.deps.settings.autoCommit;
+      const mergeResult = await this.deps.lockingService.withLock<SquashMergeResult | StageSquashResult>('config:repo', () =>
+        autoCommit
+          ? this.deps.gitService.squashMergeIntoMain(
+              sessionWorktree.branch,
+              SYSTEM_GIT_AUTHOR.name,
+              SYSTEM_GIT_AUTHOR.email,
+              squashMessage,
+            )
+          : this.deps.gitService.stageSquashMergeIntoMain(sessionWorktree.branch),
       );
 
       if (!mergeResult.ok) {
@@ -269,17 +277,19 @@ export class MemoryAgentService {
       } else if (mergeResult.touchedPaths.length === 0) {
         sessionOutcome = 'empty';
       } else {
-        squashSha = mergeResult.squashSha;
         touchedPaths = mergeResult.touchedPaths;
-        // Single-file commits: pass the path so the handler diff is path-scoped.
-        // Multi-file commits: omit path so the handler grabs the full commit diff
-        // (a comma-joined pathspec would match nothing).
-        const pathFilter = touchedPaths.length === 1 ? touchedPaths[0] : '';
-        await this.deps.rootFileStore.enqueueCommitMessageJobForExternalCommit(
-          { commitHash: squashSha },
-          squashMessage,
-          pathFilter,
-        );
+        if ('squashSha' in mergeResult) {
+          squashSha = mergeResult.squashSha;
+          // Single-file commits: pass the path so the handler diff is path-scoped.
+          // Multi-file commits: omit path so the handler grabs the full commit diff
+          // (a comma-joined pathspec would match nothing).
+          const pathFilter = touchedPaths.length === 1 ? touchedPaths[0] : '';
+          await this.deps.rootFileStore.enqueueCommitMessageJobForExternalCommit(
+            { commitHash: squashSha },
+            squashMessage,
+            pathFilter,
+          );
+        }
       }
     } catch (error) {
       sessionCrashed = true;

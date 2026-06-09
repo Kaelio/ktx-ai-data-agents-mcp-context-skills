@@ -199,6 +199,7 @@ function makeDeps(
     storage: {
       homeDir: join(runtime.configDir, '.ktx'),
       systemGitAuthor: { name: 'KTX Test', email: 'system@ktx.local' },
+      autoCommit: true,
       resolveUploadDir: (id) => join(runtime.homeDir, 'upload', id),
       resolvePullDir: (id) => join(runtime.homeDir, 'pull', id),
       resolveTranscriptDir: (id) => join(runtime.configDir, '.ktx/ingest-transcripts', id),

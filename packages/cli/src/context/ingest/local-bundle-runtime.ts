@@ -129,6 +129,10 @@ class LocalIngestStorage implements IngestStoragePort {
     this.homeDir = join(project.projectDir, '.ktx');
   }
 
+  get autoCommit(): boolean {
+    return this.project.config.storage.git.auto_commit;
+  }
+
   resolveUploadDir(uploadId: string): string {
     return join(this.project.projectDir, '.ktx/cache/local-ingest', uploadId, 'upload');
   }

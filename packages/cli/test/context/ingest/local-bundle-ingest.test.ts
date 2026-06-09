@@ -424,6 +424,60 @@ describe('canonical local ingest', () => {
     }
   });
 
+  it('with auto_commit disabled, stages ingest changes and indexes the wiki without committing', async () => {
+    const projectDir = join(tempDir, 'no-autocommit-project');
+    await initKtxProject({ projectDir });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        'ingest:',
+        '  adapters:',
+        '    - fake',
+        '  embeddings:',
+        '    backend: none',
+        'storage:',
+        '  git:',
+        '    auto_commit: false',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const stagedProject = await loadKtxProject({ projectDir });
+    const preHead = await stagedProject.git.revParseHead();
+
+    const sourceDir = join(tempDir, 'no-autocommit-source');
+    await mkdir(join(sourceDir, 'orders'), { recursive: true });
+    await writeFile(join(sourceDir, 'orders', 'orders.json'), '{"name":"orders"}\n', 'utf-8');
+
+    const result = await runLocalIngest({
+      project: stagedProject,
+      adapters: [new FakeSourceAdapter()],
+      adapter: 'fake',
+      connectionId: 'warehouse',
+      sourceDir,
+      jobId: 'wiki-staged-1',
+      agentRunner: new WikiWritingAgentRunner(),
+    });
+
+    expect(result.result.failedWorkUnits).toEqual([]);
+    // No commit was created: HEAD is unchanged.
+    expect(await stagedProject.git.revParseHead()).toBe(preHead);
+    // ...yet the wiki page is on disk (staged) and indexed for search, reconciled from the
+    // staged tree rather than a commit.
+    await expect(readFile(join(projectDir, 'wiki', 'global', 'orders_context.md'), 'utf-8')).resolves.toContain('Orders');
+    const db = new Database(join(projectDir, '.ktx', 'db.sqlite'), { readonly: true });
+    try {
+      expect(db.prepare('SELECT key, summary FROM knowledge_pages ORDER BY key').all()).toEqual([
+        { key: 'orders_context', summary: 'Orders source context' },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('does not persist noop embedding vectors when local embeddings are disabled', async () => {
     await writeFile(
       join(project.projectDir, 'ktx.yaml'),

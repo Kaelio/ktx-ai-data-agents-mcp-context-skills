@@ -116,6 +116,7 @@ export function createLocalProjectMemoryIngest(
       knowledge: { userScopedKnowledgeEnabled: false },
       slValidation: { probeRowCount: 0 },
       llm: { memoryIngestionModel: project.config.llm.models.default ?? 'local-memory-model' },
+      autoCommit: project.config.memory.auto_commit,
     },
     promptService: new PromptService({ promptsDir, partials: [] }),
     skillsRegistry: new SkillsRegistryService({ skillsDir }),

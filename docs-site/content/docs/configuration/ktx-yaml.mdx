@@ -360,7 +360,7 @@ storage:
 |-------|------|---------|---------|
 | `state` | `sqlite` \| `postgres` | `sqlite` | Backend for ktx state. `sqlite` uses `.ktx/db.sqlite`; `postgres` expects a configured Postgres connection. |
 | `search` | `sqlite-fts5` \| `postgres-hybrid` | `sqlite-fts5` | Backend for search indexes. `postgres-hybrid` combines lexical and vector search in Postgres. |
-| `git.auto_commit` | `boolean` | `true` | When `true`, ktx auto-commits changes to the git-backed state store. |
+| `git.auto_commit` | `boolean` | `true` | When `true`, a context-source ingest run commits its changes to the git-backed state store. When `false`, the changes are applied to the working tree and left staged for you to commit. |
 | `git.author` | `string` | `ktx <ktx@example.com>` | Git author identity for auto-commits. Standard `Name <email>` form. |
 
 ## `llm`
@@ -619,7 +619,7 @@ memory:
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `auto_commit` | `boolean` | `true` | When `true`, ktx auto-commits memory updates to the git-backed store. |
+| `auto_commit` | `boolean` | `true` | When `true`, a memory/wiki ingest run commits its updates to the git-backed store. When `false`, the updates are applied to the working tree and left staged for you to commit. |
 
 ## A full example
 

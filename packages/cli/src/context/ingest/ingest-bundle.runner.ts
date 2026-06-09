@@ -2677,29 +2677,51 @@ export class IngestBundleRunner {
         throw error;
       }
       const commitMessage = this.buildCommitMessage(job, syncId, diffSummary, failedWorkUnits);
+      // With auto-commit disabled, apply the run onto main's working tree and leave it staged
+      // rather than committing. The wiki index is reconciled from the staged tree (a valid
+      // diff/read ref), so search stays consistent with the staged files; only the git commit
+      // and its message-enhancement job are skipped.
+      const autoCommit = this.deps.storage.autoCommit;
       const squashResult = await this.deps.lockingService.withLock('config:repo', async () => {
         const preSquashSha = await this.deps.gitService.revParseHead();
-        const merge = await this.deps.gitService.squashMergeIntoMain(
-          sessionWorktree.branch,
-          this.deps.storage.systemGitAuthor.name,
-          this.deps.storage.systemGitAuthor.email,
-          commitMessage,
-        );
-        return { preSquashSha, merge };
+        if (autoCommit) {
+          const merge = await this.deps.gitService.squashMergeIntoMain(
+            sessionWorktree.branch,
+            this.deps.storage.systemGitAuthor.name,
+            this.deps.storage.systemGitAuthor.email,
+            commitMessage,
+          );
+          return { preSquashSha, committed: true as const, merge };
+        }
+        const merge = await this.deps.gitService.stageSquashMergeIntoMain(sessionWorktree.branch);
+        return { preSquashSha, committed: false as const, merge };
       });
-      const mergeResult = squashResult.merge;
-      if (!mergeResult.ok) {
+      if (!squashResult.merge.ok) {
         await this.deps.runs.markFailed(runRow.id);
-        throw new Error(`squash merge conflict: ${mergeResult.conflictPaths.join(', ')}`);
+        throw new Error(`squash merge conflict: ${squashResult.merge.conflictPaths.join(', ')}`);
       }
-      const commitSha = mergeResult.touchedPaths.length === 0 ? null : mergeResult.squashSha;
+      const touchedPaths = squashResult.merge.touchedPaths;
+      const hasChanges = touchedPaths.length > 0;
+      // `syncRef` is the tree-ish to diff/read when reconciling the wiki index: the new commit
+      // SHA when committed, the staged tree SHA when staging. `commitSha` is only set when an
+      // actual commit was created (it surfaces in the report and progress UI).
+      let commitSha: string | null = null;
+      let syncRef: string | null = null;
+      if (hasChanges) {
+        if (squashResult.committed) {
+          commitSha = squashResult.merge.squashSha;
+          syncRef = commitSha;
+        } else {
+          syncRef = squashResult.merge.stagedTree;
+        }
+      }
       await runTrace.event(
         'debug',
         'squash',
         'squash_finished',
         {
           commitSha,
-          touchedPaths: mergeResult.touchedPaths,
+          touchedPaths,
         },
         undefined,
         Date.now() - squashStartedAt,
@@ -2714,18 +2736,28 @@ export class IngestBundleRunner {
         wikiCount: countMemoryFlowActions(memoryFlowSavedActions, 'wiki'),
         slCount: countMemoryFlowActions(memoryFlowSavedActions, 'sl'),
       });
-      await stage6?.updateProgress(1.0, commitSha ? `Saved changes (${commitSha.slice(0, 8)})` : 'No changes to save');
+      await stage6?.updateProgress(
+        1.0,
+        commitSha
+          ? `Saved changes (${commitSha.slice(0, 8)})`
+          : hasChanges
+            ? 'Staged changes (auto-commit disabled)'
+            : 'No changes to save',
+      );
 
       // Sync the shared `knowledge` index from the squashed diff in a single
       // transaction. If this throws, the run fails and no partial index state
       // survives (thanks to the transactional upsert in applyDiffTransactional).
-      if (commitSha) {
+      // `syncRef` is the new commit when committed, or the staged tree when staging.
+      if (syncRef) {
         const indexSyncStartedAt = Date.now();
         // Multi-file squash → omit path so the handler diffs the whole commit
         // (a comma-joined pathspec would match nothing and the job would no-op).
-        const pathFilter = mergeResult.touchedPaths.length === 1 ? mergeResult.touchedPaths[0] : '';
-        await this.deps.commitMessages.enqueueForExternalCommit({ commitHash: commitSha }, commitMessage, pathFilter);
-        await this.deps.wikiService.syncFromCommit(squashResult.preSquashSha, commitSha, runRow.id);
+        const pathFilter = touchedPaths.length === 1 ? touchedPaths[0] : '';
+        if (squashResult.committed) {
+          await this.deps.commitMessages.enqueueForExternalCommit({ commitHash: syncRef }, commitMessage, pathFilter);
+        }
+        await this.deps.wikiService.syncFromCommit(squashResult.preSquashSha, syncRef, runRow.id);
         await this.syncKnowledgeSlRefsFromActions(job.connectionId, memoryFlowSavedActions);
         const touchedConnections = [
           ...new Set(

@@ -31,6 +31,10 @@ export type SquashMergeResult =
   | { ok: true; squashSha: string; touchedPaths: string[] }
   | { ok: false; conflict: true; conflictPaths: string[] };
 
+export type StageSquashResult =
+  | { ok: true; touchedPaths: string[]; stagedTree: string }
+  | { ok: false; conflict: true; conflictPaths: string[] };
+
 function mergeErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -681,6 +685,53 @@ export class GitService {
     authorEmail: string,
     commitMessage: string,
   ): Promise<SquashMergeResult> {
+    const applied = await this.applySquashToIndex(branch);
+    if (!applied.ok) {
+      return applied;
+    }
+    if (applied.touchedPaths.length === 0) {
+      const head = (await this.git.revparse(['HEAD'])).trim();
+      return { ok: true, squashSha: head, touchedPaths: [] };
+    }
+
+    await this.git.commit(commitMessage, { '--author': `${author} <${authorEmail}>` });
+    const squashSha = (await this.git.revparse(['HEAD'])).trim();
+    return { ok: true, squashSha, touchedPaths: applied.touchedPaths };
+  }
+
+  /**
+   * Like {@link squashMergeIntoMain} but stops before committing: applies `branch` onto the
+   * current branch's index + working tree and leaves the result staged for the user to commit.
+   * Returns the staged tree's SHA, which is a valid diff/read ref (`git diff A..<tree>`,
+   * `git show <tree>:path`) so callers can reconcile derived indexes without a commit.
+   *
+   * This backs the `auto_commit: false` ingest path: changes still reach the working tree (so
+   * the run is not silently discarded), they are just not committed automatically.
+   *
+   * Caller must hold the `config:repo` lock, as with {@link squashMergeIntoMain}.
+   */
+  async stageSquashMergeIntoMain(branch: string): Promise<StageSquashResult> {
+    return this.withMutationQueue(() => this.stageSquashMergeIntoMainUnlocked(branch));
+  }
+
+  private async stageSquashMergeIntoMainUnlocked(branch: string): Promise<StageSquashResult> {
+    const applied = await this.applySquashToIndex(branch);
+    if (!applied.ok) {
+      return applied;
+    }
+    const stagedTree = (await this.git.raw(['write-tree'])).trim();
+    return { ok: true, touchedPaths: applied.touchedPaths, stagedTree };
+  }
+
+  /**
+   * Shared core of the squash-merge paths: applies `branch` onto the current branch's index +
+   * working tree via `git merge --squash` WITHOUT committing, leaving the caller to either
+   * commit (auto-commit on) or stage (auto-commit off). Returns the touched paths, or conflict
+   * info after restoring a clean tree.
+   */
+  private async applySquashToIndex(
+    branch: string,
+  ): Promise<{ ok: true; touchedPaths: string[] } | { ok: false; conflict: true; conflictPaths: string[] }> {
     // Diff of HEAD..branch (two dots) lists commits/files reachable from `branch` that
     // aren't on HEAD — i.e. exactly what the squash would apply. Three dots (HEAD...branch)
     // is symmetric difference and would mis-classify cases where main moved ahead.
@@ -690,8 +741,7 @@ export class GitService {
       .map((l) => l.trim())
       .filter(Boolean);
     if (touchedPaths.length === 0) {
-      const head = (await this.git.revparse(['HEAD'])).trim();
-      return { ok: true, squashSha: head, touchedPaths: [] };
+      return { ok: true, touchedPaths: [] };
     }
 
     // `git merge --squash` may NOT throw on a textual conflict — it stages the clean
@@ -724,9 +774,7 @@ export class GitService {
       return { ok: false, conflict: true, conflictPaths };
     }
 
-    await this.git.commit(commitMessage, { '--author': `${author} <${authorEmail}>` });
-    const squashSha = (await this.git.revparse(['HEAD'])).trim();
-    return { ok: true, squashSha, touchedPaths };
+    return { ok: true, touchedPaths };
   }
 
   /**

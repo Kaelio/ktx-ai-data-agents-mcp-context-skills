@@ -74,6 +74,11 @@ interface MemoryAgentSettings {
   llm: {
     memoryIngestionModel: string;
   };
+  /**
+   * When false (config `memory.auto_commit: false`), a completed session is applied to the
+   * project's working tree and left staged instead of committed, so the user commits it.
+   */
+  autoCommit: boolean;
 }
 
 interface MemoryTelemetryPort {
