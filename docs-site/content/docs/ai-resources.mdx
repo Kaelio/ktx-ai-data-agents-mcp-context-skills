@@ -1,0 +1,111 @@
+---
+title: AI Resources
+description: How coding agents read, cite, and act on the ktx docs - Markdown endpoints, a task router, and copy-paste prompts.
+---
+
+This page is for coding assistants that read or cite the **ktx** docs. It covers
+the machine-readable endpoints, a task router for common questions, and
+copy-paste prompts. It is scoped to documentation lookup and safe command
+discovery - to wire **ktx** into an agent client, see
+[Agent Clients](/docs/integrations/agent-clients).
+
+## Markdown endpoints
+
+**ktx** docs are available as plain Markdown so assistants never have to parse
+the rendered HTML site.
+
+- [`/llms.txt`](/llms.txt) - a curated index of high-value pages and agent entry
+  points. **Start here.**
+- [`/llms-full.txt`](/llms-full.txt) - the entire docs corpus in one response.
+  Use only when a task needs broad context across many pages.
+- **Per-page Markdown** - append `.md` to any docs URL:
+
+```text
+https://docs.kaelio.com/ktx/docs/getting-started/quickstart.md
+https://docs.kaelio.com/ktx/docs/cli-reference/ktx-sl.md
+https://docs.kaelio.com/ktx/docs/guides/building-context.md
+```
+
+A request for any docs URL with an `Accept: text/markdown` header returns the
+same Markdown without the `.md` suffix:
+
+```bash
+curl -H "Accept: text/markdown" https://docs.kaelio.com/ktx/docs/getting-started/quickstart
+```
+
+Each Markdown response leads with the page title, description, canonical URL, and
+Markdown URL; frontmatter is stripped; code blocks and tables are preserved; and
+missing pages return a plain-text `404` instead of falling back to HTML. Rendered
+pages also expose a **Copy as Markdown** action near the title.
+
+### Retrieval order
+
+1. Fetch [`/llms.txt`](/llms.txt).
+2. Pick one or two relevant per-page `.md` URLs.
+3. Fetch [`/llms-full.txt`](/llms-full.txt) only when page-level docs are not
+   enough.
+
+```bash
+curl https://docs.kaelio.com/ktx/llms.txt
+curl https://docs.kaelio.com/ktx/docs/getting-started/quickstart.md
+```
+
+## Task router
+
+| User asks the agent to explain... | Read first | Then read |
+|------------------------------------|------------|-----------|
+| What **ktx** does | [Introduction](/docs/getting-started/introduction) | [The Context Layer](/docs/concepts/the-context-layer) |
+| How to start from a checkout | [Quickstart](/docs/getting-started/quickstart) | [ktx setup](/docs/cli-reference/ktx-setup) |
+| How to check project readiness | [ktx status](/docs/cli-reference/ktx-status) | [Quickstart](/docs/getting-started/quickstart) |
+| How context gets built | [Building Context](/docs/guides/building-context) | [ktx ingest](/docs/cli-reference/ktx-ingest) |
+| How semantic YAML works | [Writing Context](/docs/guides/writing-context) | [ktx sl](/docs/cli-reference/ktx-sl) |
+| How machine-readable CLI output is shaped | [ktx sl](/docs/cli-reference/ktx-sl) | [ktx wiki](/docs/cli-reference/ktx-wiki) |
+
+## Agent instructions
+
+Paste this into a project or system prompt when an assistant needs to answer
+from the **ktx** docs:
+
+```text
+When answering ktx docs questions:
+
+1. Start with https://docs.kaelio.com/ktx/llms.txt.
+2. Fetch the smallest relevant Markdown page (append .md to its docs URL).
+3. Prefer the .md route over rendered HTML.
+4. Use https://docs.kaelio.com/ktx/llms-full.txt only when the task needs broad docs context.
+5. Quote commands exactly from docs pages.
+6. If docs and local CLI behavior disagree, say what differs and prefer local verified output.
+```
+
+## Prompts
+
+Replace project names, connection ids, and business terms with your own values.
+
+**Install and configure ktx in a project**
+
+```text
+Run npx skills add Kaelio/ktx --skill ktx and use the ktx skill to install and configure ktx
+```
+
+**Find the right command**
+
+```text
+Find the correct ktx command for this task: <task>. Start with /llms.txt, then fetch the smallest relevant CLI reference .md page. Quote the exact command and flags from the docs.
+```
+
+**Review semantic changes**
+
+```text
+Review the ktx semantic-layer and wiki changes in this branch. Check that measures have clear definitions, joins use valid keys, hidden or internal columns are not exposed to agents, and validation passes. List concrete file and line issues first.
+```
+
+## Guardrails
+
+- Do not invent CLI flags - fetch the relevant CLI reference page.
+- Do not scrape rendered HTML when a `.md` route exists.
+- Do not treat `/llms.txt` as complete documentation - use it as an index, then
+  fetch the linked pages.
+- Do not include credentials or secrets in prompts, URLs, or copied docs
+  snippets.
+- When docs and local CLI behavior disagree, prefer the local CLI output and
+  mention the mismatch.

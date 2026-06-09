@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://docs.kaelio.com/ktx/docs/getting-started/quickstart"><b>Quickstart</b></a> ·
   <a href="https://docs.kaelio.com/ktx/docs/cli-reference/ktx"><b>CLI Reference</b></a> ·
-  <a href="https://docs.kaelio.com/ktx/docs/ai-resources/agent-quickstart"><b>Agent Setup</b></a> ·
+  <a href="https://docs.kaelio.com/ktx/docs/ai-resources"><b>Agent Setup</b></a> ·
   <a href="https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ"><b>Slack</b></a>
 </p>
 
@@ -201,7 +201,7 @@ then the current directory. Pass `--project-dir <path>` when scripting.
 - [The Context Layer](https://docs.kaelio.com/ktx/docs/concepts/the-context-layer)
 - [Building Context](https://docs.kaelio.com/ktx/docs/guides/building-context)
 - [CLI Reference](https://docs.kaelio.com/ktx/docs/cli-reference/ktx)
-- [Agent Quickstart](https://docs.kaelio.com/ktx/docs/ai-resources/agent-quickstart)
+- [AI Resources](https://docs.kaelio.com/ktx/docs/ai-resources)
 - [Community & Support](https://docs.kaelio.com/ktx/docs/community/support)
 
 ## Community

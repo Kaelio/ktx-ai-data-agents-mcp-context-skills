@@ -54,9 +54,7 @@ ktx provides semantic-layer files, warehouse scans, wiki pages, provenance, and 
 
 - Installable setup skill: run \`npx skills add Kaelio/ktx --skill ktx\` from
   the project you want to configure.
-${link("/docs/ai-resources/agent-quickstart", "Agent Quickstart", "Task-first route for coding assistants using ktx")}
-${link("/docs/ai-resources/markdown-access", "Markdown Access", "Fetch ktx docs as llms.txt, llms-full.txt, or per-page Markdown")}
-${link("/docs/ai-resources/agent-instructions", "Agent Instructions", "Suggested instructions for coding assistants that need to read and cite ktx docs")}
+${link("/docs/ai-resources", "AI Resources", "How coding agents read, cite, and act on the ktx docs")}
 
 ## Start Here
 
@@ -67,7 +65,7 @@ ${link("/docs/guides/writing-context", "Writing Context", "Write semantic source
 ## Machine-Readable Documentation
 
 - [Full documentation](${absoluteUrl("/llms-full.txt")}): All docs pages in one plain-text markdown response
-- [Markdown access guide](${absoluteUrl("/docs/ai-resources/markdown-access.md")}): How to fetch llms.txt, llms-full.txt, and per-page Markdown
+- [AI Resources guide](${absoluteUrl("/docs/ai-resources.md")}): How agents fetch llms.txt, llms-full.txt, and per-page Markdown
 - [Quickstart markdown](${absoluteUrl("/docs/getting-started/quickstart.md")}): Human setup walkthrough
 - [Semantic-layer CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-sl.md")}): Semantic-layer commands and JSON output
 - [Wiki CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-wiki.md")}): Wiki page commands and JSON output
