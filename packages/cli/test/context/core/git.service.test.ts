@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { KtxCoreConfig } from '../../../src/context/core/config.js';
+import { createSimpleGit } from '../../../src/context/core/git-env.js';
 import { GitService } from '../../../src/context/core/git.service.js';
 
 // These tests drive a real git repo inside a temp directory — simple-git shells out to the
@@ -314,6 +315,87 @@ describe('GitService', () => {
       await expect(second.getFileAtCommit('b.md', b.commitHash)).resolves.toBe('b\n');
 
       await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
+  });
+
+  describe('nested inside an enclosing git repository', () => {
+    let enclosingRoot: string;
+    let nestedDir: string;
+    let nested: GitService;
+
+    const makeConfig = (dir: string): KtxCoreConfig => ({
+      storage: { configDir: dir, homeDir: dir },
+      git: {
+        userName: 'Test User',
+        userEmail: 'test@example.com',
+        bootstrapMessage: 'Initialize test config repo',
+        bootstrapAuthor: 'test-system',
+        bootstrapAuthorEmail: 'system@example.com',
+      },
+    });
+
+    beforeEach(async () => {
+      // An enclosing repo, like a user's application repository.
+      enclosingRoot = await mkdtemp(join(tmpdir(), 'git-service-enclosing-'));
+      const enclosing = new GitService(makeConfig(enclosingRoot));
+      await enclosing.onModuleInit();
+
+      // A ktx project living in a subdirectory of that repo.
+      nestedDir = join(enclosingRoot, 'subproj');
+      await mkdir(nestedDir, { recursive: true });
+      nested = new GitService(makeConfig(nestedDir));
+      await nested.onModuleInit();
+    });
+
+    afterEach(async () => {
+      await rm(enclosingRoot, { recursive: true, force: true });
+    });
+
+    it('initializes a dedicated repo at the config dir rather than using the enclosing repo', async () => {
+      const hasOwnGitDir = await stat(join(nestedDir, '.git'))
+        .then(() => true)
+        .catch(() => false);
+      expect(hasOwnGitDir).toBe(true);
+
+      const toplevel = (await createSimpleGit(nestedDir).revparse(['--show-toplevel'])).trim();
+      expect(await realpath(toplevel)).toBe(await realpath(nestedDir));
+    });
+
+    it('lands worktree squash-merges under the config dir, not the enclosing root', async () => {
+      // Seed so HEAD exists, then ingest a wiki page through the worktree+squash path
+      // exactly like memory/wiki ingest does.
+      await writeFile(join(nestedDir, 'seed.md'), 'seed', 'utf-8');
+      const { commitHash: baseSha } = await nested.commitFile('seed.md', 'seed', 'Test', 'test@example.com');
+
+      const wtParent = await realpath(join(enclosingRoot, '..'));
+      const wtDir = join(wtParent, `wt-${Date.now()}-nested`);
+      await nested.addWorktree(wtDir, 'session/wiki', baseSha);
+      const scoped = nested.forWorktree(wtDir);
+      await mkdir(join(wtDir, 'wiki', 'global'), { recursive: true });
+      await writeFile(join(wtDir, 'wiki', 'global', 'page.md'), '# Page\n', 'utf-8');
+      await scoped.commitFile('wiki/global/page.md', 'wip wiki', 'System User', 'system@example.com');
+
+      const result = await nested.squashMergeIntoMain(
+        'session/wiki',
+        'System User',
+        'system@example.com',
+        'Memory ingest (external_ingest): 1 wiki [chat=test1234]',
+      );
+      expect(result.ok).toBe(true);
+
+      // The page must materialize where reindex scans (under the project dir),
+      // not one level up at the enclosing repo root.
+      const underNested = await stat(join(nestedDir, 'wiki', 'global', 'page.md'))
+        .then(() => true)
+        .catch(() => false);
+      const underEnclosing = await stat(join(enclosingRoot, 'wiki', 'global', 'page.md'))
+        .then(() => true)
+        .catch(() => false);
+      expect(underNested).toBe(true);
+      expect(underEnclosing).toBe(false);
+
+      await nested.removeWorktree(wtDir).catch(() => undefined);
       await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
     });
   });

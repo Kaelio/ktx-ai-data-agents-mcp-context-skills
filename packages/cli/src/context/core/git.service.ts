@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { SimpleGit } from 'simple-git';
+import { CheckRepoActions, type SimpleGit } from 'simple-git';
 import { noopLogger, resolveConfigDir, type KtxCoreConfig, type KtxLogger } from './config.js';
 import { createSimpleGit } from './git-env.js';
 
@@ -94,15 +94,29 @@ export class GitService {
 
   private async initialize(): Promise<void> {
     try {
-      // Check if already initialized
-      const isRepo = await this.git.checkIsRepo();
+      // The ktx store assumes configDir is its own git working-tree root: writes, session
+      // worktrees, squash-merges, and reindex scans are all resolved relative to it. The
+      // default checkIsRepo() (IN_TREE) is also satisfied by an *enclosing* repository, so a
+      // project nested inside another git working tree would silently operate against that
+      // outer repo — ingest-written files land at the outer root while reindex scans configDir,
+      // leaving e.g. the wiki seeded but unindexed. Require configDir to be the repo root
+      // itself; otherwise initialize a dedicated repository here.
+      const isOwnRepoRoot = await this.git.checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
 
-      if (!isRepo) {
+      if (!isOwnRepoRoot) {
+        const insideEnclosingRepo = await this.git.checkIsRepo(CheckRepoActions.IN_TREE);
         await this.git.init();
         const gitConfig = this.config.git;
         await this.git.addConfig('user.name', gitConfig.userName);
         await this.git.addConfig('user.email', gitConfig.userEmail);
-        this.logger.log('Initialized git repository');
+        if (insideEnclosingRepo) {
+          this.logger.log(
+            `Initialized a dedicated ktx git repository at ${this.configDir} (nested inside an existing ` +
+              'git repository); ktx commits stay in this repository and do not touch the outer one.',
+          );
+        } else {
+          this.logger.log('Initialized git repository');
+        }
       }
 
       // Keep any auto-maintenance triggered by writes in-process. Detached maintenance can

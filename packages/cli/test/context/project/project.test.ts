@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createSimpleGit } from '../../../src/context/core/git-env.js';
 import { initKtxProject, loadKtxProject } from '../../../src/context/project/project.js';
 
 describe('KTX local project runtime', () => {
@@ -40,6 +41,24 @@ describe('KTX local project runtime', () => {
     await expect(stat(join(projectDir, '_schema/.gitkeep'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(stat(join(projectDir, 'raw-sources/.gitkeep'))).resolves.toBeDefined();
     await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
+  });
+
+  it('creates its own git repo when the project dir is nested inside another repository', async () => {
+    // An enclosing repository, like a user's application repo.
+    const enclosing = createSimpleGit(tempDir);
+    await enclosing.init();
+    await enclosing.addConfig('user.name', 'Enclosing');
+    await enclosing.addConfig('user.email', 'enclosing@example.com');
+    await enclosing.commit('enclosing root', { '--allow-empty': null });
+
+    const projectDir = join(tempDir, 'subproj');
+    await initKtxProject({ projectDir, authorName: 'Agent', authorEmail: 'agent@example.com' });
+
+    // ktx must own a dedicated repo at the project dir rather than committing into the
+    // enclosing repo, so writes and reindex scans share one working-tree root.
+    await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
+    const toplevel = (await createSimpleGit(projectDir).revparse(['--show-toplevel'])).trim();
+    expect(await realpath(toplevel)).toBe(await realpath(projectDir));
   });
 
   it('loads an initialized project with a working file store', async () => {

@@ -59,6 +59,14 @@ and replay; it belongs in `.gitignore`. If your team wants a record of *why* a
 change happened, link the transcript path in the PR description rather than
 committing the file.
 
+**ktx** maintains its own git repository at the project directory. When the
+project lives inside an existing repository (for example a `data/ktx`
+subdirectory of your application repo), **ktx** initializes a dedicated
+repository at the project directory rather than committing into the enclosing
+one — its ingest commits stay isolated, and writes and reindexing always share
+the same working-tree root. Track the project directory in your outer repo as a
+nested checkout (or keep it separate) depending on how you want to review it.
+
 ## A typical review session
 
 The loop above describes the shape. In practice, one review session looks like
