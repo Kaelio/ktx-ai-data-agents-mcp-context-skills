@@ -78,7 +78,6 @@ interface PipelineStatus {
 interface StorageStatus {
   state: string;
   search: string;
-  gitAutoCommit: boolean;
   gitAuthor: string;
 }
 
@@ -160,7 +159,6 @@ export interface ProjectStatus {
   nextActions: string[];
   promptCaching?: { enabled: boolean; systemTtl?: string; toolsTtl?: string; historyTtl?: string };
   workUnits?: { stepBudget: number; maxConcurrency: number; failureMode: string };
-  memoryAutoCommit: boolean;
   relationshipsDetail?: {
     acceptThreshold: number;
     reviewThreshold: number;
@@ -579,7 +577,6 @@ function buildStorageStatus(config: KtxProjectConfig): StorageStatus {
   return {
     state: config.storage.state,
     search: config.storage.search,
-    gitAutoCommit: config.storage.git.auto_commit,
     gitAuthor: config.storage.git.author,
   };
 }
@@ -986,7 +983,6 @@ export async function buildProjectStatus(project: KtxLocalProject, options: Buil
       maxConcurrency: config.ingest.workUnits.maxConcurrency,
       failureMode: config.ingest.workUnits.failureMode,
     },
-    memoryAutoCommit: config.memory.auto_commit,
     relationshipsDetail: {
       acceptThreshold: config.scan.relationships.acceptThreshold,
       reviewThreshold: config.scan.relationships.reviewThreshold,
@@ -1272,10 +1268,7 @@ export function renderProjectStatus(status: ProjectStatus, options: RenderProjec
     lines.push(
       `  ${bold('Agent')}            ${dim(`max_iterations=${status.pipeline.agentMaxIterations}, tools=${status.pipeline.agentTools.join(', ') || '(none)'}`)}`,
     );
-    lines.push(`  ${bold('Memory')}           ${dim(`auto_commit=${status.memoryAutoCommit}`)}`);
-    lines.push(
-      `  ${bold('Git')}              ${dim(`auto_commit=${status.storage.gitAutoCommit}, author=${status.storage.gitAuthor}`)}`,
-    );
+    lines.push(`  ${bold('Git')}              ${dim(`author=${status.storage.gitAuthor}`)}`);
     lines.push('');
   }
 

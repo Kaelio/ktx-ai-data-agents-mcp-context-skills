@@ -402,6 +402,19 @@ describe('buildProjectStatus --fast', () => {
   });
 });
 
+describe('renderProjectStatus config cleanup', () => {
+  it('does not render removed auto_commit status fields in verbose output', async () => {
+    const project = projectWithConfig(baseProjectConfig());
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
+    });
+    const rendered = renderProjectStatus(status, { verbose: true, useColor: false });
+
+    expect(rendered).not.toContain('auto_commit');
+    expect(rendered).toContain('author=ktx <ktx@example.com>');
+  });
+});
+
 describe('buildProjectStatus codex', () => {
   it('reports authenticated local Codex session', async () => {
     const project = projectWithConfig(withCodexLlm(buildDefaultKtxProjectConfig()));

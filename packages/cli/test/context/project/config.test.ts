@@ -29,7 +29,6 @@ connections:
         state: 'sqlite',
         search: 'sqlite-fts5',
         git: {
-          auto_commit: true,
           author: 'ktx <ktx@example.com>',
         },
       },
@@ -70,9 +69,6 @@ connections:
           default_toolset: ['sl_query', 'wiki_search', 'sl_read_source'],
         },
       },
-      memory: {
-        auto_commit: true,
-      },
       scan: {
         enrichment: {
           mode: 'none',
@@ -90,6 +86,28 @@ connections:
           validationConcurrency: 4,
         },
       },
+    });
+  });
+
+  it('rejects removed auto-commit config keys', () => {
+    expect(() =>
+      parseKtxProjectConfig(`
+storage:
+  git:
+    auto_commit: false
+`),
+    ).toThrow(/storage\.git\.auto_commit/);
+
+    expect(() =>
+      parseKtxProjectConfig(`
+memory:
+  auto_commit: false
+`),
+    ).toThrow(/memory/);
+
+    expect(validateKtxProjectConfig('storage:\n  git:\n    auto_commit: false\n')).toMatchObject({
+      ok: false,
+      issues: [expect.objectContaining({ path: 'storage.git.auto_commit' })],
     });
   });
 
@@ -595,7 +613,7 @@ describe('generateKtxProjectConfigJsonSchema', () => {
 
   it('exposes every top-level ktx.yaml section under properties', () => {
     const properties = schema.properties as Record<string, unknown>;
-    expect(Object.keys(properties).sort()).toEqual(['agent', 'connections', 'ingest', 'llm', 'memory', 'scan', 'setup', 'storage'].sort());
+    expect(Object.keys(properties).sort()).toEqual(['agent', 'connections', 'ingest', 'llm', 'scan', 'setup', 'storage'].sort());
   });
 
   it('does not require any top-level fields', () => {
