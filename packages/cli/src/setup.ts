@@ -6,6 +6,7 @@ import { ktxLocalStateDbPath } from './context/project/local-state-db.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
 import { readKtxSetupState } from './context/project/setup-config.js';
 import { getKtxCliPackageInfo, type KtxCliIo } from './cli-runtime.js';
+import { SLACK_SETUP_NOTE } from './community-cta.js';
 import { formatNextStepLines, formatSetupNextStepLines } from './next-steps.js';
 import { runtimeInstallPolicyFromFlags } from './managed-python-command.js';
 import { readManagedPythonRuntimeStatus } from './managed-python-runtime.js';
@@ -921,5 +922,6 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
       );
     }
   }
+  setupUi.note(SLACK_SETUP_NOTE.body, SLACK_SETUP_NOTE.title, io);
   return 0;
 }

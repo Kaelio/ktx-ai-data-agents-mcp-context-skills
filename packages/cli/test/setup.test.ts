@@ -652,6 +652,8 @@ describe('setup status', () => {
     expect(testIo.stdout()).toContain('ktx setup');
     expect(testIo.stdout()).not.toContain('ktx agent context --json');
     expect(testIo.stdout()).not.toContain('Optional MCP:');
+    expect(testIo.stdout()).toContain('Community:');
+    expect(testIo.stdout()).toContain('Questions or feedback? Join the ktx Slack: https://ktx.sh/slack');
     expect(testIo.stderr()).toBe('');
   });
 
