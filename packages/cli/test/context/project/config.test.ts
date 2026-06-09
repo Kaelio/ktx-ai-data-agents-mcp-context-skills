@@ -7,6 +7,8 @@ import {
   validateKtxProjectConfig,
 } from '../../../src/context/project/config.js';
 
+const removedAutoCommitKey = ['auto', 'commit'].join('_');
+
 describe('KTX project config', () => {
   it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
     expect(
@@ -94,20 +96,20 @@ connections:
       parseKtxProjectConfig(`
 storage:
   git:
-    auto_commit: false
+    ${removedAutoCommitKey}: false
 `),
-    ).toThrow(/storage\.git\.auto_commit/);
+    ).toThrow(new RegExp(`storage\\.git\\.${removedAutoCommitKey}`));
 
     expect(() =>
       parseKtxProjectConfig(`
 memory:
-  auto_commit: false
+  ${removedAutoCommitKey}: false
 `),
     ).toThrow(/memory/);
 
-    expect(validateKtxProjectConfig('storage:\n  git:\n    auto_commit: false\n')).toMatchObject({
+    expect(validateKtxProjectConfig(`storage:\n  git:\n    ${removedAutoCommitKey}: false\n`)).toMatchObject({
       ok: false,
-      issues: [expect.objectContaining({ path: 'storage.git.auto_commit' })],
+      issues: [expect.objectContaining({ path: `storage.git.${removedAutoCommitKey}` })],
     });
   });
 

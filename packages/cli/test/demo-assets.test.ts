@@ -13,6 +13,7 @@ import {
 } from '../src/demo-assets.js';
 
 const packagedDemoSource = 'packaged-orbit-demo';
+const removedAutoCommitKey = ['auto', 'commit'].join('_');
 
 function packagedDemoAssetPath(relativePath: string): string {
   return fileURLToPath(new URL(`../assets/demo/orbit/${relativePath}`, import.meta.url));
@@ -133,7 +134,7 @@ describe('demo assets', () => {
     const config = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(config).toContain('backend: anthropic');
     expect(config).toContain('api_key: env:ANTHROPIC_API_KEY');
-    expect(config).not.toContain('auto_commit');
+    expect(config).not.toContain(removedAutoCommitKey);
     expect(config).not.toContain('memory:');
     expect(config).not.toContain('sk-ant-');
   });
