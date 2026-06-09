@@ -27,6 +27,24 @@ export interface WorktreeEntry {
   head: string | null;
 }
 
+const KTX_MANAGED_GIT_CONFIG_KEY = 'ktx.managed';
+
+type GitDirState = 'absent' | 'directory' | 'foreign';
+
+class KtxForeignGitRepositoryError extends Error {
+  constructor(configDir: string) {
+    super(
+      `${configDir} is already a git repository that ktx did not create. ` +
+        'ktx maintains its context in a repository it owns; run ktx in a dedicated directory or move the existing repository aside.',
+    );
+    this.name = 'KtxForeignGitRepositoryError';
+  }
+}
+
+function isNodeErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
+
 export type SquashMergeResult =
   | { ok: true; squashSha: string; touchedPaths: string[] }
   | { ok: false; conflict: true; conflictPaths: string[] };
@@ -96,14 +114,42 @@ export class GitService {
     await this.initialize();
   }
 
+  private async gitDirState(): Promise<GitDirState> {
+    try {
+      const stat = await fs.lstat(join(this.configDir, '.git'));
+      return stat.isDirectory() ? 'directory' : 'foreign';
+    } catch (error) {
+      if (isNodeErrnoException(error) && error.code === 'ENOENT') {
+        return 'absent';
+      }
+      throw error;
+    }
+  }
+
+  private async hasKtxManagedMarker(): Promise<boolean> {
+    try {
+      const value = await this.git.raw(['config', '--local', '--get', KTX_MANAGED_GIT_CONFIG_KEY]);
+      return value.trim() === 'true';
+    } catch {
+      return false;
+    }
+  }
+
   private async initialize(): Promise<void> {
     try {
-      // Check if already initialized
-      const isRepo = await this.git.checkIsRepo();
+      const gitDirState = await this.gitDirState();
 
-      if (!isRepo) {
+      if (gitDirState === 'absent') {
         await this.git.init();
-        this.logger.log('Initialized git repository');
+        await this.git.addConfig(KTX_MANAGED_GIT_CONFIG_KEY, 'true');
+        this.logger.log('Initialized ktx-managed git repository');
+      } else if (gitDirState === 'directory') {
+        const isManaged = await this.hasKtxManagedMarker();
+        if (!isManaged) {
+          throw new KtxForeignGitRepositoryError(this.configDir);
+        }
+      } else {
+        throw new KtxForeignGitRepositoryError(this.configDir);
       }
 
       // Keep any auto-maintenance triggered by writes in-process. Detached maintenance can
