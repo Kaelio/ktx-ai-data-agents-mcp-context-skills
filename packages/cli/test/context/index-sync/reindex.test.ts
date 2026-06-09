@@ -159,13 +159,16 @@ describe('reindexLocalIndexes', () => {
       '---\nsummary: Revenue\nusage_mode: auto\n---\n\nPaid orders.\n',
       'utf-8',
     );
-    await mkdir(join(project.projectDir, 'semantic-layer/warehouse'), { recursive: true });
-    await writeFile(join(project.projectDir, 'semantic-layer/warehouse/broken.yaml'), 'not: [valid', 'utf-8');
+    // A broken standalone source is surfaced for repair rather than failing the
+    // scope, so use a corrupt machine-generated manifest shard, which is the
+    // remaining fatal read failure that the per-scope catch must isolate.
+    await mkdir(join(project.projectDir, 'semantic-layer/warehouse/_schema'), { recursive: true });
+    await writeFile(join(project.projectDir, 'semantic-layer/warehouse/_schema/broken.yaml'), 'not: [valid', 'utf-8');
 
     const summary = await reindexLocalIndexes(project, { force: false, embeddingService: null });
 
     expect(summary.scopes.find((scope) => scope.label === 'global')?.error).toBeUndefined();
-    expect(summary.scopes.find((scope) => scope.label === 'warehouse')?.error).toContain('YAML');
+    expect(summary.scopes.find((scope) => scope.label === 'warehouse')?.error).toContain('_schema/broken.yaml');
   });
 
   it('marks a scope errored when configured embeddings fail', async () => {
