@@ -85,8 +85,12 @@ export class GitService {
     await fs.mkdir(this.configDir, { recursive: true });
     this.logger.log(`Config directory ensured at: ${this.configDir}`);
 
-    // Initialize simple-git
-    this.git = createSimpleGit(this.configDir);
+    // Initialize simple-git. Carry ktx's identity in the environment so commits succeed even
+    // when this repo already exists and the machine has no configured git identity.
+    this.git = createSimpleGit(this.configDir, {
+      name: this.config.git.userName,
+      email: this.config.git.userEmail,
+    });
 
     // Initialize git repository
     await this.initialize();
@@ -99,9 +103,6 @@ export class GitService {
 
       if (!isRepo) {
         await this.git.init();
-        const gitConfig = this.config.git;
-        await this.git.addConfig('user.name', gitConfig.userName);
-        await this.git.addConfig('user.email', gitConfig.userEmail);
         this.logger.log('Initialized git repository');
       }
 
@@ -125,7 +126,11 @@ export class GitService {
       }
     } catch (error) {
       this.logger.error('Failed to initialize git repository', error);
-      throw new Error('Failed to initialize git repository');
+      // Preserve the underlying git error: the generic message alone is undiagnosable in
+      // telemetry and unactionable for the user. The exception reporter walks `cause` and
+      // redacts secrets before send.
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to initialize git repository: ${detail}`, { cause: error });
     }
   }
 
@@ -899,7 +904,10 @@ export class GitService {
    */
   forWorktree(workdir: string): GitService {
     const scoped = new GitService(this.config, this.logger);
-    scoped.git = createSimpleGit(workdir);
+    scoped.git = createSimpleGit(workdir, {
+      name: this.config.git.userName,
+      email: this.config.git.userEmail,
+    });
     scoped.configDir = workdir;
     return scoped;
   }

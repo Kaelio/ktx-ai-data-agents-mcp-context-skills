@@ -24,6 +24,21 @@ function sanitizedGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
   return sanitized;
 }
 
-export function createSimpleGit(baseDir: string): SimpleGit {
-  return simpleGit({ baseDir, unsafe: { allowUnsafeAskPass: true } }).env(sanitizedGitEnv());
+/**
+ * Create a simple-git client scoped to `baseDir`. When an identity is provided, ktx's own
+ * commits carry it through the GIT_AUTHOR and GIT_COMMITTER environment variables instead of
+ * relying on repo-local or global git config. This keeps commits working when the project
+ * directory is an existing repo ktx did not create and the machine has no configured git
+ * identity (e.g. a fresh Mac with no ~/.gitconfig), without mutating the user's repo config.
+ * Explicit `--author` flags on individual commits still take precedence over GIT_AUTHOR_NAME.
+ */
+export function createSimpleGit(baseDir: string, identity?: { name: string; email: string }): SimpleGit {
+  const env = sanitizedGitEnv();
+  if (identity?.name && identity.email) {
+    env.GIT_AUTHOR_NAME = identity.name;
+    env.GIT_AUTHOR_EMAIL = identity.email;
+    env.GIT_COMMITTER_NAME = identity.name;
+    env.GIT_COMMITTER_EMAIL = identity.email;
+  }
+  return simpleGit({ baseDir, unsafe: { allowUnsafeAskPass: true } }).env(env);
 }
