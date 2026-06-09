@@ -332,6 +332,35 @@ describe('runKtxScan', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it('refuses to scan a connection marked execute-only (scan_enabled: false)', async () => {
+    await initKtxProject({ projectDir: tempDir });
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      ['connections:', '  public_bq:', '    driver: bigquery', '    scan_enabled: false', ''].join('\n'),
+      'utf-8',
+    );
+    const runLocalScan = vi.fn();
+    const io = makeIo();
+
+    await expect(
+      runKtxScan(
+        {
+          command: 'run',
+          projectDir: tempDir,
+          connectionId: 'public_bq',
+          mode: 'structural',
+          detectRelationships: false,
+          dryRun: false,
+        },
+        io.io,
+        { runLocalScan, createLocalIngestAdapters: noLocalIngestAdapters },
+      ),
+    ).resolves.toBe(1);
+
+    expect(runLocalScan).not.toHaveBeenCalled();
+    expect(io.stderr()).toContain('scan_enabled: false');
+  });
+
   it('runs structural scans and prints a dev-friendly plain summary', async () => {
     await initKtxProject({ projectDir: tempDir });
     const runLocalScan = vi.fn(

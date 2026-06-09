@@ -8,6 +8,7 @@ import type { MemoryFlowEvent, MemoryFlowReplayInput } from './context/ingest/me
 import { renderMemoryFlowReplay } from './context/ingest/memory-flow/render.js';
 import type { KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import { isExecuteOnlyConnection } from './context/connections/local-warehouse-descriptor.js';
 import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
@@ -695,6 +696,13 @@ export async function runKtxIngest(
     const project = await loadKtxProject({ projectDir: args.projectDir });
     const env = deps.env ?? process.env;
     if (args.command === 'run') {
+      if (isExecuteOnlyConnection(project.config.connections[args.connectionId])) {
+        io.stderr.write(
+          `Connection '${args.connectionId}' is registered for SQL execution only (scan_enabled: false) and ` +
+            'cannot be ingested. Remove scan_enabled: false to make it a scan/ingest target, or use `ktx sql` to query it.\n',
+        );
+        return 1;
+      }
       const resolveEmbeddingProvider = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
       const resolution = await resolveEmbeddingProvider(project, {
         mode: 'ensure',

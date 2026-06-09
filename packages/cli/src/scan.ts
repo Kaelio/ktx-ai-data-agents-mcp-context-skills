@@ -1,6 +1,7 @@
 import type { KtxProgressPort, KtxScanMode, KtxScanReport, KtxScanWarning } from './context/scan/types.js';
 import { runLocalScan } from './context/scan/local-scan.js';
 import { loadKtxProject, type KtxLocalProject } from './context/project/project.js';
+import { isExecuteOnlyConnection } from './context/connections/local-warehouse-descriptor.js';
 import { getKtxCliPackageInfo } from './cli-runtime.js';
 import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import type { KtxCliIo } from './index.js';
@@ -326,6 +327,13 @@ export async function runKtxScan(args: KtxScanArgs, io: KtxCliIo = process, deps
   let project: KtxLocalProject | undefined;
   try {
     project = await loadKtxProject({ projectDir: args.projectDir });
+    if (isExecuteOnlyConnection(project.config.connections[args.connectionId])) {
+      io.stderr.write(
+        `Connection '${args.connectionId}' is registered for SQL execution only (scan_enabled: false) and ` +
+          'cannot be scanned. Remove scan_enabled: false to make it a scan target, or use `ktx sql` to query it.\n',
+      );
+      return 1;
+    }
     const resolveEmbeddingProvider = deps.resolveEmbeddingProvider ?? resolveProjectEmbeddingProvider;
     const resolution = await resolveEmbeddingProvider(project, {
       mode: 'ensure',

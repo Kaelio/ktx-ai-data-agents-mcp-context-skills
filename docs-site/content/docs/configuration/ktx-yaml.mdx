@@ -162,10 +162,12 @@ connections:
 
 Set `scan_enabled: false` to register a warehouse for SQL execution only. The
 connection is usable by `ktx sql` and the agent `sql_execution` tool, but **ktx**
-never introspects, scans, or ingests it — and `ktx setup` validates the
-credential without discovering or scanning its schemas. This is the supported way
-to run read-only queries against shared or public data (for example a BigQuery
-billing project full of unrelated datasets) without making it a context source.
+never introspects, scans, or ingests it: automatic ingest skips it, `ktx setup`
+validates the credential without discovering or scanning its schemas, and even an
+explicit `ktx scan <id>` or `ktx ingest <id>` is refused with guidance. This is
+the supported way to run read-only queries against shared or public data (for
+example a BigQuery billing project full of unrelated datasets) without making it
+a context source.
 
 ```yaml
 connections:

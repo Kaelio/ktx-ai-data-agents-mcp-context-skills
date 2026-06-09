@@ -54,6 +54,40 @@ describe('runKtxIngest', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it('refuses to ingest a connection marked execute-only (scan_enabled: false)', async () => {
+    const projectDir = join(tempDir, 'project');
+    await initKtxProject({ projectDir });
+    await writeFile(
+      join(projectDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  public_bq:',
+        '    driver: bigquery',
+        '    scan_enabled: false',
+        'ingest:',
+        '  adapters:',
+        '    - fake',
+        '  embeddings:',
+        '    backend: none',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const runLocal = vi.fn();
+    const io = makeIo();
+
+    await expect(
+      runKtxIngest(
+        { command: 'run', projectDir, connectionId: 'public_bq', adapter: 'fake', outputMode: 'plain' },
+        io.io,
+        { runLocalIngest: runLocal },
+      ),
+    ).resolves.toBe(1);
+
+    expect(runLocal).not.toHaveBeenCalled();
+    expect(io.stderr()).toContain('scan_enabled: false');
+  });
+
   it('runs local ingest and reads status', async () => {
     const projectDir = join(tempDir, 'project');
     await writeWarehouseConfig(projectDir);
