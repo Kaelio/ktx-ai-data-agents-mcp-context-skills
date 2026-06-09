@@ -271,8 +271,18 @@ export class MemoryAgentService {
       );
 
       if (!mergeResult.ok) {
+        // Both conflict and dirty-target mean "not landed" — roll back the eager session
+        // writes so the DB doesn't get ahead of main, and leave main untouched.
         sessionOutcome = 'conflict';
-        sessionConflictPaths = mergeResult.conflictPaths;
+        if ('dirty' in mergeResult) {
+          this.logger.warn(
+            `[memory-agent] chat=${chatId} not landed: project working tree has uncommitted changes ` +
+              `(${mergeResult.dirtyPaths.slice(0, 5).join(', ')}); commit or discard them and re-run ` +
+              '(a previous run with auto_commit disabled may have been left staged).',
+          );
+        } else {
+          sessionConflictPaths = mergeResult.conflictPaths;
+        }
         await this.rollbackDbForAbortedSession(session, actions);
       } else if (mergeResult.touchedPaths.length === 0) {
         sessionOutcome = 'empty';

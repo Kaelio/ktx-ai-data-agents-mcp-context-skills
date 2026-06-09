@@ -365,6 +365,24 @@ describe('MemoryAgentService.ingest — session-branch orchestration', () => {
     expect(result.actions).toEqual([]);
   });
 
+  it('dirty-target path: rolls back DB and does not land when main has uncommitted changes', async () => {
+    const mocks = buildMocks();
+    mocks.gitService.squashMergeIntoMain.mockResolvedValue({
+      ok: false,
+      dirty: true,
+      dirtyPaths: ['pending.md'],
+    });
+    const svc = buildService(mocks);
+
+    const result = await svc.ingest(baseInput);
+
+    // Treated as a not-landed abort: rolled back, no commit, no message-enhancement job.
+    expect(mocks.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'conflict', expect.any(Object));
+    expect(mocks.configService.enqueueCommitMessageJobForExternalCommit).not.toHaveBeenCalled();
+    expect(result.commitHash).toBeNull();
+    expect(result.actions).toEqual([]);
+  });
+
   it('crash path: post-loop step throws → cleanup(crash), commitHash=null', async () => {
     const mocks = buildMocks();
     // Force the cross-ref reconciler to throw, escaping into the outer try/catch and

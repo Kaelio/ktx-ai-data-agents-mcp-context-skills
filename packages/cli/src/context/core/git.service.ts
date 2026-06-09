@@ -27,13 +27,21 @@ export interface WorktreeEntry {
   head: string | null;
 }
 
+/**
+ * `dirty` means the target (main) working tree had uncommitted tracked changes before the
+ * merge — typically residue from a prior `auto_commit: false` run that was never committed.
+ * Squashing into it would either commit those unrelated changes or, on conflict cleanup,
+ * `reset --hard` them away, so the merge is refused and the tree is left untouched.
+ */
 export type SquashMergeResult =
   | { ok: true; squashSha: string; touchedPaths: string[] }
-  | { ok: false; conflict: true; conflictPaths: string[] };
+  | { ok: false; conflict: true; conflictPaths: string[] }
+  | { ok: false; dirty: true; dirtyPaths: string[] };
 
 export type StageSquashResult =
   | { ok: true; touchedPaths: string[]; stagedTree: string }
-  | { ok: false; conflict: true; conflictPaths: string[] };
+  | { ok: false; conflict: true; conflictPaths: string[] }
+  | { ok: false; dirty: true; dirtyPaths: string[] };
 
 function mergeErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -731,7 +739,28 @@ export class GitService {
    */
   private async applySquashToIndex(
     branch: string,
-  ): Promise<{ ok: true; touchedPaths: string[] } | { ok: false; conflict: true; conflictPaths: string[] }> {
+  ): Promise<
+    | { ok: true; touchedPaths: string[] }
+    | { ok: false; conflict: true; conflictPaths: string[] }
+    | { ok: false; dirty: true; dirtyPaths: string[] }
+  > {
+    // The squash flow commits the whole index and, on conflict, `reset --hard`s the tree, so
+    // it must start from a clean target. Refuse if the target has uncommitted tracked changes
+    // (e.g. residue from a prior `auto_commit: false` run) rather than committing them under
+    // this run's message or discarding them. Untracked files (gitignored .ktx state, stray
+    // files) are not committed by the squash and are intentionally ignored here.
+    const dirtyPaths = (await this.git.raw(['status', '--porcelain', '--untracked-files=no']))
+      .split('\n')
+      .map((line) => line.slice(3).trim())
+      .filter(Boolean);
+    if (dirtyPaths.length > 0) {
+      this.logger.warn(
+        `applySquashToIndex: target worktree has ${dirtyPaths.length} uncommitted change(s) ` +
+          `(${dirtyPaths.slice(0, 5).join(', ')}); refusing to squash ${branch} to avoid contaminating or discarding them`,
+      );
+      return { ok: false, dirty: true, dirtyPaths };
+    }
+
     // Diff of HEAD..branch (two dots) lists commits/files reachable from `branch` that
     // aren't on HEAD — i.e. exactly what the squash would apply. Three dots (HEAD...branch)
     // is symmetric difference and would mis-classify cases where main moved ahead.

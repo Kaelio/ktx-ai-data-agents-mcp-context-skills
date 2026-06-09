@@ -449,11 +449,72 @@ describe('GitService', () => {
 
       const result = await service.stageSquashMergeIntoMain('session/stage-conflict');
       expect(result.ok).toBe(false);
-      if (result.ok) {
-        throw new Error('unreachable');
+      if (result.ok || !('conflict' in result)) {
+        throw new Error('expected a conflict');
       }
       expect(result.conflictPaths).toContain('conflict.md');
       expect(await service.revParseHead()).toBe(mainHead);
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
+  });
+
+  describe('refuses to squash into a dirty main worktree', () => {
+    it('reports dirty without committing, merging, or discarding pre-existing staged changes', async () => {
+      const { commitHash: baseSha } = await writeAndCommit('seed.md', 'seed');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-dirty`);
+      await service.addWorktree(wtDir, 'session/dirty', baseSha);
+      const scoped = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'from-branch.yaml'), 'b: 1\n', 'utf-8');
+      await scoped.commitFile('from-branch.yaml', 'wip', 'System User', 'system@example.com');
+
+      // Residue from a prior auto_commit:false run: a staged change on main.
+      await writeFile(join(tempDir, 'pending.md'), 'pending work\n', 'utf-8');
+      await createSimpleGit(tempDir).add('pending.md');
+
+      const result = await service.squashMergeIntoMain('session/dirty', 'System User', 'system@example.com', 'msg');
+
+      expect(result.ok).toBe(false);
+      if (result.ok || !('dirty' in result)) {
+        throw new Error('expected a dirty refusal');
+      }
+      expect(result.dirtyPaths).toContain('pending.md');
+
+      // Main is untouched: HEAD unchanged, branch not merged, pending change preserved.
+      expect(await service.revParseHead()).toBe(baseSha);
+      await expect(readFile(join(tempDir, 'pending.md'), 'utf-8')).resolves.toBe('pending work\n');
+      const staged = await createSimpleGit(tempDir).raw(['diff', '--cached', '--name-only']);
+      expect(staged).toContain('pending.md');
+      const branchFileLanded = await stat(join(tempDir, 'from-branch.yaml'))
+        .then(() => true)
+        .catch(() => false);
+      expect(branchFileLanded).toBe(false);
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
+
+    it('stageSquashMergeIntoMain also refuses on a dirty main', async () => {
+      const { commitHash: baseSha } = await writeAndCommit('seed.md', 'seed');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-dirty-stage`);
+      await service.addWorktree(wtDir, 'session/dirty-stage', baseSha);
+      const scoped = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'from-branch.yaml'), 'b: 1\n', 'utf-8');
+      await scoped.commitFile('from-branch.yaml', 'wip', 'System User', 'system@example.com');
+
+      await writeFile(join(tempDir, 'pending.md'), 'pending work\n', 'utf-8');
+      await createSimpleGit(tempDir).add('pending.md');
+
+      const result = await service.stageSquashMergeIntoMain('session/dirty-stage');
+      expect(result.ok).toBe(false);
+      if (result.ok || !('dirty' in result)) {
+        throw new Error('expected a dirty refusal');
+      }
+      expect(result.dirtyPaths).toContain('pending.md');
+      expect(await service.revParseHead()).toBe(baseSha);
 
       await service.removeWorktree(wtDir).catch(() => undefined);
       await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
@@ -544,8 +605,8 @@ describe('GitService', () => {
       );
 
       expect(result.ok).toBe(false);
-      if (result.ok) {
-        throw new Error('unreachable');
+      if (result.ok || !('conflict' in result)) {
+        throw new Error('expected a conflict');
       }
       expect(result.conflict).toBe(true);
       expect(result.conflictPaths).toContain('shared.yaml');
@@ -576,8 +637,8 @@ describe('GitService', () => {
       );
 
       expect(result.ok).toBe(false);
-      if (result.ok) {
-        throw new Error('unreachable');
+      if (result.ok || !('conflict' in result)) {
+        throw new Error('expected a conflict');
       }
       expect(result.conflict).toBe(true);
       expect(result.conflictPaths).toEqual(['knowledge.md']);
