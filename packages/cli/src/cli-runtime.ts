@@ -12,6 +12,7 @@ import type { KtxSqlArgs } from './sql.js';
 import { profileMark, profileSpan } from './startup-profile.js';
 import type { KtxTextIngestArgs } from './text-ingest.js';
 import { assertCliVersion } from './release-version.js';
+import { writeErrorCommunityHint } from './community-cta.js';
 
 profileMark('module:cli-runtime');
 
@@ -144,6 +145,16 @@ export function createGlobalExceptionReporter(io: KtxCliIo, info: KtxCliPackageI
   };
 }
 
+/** @internal */
+export function writeGlobalExceptionToStderr(io: KtxCliIo, error: unknown): void {
+  if (error instanceof Error && error.stack) {
+    io.stderr.write(`${error.stack}\n`);
+  } else {
+    io.stderr.write(`${String(error)}\n`);
+  }
+  writeErrorCommunityHint(io, 'crash');
+}
+
 export function installGlobalExceptionHandlers(io: KtxCliIo, info: KtxCliPackageInfo): () => void {
   const report = createGlobalExceptionReporter(io, info);
   const handle = (source: 'uncaughtException' | 'unhandledRejection', error: unknown): void => {
@@ -153,11 +164,7 @@ export function installGlobalExceptionHandlers(io: KtxCliIo, info: KtxCliPackage
       } catch {
         // Best-effort: preserve Node's process termination behavior.
       }
-      if (error instanceof Error && error.stack) {
-        io.stderr.write(`${error.stack}\n`);
-      } else {
-        io.stderr.write(`${String(error)}\n`);
-      }
+      writeGlobalExceptionToStderr(io, error);
       process.exit(1);
     })();
   };
