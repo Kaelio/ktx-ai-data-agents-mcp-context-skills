@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Command, type CommandUnknownOpts, InvalidArgumentError } from '@commander-js/extra-typings';
 import type { KtxCliDeps, KtxCliIo, KtxCliPackageInfo } from './cli-runtime.js';
+import { SLACK_HELP_FOOTER, writeErrorCommunityHint } from './community-cta.js';
 import { registerCompletionCommands } from './commands/completion-commands.js';
 import { registerConnectionCommands } from './commands/connection-commands.js';
 import { registerIngestCommands } from './commands/ingest-commands.js';
@@ -258,6 +259,7 @@ function createBaseProgram(info: KtxCliPackageInfo, io: KtxCliIo): Command {
     .helpOption('-h, --help', 'Show this help text')
     .configureHelp({ showGlobalOptions: true })
     .showHelpAfterError()
+    .addHelpText('after', `\n${SLACK_HELP_FOOTER}`)
     .exitOverride()
     .configureOutput({
       writeOut: (chunk) => io.stdout.write(chunk),
@@ -561,6 +563,7 @@ export async function runCommanderKtxCli(
           io,
         });
         io.stderr.write(`${formatCliError(error)}\n`);
+        writeErrorCommunityHint(io, 'error');
         return 1;
       }
     }
@@ -585,6 +588,7 @@ export async function runCommanderKtxCli(
       exitCode = error.exitCode === 0 ? 0 : 1;
     } else {
       io.stderr.write(`${formatCliError(error)}\n`);
+      writeErrorCommunityHint(io, 'error');
       exitCode = 1;
     }
   } finally {

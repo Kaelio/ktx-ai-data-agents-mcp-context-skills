@@ -54,6 +54,32 @@ describe('buildKtxProgram', () => {
 
     expect(wrote).toBe('');
   });
+
+  it('adds the Slack community footer to root help', () => {
+    let stdout = '';
+    const io: KtxCliIo = {
+      stdout: {
+        isTTY: false,
+        columns: 80,
+        write: (chunk) => {
+          stdout += chunk;
+        },
+      },
+      stderr: {
+        write: () => undefined,
+      },
+    };
+    const program: Command = buildKtxProgram({
+      io,
+      deps: {},
+      packageInfo: stubPackageInfo(),
+      runInit: async () => 0,
+    });
+
+    program.outputHelp();
+
+    expect(stdout).toContain('Community & support: https://ktx.sh/slack');
+  });
 });
 
 describe('collectCommandFlagsPresent', () => {

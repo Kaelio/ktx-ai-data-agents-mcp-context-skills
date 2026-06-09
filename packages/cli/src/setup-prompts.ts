@@ -1,4 +1,3 @@
-import type { Writable } from 'node:stream';
 import {
   autocomplete,
   autocompleteMultiselect,
@@ -13,6 +12,7 @@ import {
   text,
 } from '@clack/prompts';
 import type { KtxCliIo } from './cli-runtime.js';
+import { isWritableTtyOutput } from './io/tty.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
 import { revealPassword } from './reveal-password-prompt.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
@@ -209,14 +209,6 @@ interface KtxSetupNoteOptions {
 export interface KtxSetupUiAdapter {
   intro(title: string, io: KtxCliIo): void;
   note(message: string, title: string, io: KtxCliIo, options?: KtxSetupNoteOptions): void;
-}
-
-function isWritableTtyOutput(output: KtxCliIo['stdout']): output is KtxCliIo['stdout'] & Writable {
-  return (
-    output.isTTY === true &&
-    typeof (output as { on?: unknown }).on === 'function' &&
-    typeof (output as { columns?: unknown }).columns !== 'undefined'
-  );
 }
 
 export function createKtxSetupUiAdapter(): KtxSetupUiAdapter {

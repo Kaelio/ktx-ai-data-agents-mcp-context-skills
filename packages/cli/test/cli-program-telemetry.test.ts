@@ -13,9 +13,27 @@ vi.mock('../src/telemetry/exception.js', () => ({
   reportException: reportExceptionMock,
 }));
 
-function makeIo(stdoutIsTTY = true): { io: KtxCliIo; stdout: () => string; stderr: () => string } {
+function makeIo(
+  stdoutIsTTY = true,
+  stderrIsTTY = false,
+): { io: KtxCliIo; stdout: () => string; stderr: () => string } {
   let stdout = '';
   let stderr = '';
+  const stderrStream = stderrIsTTY
+    ? {
+        isTTY: true,
+        columns: 80,
+        on: () => undefined,
+        write: (chunk: string) => {
+          stderr += chunk;
+        },
+      }
+    : {
+        write: (chunk: string) => {
+          stderr += chunk;
+        },
+      };
+
   return {
     io: {
       stdout: {
@@ -24,11 +42,7 @@ function makeIo(stdoutIsTTY = true): { io: KtxCliIo; stdout: () => string; stder
           stdout += chunk;
         },
       },
-      stderr: {
-        write: (chunk) => {
-          stderr += chunk;
-        },
-      },
+      stderr: stderrStream,
     },
     stdout: () => stdout,
     stderr: () => stderr,
@@ -163,5 +177,76 @@ describe('runCommanderKtxCli telemetry', () => {
         projectDir: tempDir,
       }),
     );
+  });
+
+  it('prints the Slack hint for unexpected command errors on TTY stderr only', async () => {
+    const ttyIo = makeIo(true, true);
+    const deps: KtxCliDeps = {
+      doctor: async () => {
+        throw new Error('status failed');
+      },
+    };
+
+    await expect(
+      runCommanderKtxCli(
+        ['--project-dir', tempDir, 'status', '--json'],
+        ttyIo.io,
+        deps,
+        info,
+        { runInit: async () => 0 },
+      ),
+    ).resolves.toBe(1);
+
+    expect(ttyIo.stderr()).toContain('status failed');
+    expect(ttyIo.stderr()).toContain('Stuck? The ktx community can help');
+    expect(ttyIo.stderr()).toContain('https://ktx.sh/slack');
+
+    const pipeIo = makeIo(true, false);
+    await expect(
+      runCommanderKtxCli(
+        ['--project-dir', tempDir, 'status', '--json'],
+        pipeIo.io,
+        deps,
+        info,
+        { runInit: async () => 0 },
+      ),
+    ).resolves.toBe(1);
+
+    expect(pipeIo.stderr()).toContain('status failed');
+    expect(pipeIo.stderr()).not.toContain('https://ktx.sh/slack');
+  });
+
+  it('does not print the Slack hint for Commander usage errors', async () => {
+    const io = makeIo(true, true);
+
+    await expect(
+      runCommanderKtxCli(['--not-a-real-option'], io.io, {}, info, { runInit: async () => 0 }),
+    ).resolves.toBe(1);
+
+    expect(io.stderr()).toContain("unknown option '--not-a-real-option'");
+    expect(io.stderr()).not.toContain('Stuck? The ktx community can help');
+  });
+
+  it('prints the Slack hint for bare interactive setup failures on TTY stderr', async () => {
+    const originalCwd = process.cwd();
+    const noProjectDir = await mkdtemp(join(tmpdir(), 'ktx-cli-bare-'));
+    const io = makeIo(true, true);
+    const deps: KtxCliDeps = {
+      setup: async () => {
+        throw new Error('setup failed');
+      },
+    };
+
+    try {
+      process.chdir(noProjectDir);
+      await expect(runCommanderKtxCli([], io.io, deps, info, { runInit: async () => 0 })).resolves.toBe(1);
+    } finally {
+      process.chdir(originalCwd);
+      await rm(noProjectDir, { recursive: true, force: true });
+    }
+
+    expect(io.stderr()).toContain('setup failed');
+    expect(io.stderr()).toContain('Stuck? The ktx community can help');
+    expect(io.stderr()).toContain('https://ktx.sh/slack');
   });
 });

@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
-import type { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 import { log, outro } from '@clack/prompts';
@@ -11,6 +10,7 @@ import { serializeKtxProjectConfig } from './context/project/config.js';
 import { strToU8, zipSync } from 'fflate';
 import type { KtxCliIo } from './cli-runtime.js';
 import { errorMessage, writePrefixedLines } from './clack.js';
+import { isWritableTtyOutput } from './io/tty.js';
 import {
   createKtxSetupPromptAdapter,
   createKtxSetupUiAdapter,
@@ -82,14 +82,6 @@ const MCP_DAEMON_REQUIRED_NOTICE = 'mcp-daemon-required';
 interface KtxCliLauncher {
   command: string;
   args: string[];
-}
-
-function isWritableTtyOutput(output: KtxCliIo['stdout']): output is KtxCliIo['stdout'] & Writable {
-  return (
-    output.isTTY === true &&
-    typeof (output as { on?: unknown }).on === 'function' &&
-    typeof (output as { columns?: unknown }).columns !== 'undefined'
-  );
 }
 
 function writeSetupInfo(io: KtxCliIo, message: string): void {
