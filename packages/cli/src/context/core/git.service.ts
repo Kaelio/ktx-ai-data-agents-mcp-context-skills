@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { SimpleGit } from 'simple-git';
+import { CheckRepoActions, type SimpleGit } from 'simple-git';
 import { noopLogger, resolveConfigDir, type KtxCoreConfig, type KtxLogger } from './config.js';
 import { createSimpleGit } from './git-env.js';
 
@@ -98,10 +98,15 @@ export class GitService {
 
   private async initialize(): Promise<void> {
     try {
-      // Check if already initialized
-      const isRepo = await this.git.checkIsRepo();
+      // Adopt an existing repo ONLY when this directory is itself that repo's root.
+      // When it sits below an enclosing repo, a plain checkIsRepo() is true and ktx
+      // would silently piggyback on the enclosing tree — but every ktx relative path
+      // (file-store writes, session worktrees, squash-merges, reindex scans) assumes
+      // this directory IS the working-tree root. So treat "inside an enclosing repo"
+      // the same as "no repo" and initialize a dedicated repo rooted here.
+      const isRepoRoot = await this.git.checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
 
-      if (!isRepo) {
+      if (!isRepoRoot) {
         await this.git.init();
         this.logger.log('Initialized git repository');
       }

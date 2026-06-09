@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -58,6 +59,30 @@ describe('KTX local project runtime', () => {
     await expect(loaded.fileStore.readFile('wiki/global/revenue.md')).resolves.toMatchObject({
       content: '# Revenue\n',
     });
+  });
+
+  it('initializes a dedicated git repo at the project dir even when nested inside an enclosing repo', async () => {
+    // A ktx project dir living below an existing git working tree (e.g. an analytics
+    // subfolder of an app repo). ktx must own its own repo rooted at the project dir,
+    // not silently adopt the enclosing repo — otherwise worktree writes resolve against
+    // the enclosing root and land outside the project dir.
+    const enclosing = join(tempDir, 'enclosing');
+    await mkdir(enclosing, { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: enclosing });
+
+    const projectDir = join(enclosing, 'analytics');
+    await initKtxProject({ projectDir, authorName: 'Agent', authorEmail: 'agent@example.com' });
+
+    await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
+    const toplevel = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: projectDir,
+      encoding: 'utf-8',
+    }).trim();
+    expect(await realpath(toplevel)).toBe(await realpath(projectDir));
+
+    // ktx must not write its scaffold commits into the user's enclosing repo.
+    const enclosingTracked = execFileSync('git', ['ls-files'], { cwd: enclosing, encoding: 'utf-8' });
+    expect(enclosingTracked).not.toContain('ktx.yaml');
   });
 
   it('rejects reinitializing an existing project unless force is set', async () => {
