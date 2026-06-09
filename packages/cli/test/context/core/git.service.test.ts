@@ -496,6 +496,36 @@ describe('GitService', () => {
       await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
     });
 
+    it('allows the squash when main has only unstaged (not staged) changes', async () => {
+      // e.g. setup writes ktx.yaml during the flow and commits it only after the context
+      // build, leaving it modified-but-unstaged. `git commit` never captures unstaged changes,
+      // so the squash must proceed and leave them untouched.
+      const { commitHash: baseSha } = await writeAndCommit('config.yaml', 'a: 1\n');
+      const parent = await realpath(join(tempDir, '..'));
+      const wtDir = join(parent, `wt-${Date.now()}-unstaged`);
+      await service.addWorktree(wtDir, 'session/unstaged', baseSha);
+      const scoped = service.forWorktree(wtDir);
+      await writeFile(join(wtDir, 'from-branch.yaml'), 'b: 1\n', 'utf-8');
+      await scoped.commitFile('from-branch.yaml', 'wip', 'System User', 'system@example.com');
+
+      // Modify a tracked file on main WITHOUT staging it.
+      await writeFile(join(tempDir, 'config.yaml'), 'a: 2\n', 'utf-8');
+
+      const result = await service.squashMergeIntoMain('session/unstaged', 'System User', 'system@example.com', 'msg');
+
+      expect(result.ok).toBe(true);
+      if (!result.ok || !('squashSha' in result)) {
+        throw new Error('expected the squash to land');
+      }
+      expect(result.touchedPaths).toEqual(['from-branch.yaml']);
+      // The branch landed, and the unstaged edit was neither committed nor discarded.
+      await expect(readFile(join(tempDir, 'from-branch.yaml'), 'utf-8')).resolves.toBe('b: 1\n');
+      await expect(readFile(join(tempDir, 'config.yaml'), 'utf-8')).resolves.toBe('a: 2\n');
+
+      await service.removeWorktree(wtDir).catch(() => undefined);
+      await rm(wtDir, { recursive: true, force: true }).catch(() => undefined);
+    });
+
     it('stageSquashMergeIntoMain also refuses on a dirty main', async () => {
       const { commitHash: baseSha } = await writeAndCommit('seed.md', 'seed');
       const parent = await realpath(join(tempDir, '..'));

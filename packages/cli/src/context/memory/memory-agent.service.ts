@@ -276,8 +276,8 @@ export class MemoryAgentService {
         sessionOutcome = 'conflict';
         if ('dirty' in mergeResult) {
           this.logger.warn(
-            `[memory-agent] chat=${chatId} not landed: project working tree has uncommitted changes ` +
-              `(${mergeResult.dirtyPaths.slice(0, 5).join(', ')}); commit or discard them and re-run ` +
+            `[memory-agent] chat=${chatId} not landed: project has staged but uncommitted changes ` +
+              `(${mergeResult.dirtyPaths.slice(0, 5).join(', ')}); commit or unstage them and re-run ` +
               '(a previous run with auto_commit disabled may have been left staged).',
           );
         } else {

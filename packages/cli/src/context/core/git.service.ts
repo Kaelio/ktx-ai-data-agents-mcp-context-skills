@@ -744,19 +744,21 @@ export class GitService {
     | { ok: false; conflict: true; conflictPaths: string[] }
     | { ok: false; dirty: true; dirtyPaths: string[] }
   > {
-    // The squash flow commits the whole index and, on conflict, `reset --hard`s the tree, so
-    // it must start from a clean target. Refuse if the target has uncommitted tracked changes
-    // (e.g. residue from a prior `auto_commit: false` run) rather than committing them under
-    // this run's message or discarding them. Untracked files (gitignored .ktx state, stray
-    // files) are not committed by the squash and are intentionally ignored here.
-    const dirtyPaths = (await this.git.raw(['status', '--porcelain', '--untracked-files=no']))
+    // `git commit` after the squash commits the WHOLE index, and conflict cleanup `reset
+    // --hard`s the tree. So pre-existing *staged* changes are the hazard: they would be
+    // committed under this run's message, or discarded on conflict. The residue from a prior
+    // `auto_commit: false` run is exactly that — `git merge --squash` stages without
+    // committing. Refuse when the index already differs from HEAD. Unstaged working-tree edits
+    // (e.g. a `ktx.yaml` written by setup and committed later, or user edits) are NOT captured
+    // by `git commit`, so they must not block the squash; untracked files are likewise ignored.
+    const dirtyPaths = (await this.git.raw(['diff', '--cached', '--name-only']))
       .split('\n')
-      .map((line) => line.slice(3).trim())
+      .map((line) => line.trim())
       .filter(Boolean);
     if (dirtyPaths.length > 0) {
       this.logger.warn(
-        `applySquashToIndex: target worktree has ${dirtyPaths.length} uncommitted change(s) ` +
-          `(${dirtyPaths.slice(0, 5).join(', ')}); refusing to squash ${branch} to avoid contaminating or discarding them`,
+        `applySquashToIndex: target index has ${dirtyPaths.length} staged change(s) ` +
+          `(${dirtyPaths.slice(0, 5).join(', ')}); refusing to squash ${branch} to avoid committing or discarding them`,
       );
       return { ok: false, dirty: true, dirtyPaths };
     }

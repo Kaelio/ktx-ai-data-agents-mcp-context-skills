@@ -2700,8 +2700,8 @@ export class IngestBundleRunner {
         await this.deps.runs.markFailed(runRow.id);
         if ('dirty' in squashResult.merge) {
           throw new Error(
-            'The project working tree has uncommitted changes ' +
-              `(${squashResult.merge.dirtyPaths.slice(0, 5).join(', ')}); commit or discard them before ingesting ` +
+            'The project has staged but uncommitted changes ' +
+              `(${squashResult.merge.dirtyPaths.slice(0, 5).join(', ')}); commit or unstage them before ingesting ` +
               '(this typically means a previous run with storage.git.auto_commit: false was left staged).',
           );
         }
