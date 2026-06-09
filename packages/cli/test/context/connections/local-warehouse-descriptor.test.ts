@@ -1,9 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isExecuteOnlyConnection,
+  isScanTargetWarehouse,
   localConnectionInfoFromConfig,
   localConnectionToWarehouseDescriptor,
   localConnectionTypeForConfig,
 } from '../../../src/context/connections/local-warehouse-descriptor.js';
+
+describe('execute-only warehouse connections', () => {
+  it('treats a warehouse without scan_enabled as a scan target', () => {
+    const connection = { driver: 'postgres', url: 'postgresql://db/a' } as const;
+    expect(isExecuteOnlyConnection(connection)).toBe(false);
+    expect(isScanTargetWarehouse('w', connection)).toBe(true);
+  });
+
+  it('excludes a warehouse with scan_enabled: false from scan targets but still resolves it as a warehouse', () => {
+    const connection = { driver: 'postgres', url: 'postgresql://db/a', scan_enabled: false } as const;
+    expect(isExecuteOnlyConnection(connection)).toBe(true);
+    expect(isScanTargetWarehouse('w', connection)).toBe(false);
+    // Execution paths must still see it as a warehouse so `ktx sql` works.
+    expect(localConnectionToWarehouseDescriptor('w', connection)).not.toBeNull();
+  });
+
+  it('does not treat non-warehouse connections as scan targets', () => {
+    expect(isScanTargetWarehouse('n', { driver: 'notion', auth_token: 'x' } as never)).toBe(false);
+  });
+});
 
 describe('localConnectionToWarehouseDescriptor', () => {
   it('maps local Postgres URLs to canonical warehouse descriptors', () => {

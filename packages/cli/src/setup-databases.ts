@@ -4,6 +4,7 @@ import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { getDriverRegistration } from './context/connections/drivers.js';
+import { isExecuteOnlyConnection } from './context/connections/local-warehouse-descriptor.js';
 import { createLocalKtxLlmRuntimeFromConfig } from './context/llm/local-config.js';
 import type { KtxLlmRuntimePort } from './context/llm/runtime-port.js';
 import { queryHistoryDialectForConnection } from './context/ingest/adapters/historic-sql/connection-dialect.js';
@@ -459,12 +460,14 @@ function configuredPrimaryConnectionIds(
   const configuredIds =
     setupConnectionIds
       ?.filter((connectionId) => normalizeDriver(connections[connectionId]?.driver) !== null)
+      .filter((connectionId) => !isExecuteOnlyConnection(connections[connectionId]))
       .filter((connectionId, index, ids) => ids.indexOf(connectionId) === index) ?? [];
   if (configuredIds.length > 0) {
     return configuredIds;
   }
   return Object.entries(connections)
     .filter(([, connection]) => normalizeDriver(connection.driver) !== null)
+    .filter(([, connection]) => !isExecuteOnlyConnection(connection))
     .map(([connectionId]) => connectionId)
     .sort((left, right) => left.localeCompare(right));
 }
@@ -1384,11 +1387,13 @@ async function maybeConfigureDatabaseScope(input: {
   if (input.args.inputMode === 'disabled') {
     if (spec) {
       let scopeToWrite: string[] = cliSchemas;
+      let scopedFromDiscovery = false;
       if (scopeToWrite.length === 0) {
         try {
           scopeToWrite = unique(
             await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
           );
+          scopedFromDiscovery = true;
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
           input.io.stderr.write(
@@ -1396,6 +1401,18 @@ async function maybeConfigureDatabaseScope(input: {
           );
           return okValidateResult();
         }
+      }
+      // Scripted setup with no explicit scope would otherwise silently scan every discovered
+      // schema/dataset the credential can see — including unrelated ones on a shared billing
+      // account. Surface that so the operator can narrow it or register the connection as
+      // execute-only instead of discovering it as a silent full-warehouse scan.
+      if (scopedFromDiscovery && scopeToWrite.length > 1) {
+        input.io.stderr.write(
+          `No --database-schema given for ${input.connectionId}; scanning all ${scopeToWrite.length} ` +
+            `discovered ${spec.nounPlural} (${scopeToWrite.join(', ')}). Pass --database-schema to narrow ` +
+            'the scan, or set connections.' +
+            `${input.connectionId}.scan_enabled: false to register it for SQL execution only.\n`,
+        );
       }
       if (scopeToWrite.length > 0) {
         await writeScopeConfig({
@@ -1893,6 +1910,15 @@ async function validateAndScanConnection(input: {
   const driverDisplay = outputDriver ? driverLabel(outputDriver) : (configuredDriverLabel ?? 'Unknown driver');
   const testLines = ['✓ Connection test passed', `Driver: ${driverDisplay}`];
   writeSetupSection(input.io, `Testing ${input.connectionId}`, testLines);
+
+  // Execute-only connections (scan_enabled: false) are registered for SQL execution only:
+  // the credential is validated above, but ktx never introspects/scans the warehouse.
+  if (isExecuteOnlyConnection(project.config.connections[input.connectionId])) {
+    writeSetupSection(input.io, `Registering ${input.connectionId}`, [
+      'Execute-only connection (scan_enabled: false) — skipping schema scan.',
+    ]);
+    return okValidateResult();
+  }
 
   const scopeStatus = await maybeConfigureDatabaseScope({ ...input, forcePrompt: input.forceScopeAndTables });
   if (scopeStatus.status !== 'ok') {

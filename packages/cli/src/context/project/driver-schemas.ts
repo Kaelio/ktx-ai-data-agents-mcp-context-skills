@@ -32,6 +32,12 @@ function warehouseConnectionSchema<const Driver extends WarehouseDriver>(driver:
         .describe(
           'Optional allowlist of fully-qualified table names ("schema.table") to ingest. When set, live-database ingest discards any table whose schema-qualified name is not in this list. Useful for smoke-testing ingest on a single table.',
         ),
+      scan_enabled: z
+        .boolean()
+        .optional()
+        .describe(
+          'When false, this connection is registered for SQL execution only (ktx sql / sql_execution) and is never used as a scan/ingest target. Omit (or true) to scan and ingest it as a primary warehouse.',
+        ),
     })
     .describe(
       `${driver} warehouse connection. Additional driver-tunable fields (e.g. context.queryHistory) are accepted and passed through.`,

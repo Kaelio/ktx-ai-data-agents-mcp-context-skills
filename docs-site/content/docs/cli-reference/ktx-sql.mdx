@@ -15,6 +15,10 @@ Use `ktx sql` with a required connection id and positional SQL text.
 ktx sql --connection <id> [options] <sql...>
 ```
 
+`ktx sql` runs against any configured connection, whether or not it is a scan or
+ingest target. Connections marked `scan_enabled: false` (execute-only) work here
+too — see [execute-only connections](/docs/configuration/ktx-yaml#execute-only-connections).
+
 ## Options
 
 Use output flags to choose between terminal display, TSV rows, and structured

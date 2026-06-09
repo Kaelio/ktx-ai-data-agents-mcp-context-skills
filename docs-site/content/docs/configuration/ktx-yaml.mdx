@@ -158,6 +158,29 @@ connections:
     dataset_ids: [analytics, mart]
 ```
 
+#### Execute-only connections
+
+Set `scan_enabled: false` to register a warehouse for SQL execution only. The
+connection is usable by `ktx sql` and the agent `sql_execution` tool, but **ktx**
+never introspects, scans, or ingests it — and `ktx setup` validates the
+credential without discovering or scanning its schemas. This is the supported way
+to run read-only queries against shared or public data (for example a BigQuery
+billing project full of unrelated datasets) without making it a context source.
+
+```yaml
+connections:
+  public_bq:
+    driver: bigquery
+    credentials_json: file:./service-account.json
+    scan_enabled: false
+```
+
+Without `scan_enabled`, a warehouse is a scan target. In scripted setup
+(`--no-input`) with no `--database-schema` and no `dataset_ids`/`schemas`, **ktx**
+scopes the scan to every schema or dataset the credential can see and prints a
+warning naming the count; pass `--database-schema` to narrow it, or
+`scan_enabled: false` to register it for execution only.
+
 For Postgres, MySQL, SQL Server, and Snowflake connections, set
 `maxConnections` when scan or ingest work needs to stay below the target's
 connection cap. Postgres, MySQL, and SQL Server default to `10`; Snowflake

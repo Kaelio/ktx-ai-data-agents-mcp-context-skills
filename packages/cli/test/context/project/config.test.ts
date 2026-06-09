@@ -129,6 +129,18 @@ connections:
     expect(serialized).not.toContain('completed_steps:');
   });
 
+  it('parses and serializes a warehouse connection marked execute-only (scan_enabled: false)', () => {
+    const config = parseKtxProjectConfig(`
+connections:
+  public_bq:
+    driver: bigquery
+    scan_enabled: false
+`);
+
+    expect(config.connections.public_bq).toMatchObject({ driver: 'bigquery', scan_enabled: false });
+    expect(serializeKtxProjectConfig(config)).toContain('scan_enabled: false');
+  });
+
   it('parses global direct Anthropic LLM config', () => {
     const config = parseKtxProjectConfig(`
 llm:

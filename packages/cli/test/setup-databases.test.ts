@@ -1586,6 +1586,64 @@ describe('setup databases step', () => {
     });
   });
 
+  it('registers an execute-only connection (scan_enabled: false) without scanning it', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      ['connections:', '  public_bq:', '    driver: bigquery', '    scan_enabled: false', ''].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseConnectionIds: ['public_bq'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { testConnection, scanConnection, listSchemas: vi.fn(async () => ['a', 'b', 'c']) },
+    );
+
+    expect(result.status).toBe('ready');
+    // The credential is validated, but the warehouse is never introspected/scanned.
+    expect(testConnection).toHaveBeenCalledWith(tempDir, 'public_bq', expect.anything());
+    expect(scanConnection).not.toHaveBeenCalled();
+  });
+
+  it('warns instead of silently scanning every discovered dataset when scripted setup has no scope', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      ['connections:', '  warehouse:', '    driver: bigquery', ''].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseConnectionIds: ['warehouse'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      {
+        testConnection: vi.fn(async () => 0),
+        scanConnection: vi.fn(async () => 0),
+        listSchemas: vi.fn(async () => ['stripe', 'posthog', 'linear']),
+        listTables: vi.fn(async () => []),
+      },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(io.stderr()).toContain('No --database-schema given for warehouse');
+    expect(io.stderr()).toContain('scan_enabled: false');
+  });
+
   it('keeps scripted database ids fail-fast even when input mode is auto', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),

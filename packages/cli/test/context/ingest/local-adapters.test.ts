@@ -634,6 +634,21 @@ describe('local ingest adapters', () => {
     await expect(adapter?.listTargetConnectionIds?.('/tmp/staged-dbt')).resolves.toEqual(['warehouse']);
   });
 
+  it('excludes execute-only (scan_enabled: false) warehouses from primary scan targets', async () => {
+    const adapters = createDefaultLocalIngestAdapters(
+      projectWithConnections({
+        scannable: { driver: 'postgres', url: 'postgresql://db/a' },
+        executeonly: { driver: 'postgres', url: 'postgresql://db/b', scan_enabled: false },
+        docs: { driver: 'dbt', source_dir: './dbt' },
+      } as never),
+    );
+
+    // No setup.database_connection_ids → falls back to "all warehouses", which must now
+    // skip the execute-only connection rather than re-including it.
+    const dbt = adapters.find((adapter) => adapter.source === 'dbt');
+    await expect(dbt?.listTargetConnectionIds?.('/tmp/staged-dbt')).resolves.toEqual(['scannable']);
+  });
+
   it('passes primary warehouse connection ids to the local Notion adapter', async () => {
     const adapters = createDefaultLocalIngestAdapters(
       projectWithConnections({

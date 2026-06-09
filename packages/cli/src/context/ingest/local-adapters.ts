@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { localConnectionToWarehouseDescriptor } from '../../context/connections/local-warehouse-descriptor.js';
+import { isScanTargetWarehouse, localConnectionToWarehouseDescriptor } from '../../context/connections/local-warehouse-descriptor.js';
 import { notionConnectionToPullConfig, parseNotionConnectionConfig } from '../../context/connections/notion-config.js';
 import { resolveKtxConfigReference } from '../core/config-reference.js';
 import { ktxLocalStateDbPath } from '../../context/project/local-state-db.js';
@@ -147,14 +147,14 @@ export function createDefaultLocalIngestAdapters(
 function primaryWarehouseConnectionIds(project: KtxLocalProject): string[] {
   const configuredPrimaryIds = project.config.setup?.database_connection_ids ?? [];
   const configured = configuredPrimaryIds.filter((connectionId) =>
-    Boolean(localConnectionToWarehouseDescriptor(connectionId, project.config.connections[connectionId])),
+    isScanTargetWarehouse(connectionId, project.config.connections[connectionId]),
   );
   if (configured.length > 0) {
     return [...new Set(configured)];
   }
 
   return Object.entries(project.config.connections)
-    .filter(([connectionId, connection]) => Boolean(localConnectionToWarehouseDescriptor(connectionId, connection)))
+    .filter(([connectionId, connection]) => isScanTargetWarehouse(connectionId, connection))
     .map(([connectionId]) => connectionId)
     .sort((left, right) => left.localeCompare(right));
 }

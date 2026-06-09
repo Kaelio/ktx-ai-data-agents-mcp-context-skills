@@ -72,6 +72,24 @@ export function localConnectionToWarehouseDescriptor(
   return info;
 }
 
+/**
+ * True when the connection is registered for SQL execution only (`scan_enabled: false`) and
+ * must never be used as a scan/ingest target. Execution paths (`ktx sql`, `sql_execution`) are
+ * unaffected — they resolve the warehouse via {@link localConnectionToWarehouseDescriptor}.
+ */
+export function isExecuteOnlyConnection(connection: KtxProjectConnectionConfig | undefined): boolean {
+  return (connection as { scan_enabled?: boolean } | undefined)?.scan_enabled === false;
+}
+
+/**
+ * True when the connection is a warehouse AND eligible to be scanned/ingested. This is the single
+ * predicate every scan-target selection path routes through, so execute-only connections are
+ * excluded consistently — including the "fall back to all warehouses" path.
+ */
+export function isScanTargetWarehouse(id: string, connection: KtxProjectConnectionConfig | undefined): boolean {
+  return localConnectionToWarehouseDescriptor(id, connection) !== null && !isExecuteOnlyConnection(connection);
+}
+
 export function localConnectionTypeForConfig(id: string, connection: KtxProjectConnectionConfig | undefined): string {
   const descriptor = localConnectionToWarehouseDescriptor(id, connection);
   if (descriptor) {
