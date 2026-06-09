@@ -67,6 +67,13 @@ of Anthropic API key or Vertex flags. After you choose a backend, `ktx setup`
 writes that backend's per-role model preset to `ktx.yaml`. To change a model,
 edit the matching `llm.models.<role>` value in `ktx.yaml`.
 
+With `--no-input`, `ktx setup` does not assume a default LLM provider, because
+every backend needs credentials only you can supply. Pass `--llm-backend`
+explicitly. Note that `--target` selects the agent integration, not the LLM
+provider: `ktx setup --target claude-code --no-input` still needs
+`--llm-backend claude-code` to use your Claude subscription for **ktx** LLM
+calls.
+
 ### Embeddings
 
 | Flag | Description |
@@ -276,6 +283,7 @@ Use `ktx status` for repeatable readiness checks after setup exits.
 |-------|-------|----------|
 | Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
 | Setup cannot run in CI | Required values are missing and `--no-input` disables prompts | Provide the relevant automation flags or create a fixture `ktx.yaml` |
+| `Missing LLM backend: pass --llm-backend …` | `--no-input` setup ran without an LLM backend; `--target` does not select one | Pass `--llm-backend claude-code`, `codex`, `anthropic`, or `vertex` (with that backend's credential flags) |
 | Provider health check fails | Provider key, model id, Vertex project, or Vertex location is invalid | Fix the `env:` or `file:` reference and rerun setup |
 | Python runtime is missing | The selected setup needs runtime-backed agent, query-history, Looker, or local embedding features | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx admin runtime install` command |
 | `--enable-query-history` is rejected | The selected database driver does not support query history | Use Postgres, BigQuery, or Snowflake, or rerun without query-history flags |

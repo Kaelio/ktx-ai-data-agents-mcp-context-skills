@@ -51,7 +51,27 @@ export type KtxSetupModelResult =
   | { status: 'missing-input'; projectDir: string }
   | { status: 'failed'; projectDir: string };
 
-export type KtxSetupLlmBackend = 'anthropic' | 'vertex' | 'claude-code' | 'codex';
+// Single source of truth for the LLM backends a user can pick during setup.
+// The CLI arg parser, the interactive prompt, and the missing-backend error all
+// derive from this list, so adding a backend is one edit. Order is the prompt's
+// preference order (subscription backends first).
+const KTX_SETUP_LLM_BACKENDS = ['claude-code', 'codex', 'anthropic', 'vertex'] as const;
+export type KtxSetupLlmBackend = (typeof KTX_SETUP_LLM_BACKENDS)[number];
+
+/** Validates a raw CLI or prompt value against the setup-selectable LLM backends. */
+export function isKtxSetupLlmBackend(value: string): value is KtxSetupLlmBackend {
+  return KTX_SETUP_LLM_BACKENDS.some((backend) => backend === value);
+}
+
+// Display labels for the interactive provider prompt. The Record key type forces
+// every backend to carry a label, so adding one to KTX_SETUP_LLM_BACKENDS fails
+// to compile until its prompt option exists here.
+const KTX_SETUP_LLM_BACKEND_LABELS: Record<KtxSetupLlmBackend, string> = {
+  'claude-code': 'Claude subscription (Pro/Max)',
+  codex: 'Codex subscription',
+  anthropic: 'Anthropic API key',
+  vertex: 'Google Vertex AI for Anthropic Claude',
+};
 
 /** @internal */
 export interface KtxSetupModelPromptAdapter {
@@ -135,7 +155,18 @@ const execFileAsync = promisify(execFile);
 
 type ChooseBackendResult =
   | { status: 'ready'; backend: KtxSetupLlmBackend; prompted: boolean }
-  | { status: 'back' };
+  | { status: 'back' }
+  | { status: 'missing-input' };
+
+// Non-interactive setup cannot pick a provider safely: every backend needs
+// something the user must supply (an API key, gcloud ADC, or a logged-in local
+// CLI), so there is no credential-free default to fall back to. Name the hidden
+// --llm-backend flag and its choices here instead, mirroring how the other
+// automation errors guide users to the flag they need.
+const MISSING_LLM_BACKEND_MESSAGE =
+  `Missing LLM backend: pass --llm-backend with one of ${KTX_SETUP_LLM_BACKENDS.join(', ')}. ` +
+  'claude-code and codex use local CLI authentication; anthropic also needs --anthropic-api-key-env or ' +
+  '--anthropic-api-key-file, and vertex also needs --vertex-project.';
 
 type VertexConfigChoice =
   | {
@@ -446,7 +477,8 @@ async function chooseBackend(
     return { status: 'ready', backend: explicit, prompted: false };
   }
   if (args.inputMode === 'disabled') {
-    return { status: 'ready', backend: 'anthropic', prompted: false };
+    io.stderr.write(`${MISSING_LLM_BACKEND_MESSAGE}\n`);
+    return { status: 'missing-input' };
   }
 
   const prompts = deps.prompts ?? createPromptAdapter();
@@ -458,21 +490,20 @@ async function chooseBackend(
   const choice = await prompts.select({
     message: 'Which LLM provider should KTX use?',
     options: [
-      { value: 'claude-code', label: 'Claude subscription (Pro/Max)' },
-      { value: 'codex', label: 'Codex subscription' },
-      { value: 'anthropic', label: 'Anthropic API key' },
-      { value: 'vertex', label: 'Google Vertex AI for Anthropic Claude' },
+      ...KTX_SETUP_LLM_BACKENDS.map((backend) => ({ value: backend, label: KTX_SETUP_LLM_BACKEND_LABELS[backend] })),
       { value: 'back', label: 'Back' },
     ],
   });
   if (choice === 'back') {
     return { status: 'back' };
   }
-  return {
-    status: 'ready',
-    backend: choice === 'vertex' || choice === 'claude-code' || choice === 'codex' ? choice : 'anthropic',
-    prompted: true,
-  };
+  if (isKtxSetupLlmBackend(choice)) {
+    return { status: 'ready', backend: choice, prompted: true };
+  }
+  // Options are derived from KTX_SETUP_LLM_BACKENDS, so the only other value is
+  // 'back' (handled above). Treat any unexpected value as a cancel rather than
+  // silently assuming a provider.
+  return { status: 'back' };
 }
 
 function resolveProvidedVertexRef(

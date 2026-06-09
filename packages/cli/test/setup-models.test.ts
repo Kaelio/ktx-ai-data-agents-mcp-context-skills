@@ -814,7 +814,7 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).toContain(`Missing Anthropic API key file: ${missingSecretPath}`);
   });
 
-  it('does not recommend skipping when non-interactive setup is missing an Anthropic credential source', async () => {
+  it('fails clearly when non-interactive setup has no LLM backend instead of assuming Anthropic', async () => {
     const io = makeIo();
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -823,10 +823,17 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('missing-input');
-    expect(io.stderr()).toContain(
-      'Missing Anthropic API key: pass --anthropic-api-key-env or --anthropic-api-key-file.',
-    );
-    expect(io.stderr()).not.toContain('--skip-llm');
+    const stderr = io.stderr();
+    expect(stderr).toContain('Missing LLM backend: pass --llm-backend');
+    // Names every backend so the user can choose without reading hidden --help flags.
+    expect(stderr).toContain('claude-code');
+    expect(stderr).toContain('codex');
+    expect(stderr).toContain('anthropic');
+    expect(stderr).toContain('vertex');
+    // Does not mislead with an Anthropic-key error the user never opted into.
+    expect(stderr).not.toContain('Missing Anthropic API key');
+    // Does not nudge users to skip the LLM.
+    expect(stderr).not.toContain('--skip-llm');
   });
 
   it('writes pasted keys to .ktx/secrets and never prints the key', async () => {
