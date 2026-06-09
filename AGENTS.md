@@ -64,6 +64,25 @@ When rules conflict, follow this order:
 4. Code quality: types, readable boundaries, focused modules
 5. Performance where it matters
 
+## Opinionated Product Defaults
+
+- **MUST**: Prefer one canonical behavior over configurable alternatives. A new
+  flag, config field, environment variable, mode, strategy option, adapter hook,
+  or fallback path is a product feature and must be justified by an explicit
+  user request or a real correctness requirement.
+- **MUST NOT**: Add speculative flexibility for imagined users, migrations,
+  review preferences, local workflows, or "just in case" scenarios. If the
+  requested behavior can work with one solid default, implement that default.
+- **MUST NOT**: Add boolean switches that create two runtime paths unless both
+  paths are essential and the user explicitly asked for the choice. Boolean
+  policy knobs are especially suspect because they double the state space and
+  test surface.
+- **MUST**: When a design seems to need a new option, first try to remove the
+  need by choosing the stronger default, tightening the invariant, or failing
+  clearly. Ask the user before adding the option if it still seems necessary.
+- **MUST**: Delete obsolete branches, tests, docs, and config when removing a
+  behavior. Do not preserve dormant compatibility paths.
+
 ## Repository Shape
 
 **ktx** is a pnpm + uv workspace.
@@ -229,11 +248,20 @@ Before presenting a design, answer these explicitly:
    implementation? If so, am I routing through that path instead of forking a
    parallel one — and if I'm fixing a bug, am I fixing the shared layer rather
    than one branch?
+7. Am I adding a user-visible option or alternate runtime path that the user did
+   not ask for? If yes, can one opinionated default solve the problem instead?
+8. Does this option multiply behavior by caller path, config value, or local
+   state? If yes, remove it unless it is explicitly required.
 
 A user question that nudges toward an alternative ("would X help?", "should I
 always do Y?", "will you hardcode Z?") is a signal that a better option exists.
 Investigate the implied direction and reason it through *before* defending the
 original proposal — and prefer to have asked yourself the question first.
+
+Example: If generated context changes should be saved, choose one save policy
+and route ingest, setup, memory, indexing, and docs through it. Do not add an
+`auto_commit`-style switch unless the user explicitly asks for staged-only runs
+and accepts the extra runtime path.
 
 ## TypeScript Standards
 
