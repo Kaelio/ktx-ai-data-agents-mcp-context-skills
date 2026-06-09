@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { KtxCoreConfig } from '../../../src/context/core/config.js';
-import { GitService } from '../../../src/context/core/git.service.js';
+import { classifyKtxRepoOwnership, GitService } from '../../../src/context/core/git.service.js';
 
 function coreConfig(configDir: string): KtxCoreConfig {
   return {
@@ -104,5 +104,51 @@ describe('GitService repository ownership', () => {
 
     expect(await second.revParseHead()).toBe(before);
     expect(git(projectDir, ['config', '--local', '--get', 'ktx.managed'])).toBe('true');
+  });
+});
+
+describe('classifyKtxRepoOwnership', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'git-ownership-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('reports unowned when no .git exists at the directory', async () => {
+    const dir = join(tempDir, 'fresh');
+    await mkdir(dir, { recursive: true });
+    expect(await classifyKtxRepoOwnership(dir)).toBe('unowned');
+  });
+
+  it('reports unowned for a fresh directory nested inside an enclosing repo', async () => {
+    const parentDir = join(tempDir, 'parent');
+    const nestedDir = join(parentDir, 'nested');
+    await mkdir(nestedDir, { recursive: true });
+    git(parentDir, ['init']);
+    expect(await classifyKtxRepoOwnership(nestedDir)).toBe('unowned');
+  });
+
+  it('reports ktx-managed for a repo ktx initialized', async () => {
+    const dir = join(tempDir, 'owned');
+    await new GitService(coreConfig(dir)).onModuleInit();
+    expect(await classifyKtxRepoOwnership(dir)).toBe('ktx-managed');
+  });
+
+  it('reports foreign for a repo ktx did not create', async () => {
+    const dir = join(tempDir, 'foreign');
+    await mkdir(dir, { recursive: true });
+    git(dir, ['init']);
+    expect(await classifyKtxRepoOwnership(dir)).toBe('foreign');
+  });
+
+  it('reports foreign for a .git file (linked worktree)', async () => {
+    const dir = join(tempDir, 'linked');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, '.git'), 'gitdir: ../actual.git\n', 'utf-8');
+    expect(await classifyKtxRepoOwnership(dir)).toBe('foreign');
   });
 });

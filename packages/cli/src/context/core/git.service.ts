@@ -29,7 +29,7 @@ export interface WorktreeEntry {
 
 const KTX_MANAGED_GIT_CONFIG_KEY = 'ktx.managed';
 
-type GitDirState = 'absent' | 'directory' | 'foreign';
+export type KtxRepoOwnership = 'unowned' | 'ktx-managed' | 'foreign';
 
 class KtxForeignGitRepositoryError extends Error {
   constructor(configDir: string) {
@@ -43,6 +43,46 @@ class KtxForeignGitRepositoryError extends Error {
 
 function isNodeErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+/**
+ * Classify whether ktx may own a git repository rooted exactly at `dir`.
+ *
+ * - `unowned`: no `<dir>/.git` exists → ktx can `git init` here. Covers a fresh
+ *   standalone directory and a fresh directory nested inside a parent repo.
+ * - `ktx-managed`: `<dir>/.git` is a directory carrying ktx's ownership marker.
+ * - `foreign`: a repo ktx did not create — a `.git` directory without the marker,
+ *   or a `.git` *file* (a linked worktree). ktx must never adopt or mutate it.
+ *
+ * Reads only `<dir>/.git` directly and never walks up the directory tree, so the
+ * classification of a project dir never depends on whether a parent repo exists.
+ * Shared by `GitService.initialize()` (the invariant) and the setup wizard (the
+ * pre-flight guidance) so both decide ownership from the same rule.
+ */
+export async function classifyKtxRepoOwnership(dir: string): Promise<KtxRepoOwnership> {
+  let dotGitIsDirectory: boolean;
+  try {
+    dotGitIsDirectory = (await fs.lstat(join(dir, '.git'))).isDirectory();
+  } catch (error) {
+    if (isNodeErrnoException(error) && error.code === 'ENOENT') {
+      return 'unowned';
+    }
+    throw error;
+  }
+  if (!dotGitIsDirectory) {
+    return 'foreign';
+  }
+  try {
+    const marker = await createSimpleGit(dir).raw([
+      'config',
+      '--local',
+      '--get',
+      KTX_MANAGED_GIT_CONFIG_KEY,
+    ]);
+    return marker.trim() === 'true' ? 'ktx-managed' : 'foreign';
+  } catch {
+    return 'foreign';
+  }
 }
 
 export type SquashMergeResult =
@@ -114,43 +154,19 @@ export class GitService {
     await this.initialize();
   }
 
-  private async gitDirState(): Promise<GitDirState> {
-    try {
-      const stat = await fs.lstat(join(this.configDir, '.git'));
-      return stat.isDirectory() ? 'directory' : 'foreign';
-    } catch (error) {
-      if (isNodeErrnoException(error) && error.code === 'ENOENT') {
-        return 'absent';
-      }
-      throw error;
-    }
-  }
-
-  private async hasKtxManagedMarker(): Promise<boolean> {
-    try {
-      const value = await this.git.raw(['config', '--local', '--get', KTX_MANAGED_GIT_CONFIG_KEY]);
-      return value.trim() === 'true';
-    } catch {
-      return false;
-    }
-  }
-
   private async initialize(): Promise<void> {
     try {
-      const gitDirState = await this.gitDirState();
+      const ownership = await classifyKtxRepoOwnership(this.configDir);
 
-      if (gitDirState === 'absent') {
+      if (ownership === 'foreign') {
+        throw new KtxForeignGitRepositoryError(this.configDir);
+      }
+      if (ownership === 'unowned') {
         await this.git.init();
         await this.git.addConfig(KTX_MANAGED_GIT_CONFIG_KEY, 'true');
         this.logger.log('Initialized ktx-managed git repository');
-      } else if (gitDirState === 'directory') {
-        const isManaged = await this.hasKtxManagedMarker();
-        if (!isManaged) {
-          throw new KtxForeignGitRepositoryError(this.configDir);
-        }
-      } else {
-        throw new KtxForeignGitRepositoryError(this.configDir);
       }
+      // ownership === 'ktx-managed' → ktx's own repo; proceed with the normal re-run path.
 
       // Keep any auto-maintenance triggered by writes in-process. Detached maintenance can
       // keep object-pack directories alive briefly after awaited git commands complete,
@@ -171,6 +187,11 @@ export class GitService {
         this.logger.log('Wrote bootstrap commit to config repo');
       }
     } catch (error) {
+      // The foreign-repo error is already typed and actionable; surface it verbatim so every
+      // command that loads the project shows the same clear guidance instead of a generic wrapper.
+      if (error instanceof KtxForeignGitRepositoryError) {
+        throw error;
+      }
       this.logger.error('Failed to initialize git repository', error);
       // Preserve the underlying git error: the generic message alone is undiagnosable in
       // telemetry and unactionable for the user. The exception reporter walks `cause` and

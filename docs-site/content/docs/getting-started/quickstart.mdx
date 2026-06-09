@@ -342,6 +342,13 @@ separate `ktx` binary on `PATH`. If the CLI path changes, rerun
 changes there. If the project directory is nested inside another repository,
 **ktx** still keeps its own repo and does not commit to the parent repo.
 
+Because **ktx** owns that repository, it will not adopt one it did not create. If
+you point setup at a directory that is already a git repository's root - such as
+an existing application checkout - **ktx** stops and asks you to pick a dedicated
+directory instead. In the setup wizard choose the **New subfolder** option (for
+example `ktx-project`), or pass a fresh `--project-dir` when running setup
+non-interactively.
+
 | Path | Purpose |
 |------|---------|
 | `ktx.yaml` | Project configuration |
