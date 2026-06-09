@@ -344,15 +344,14 @@ setup:
 
 ## `storage`
 
-`storage` controls where **ktx** keeps its own state and search index, and how
-state changes are committed. Defaults work for a single-user local project.
+`storage` controls where **ktx** keeps its own state and search index. Defaults
+work for a single-user local project.
 
 ```yaml
 storage:
   state: sqlite          # sqlite | postgres
   search: sqlite-fts5    # sqlite-fts5 | postgres-hybrid
   git:
-    auto_commit: true
     author: "ktx <ktx@example.com>"
 ```
 
@@ -360,8 +359,7 @@ storage:
 |-------|------|---------|---------|
 | `state` | `sqlite` \| `postgres` | `sqlite` | Backend for ktx state. `sqlite` uses `.ktx/db.sqlite`; `postgres` expects a configured Postgres connection. |
 | `search` | `sqlite-fts5` \| `postgres-hybrid` | `sqlite-fts5` | Backend for search indexes. `postgres-hybrid` combines lexical and vector search in Postgres. |
-| `git.auto_commit` | `boolean` | `true` | When `true`, ktx auto-commits changes to the git-backed state store. |
-| `git.author` | `string` | `ktx <ktx@example.com>` | Git author identity for auto-commits. Standard `Name <email>` form. |
+| `git.author` | `string` | `ktx <ktx@example.com>` | Git author identity for commits. Standard `Name <email>` form. |
 
 ## `llm`
 
@@ -608,19 +606,6 @@ agent:
 | `run_research.max_iterations` | `int ≥ 0` | `20` | Maximum tool-call iterations per research run. |
 | `run_research.default_toolset` | `string[]` | `[sl_query, wiki_search, sl_read_source]` | Tool identifiers exposed to the research agent. |
 
-## `memory`
-
-`memory` controls the agent memory subsystem.
-
-```yaml
-memory:
-  auto_commit: true
-```
-
-| Field | Type | Default | Purpose |
-|-------|------|---------|---------|
-| `auto_commit` | `boolean` | `true` | When `true`, ktx auto-commits memory updates to the git-backed store. |
-
 ## A full example
 
 Combining the blocks above:
@@ -645,7 +630,6 @@ storage:
   state: sqlite
   search: sqlite-fts5
   git:
-    auto_commit: true
     author: "ktx <ktx@example.com>"
 llm:
   provider:
@@ -678,8 +662,6 @@ scan:
 agent:
   run_research:
     enabled: true
-memory:
-  auto_commit: true
 ```
 
 ## Validating your config

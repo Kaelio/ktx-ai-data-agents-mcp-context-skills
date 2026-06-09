@@ -338,6 +338,9 @@ separate `ktx` binary on `PATH`. If the CLI path changes, rerun
 ## What setup writes
 
 **ktx** writes plain files so people and agents can review changes in git.
+**ktx** initializes a git repository at the project directory and writes context
+changes there. If the project directory is nested inside another repository,
+**ktx** still keeps its own repo and does not commit to the parent repo.
 
 | Path | Purpose |
 |------|---------|
