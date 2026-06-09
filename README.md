@@ -143,6 +143,17 @@ Agent integration ready: yes (codex:project)
 > If `ktx status` prints `ktx mcp start --project-dir ...`, run it before
 > opening your agent client.
 
+## Upgrading
+
+Re-run the global install with the `@latest` tag:
+
+```bash
+npm install -g @kaelio/ktx@latest
+```
+
+**ktx** also prints an update notice after a command when a newer release is
+available.
+
 ## First commands
 
 | Command | Purpose |
