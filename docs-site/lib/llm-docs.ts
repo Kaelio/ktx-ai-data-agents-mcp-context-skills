@@ -54,7 +54,7 @@ ktx provides semantic-layer files, warehouse scans, wiki pages, provenance, and 
 
 - Installable setup skill: run \`npx skills add Kaelio/ktx --skill ktx\` from
   the project you want to configure.
-${link("/docs/ai-resources", "AI Resources", "How coding agents read, cite, and act on the ktx docs")}
+${link("/docs/community/ai-resources", "AI Resources", "How coding agents read, cite, and act on the ktx docs")}
 
 ## Start Here
 
@@ -65,7 +65,7 @@ ${link("/docs/guides/writing-context", "Writing Context", "Write semantic source
 ## Machine-Readable Documentation
 
 - [Full documentation](${absoluteUrl("/llms-full.txt")}): All docs pages in one plain-text markdown response
-- [AI Resources guide](${absoluteUrl("/docs/ai-resources.md")}): How agents fetch llms.txt, llms-full.txt, and per-page Markdown
+- [AI Resources guide](${absoluteUrl("/docs/community/ai-resources.md")}): How agents fetch llms.txt, llms-full.txt, and per-page Markdown
 - [Quickstart markdown](${absoluteUrl("/docs/getting-started/quickstart.md")}): Human setup walkthrough
 - [Semantic-layer CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-sl.md")}): Semantic-layer commands and JSON output
 - [Wiki CLI markdown](${absoluteUrl("/docs/cli-reference/ktx-wiki.md")}): Wiki page commands and JSON output
@@ -145,8 +145,8 @@ function absoluteUrl(path: string) {
 
 function formatCategoryName(category: string) {
   const labels: Record<string, string> = {
-    "ai-resources": "AI Resources",
     "cli-reference": "CLI Reference",
+    community: "Community & Resources",
   };
 
   if (labels[category]) {

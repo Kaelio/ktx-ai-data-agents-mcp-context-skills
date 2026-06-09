@@ -1,5 +1,5 @@
 {
-  "title": "Community",
+  "title": "Community & Resources",
   "defaultOpen": true,
-  "pages": ["support", "contributing", "telemetry"]
+  "pages": ["support", "contributing", "telemetry", "ai-resources"]
 }

@@ -73,18 +73,29 @@ const config = {
         basePath: false,
       },
       {
-        // The AI Resources section collapsed from four pages to one. Redirect
-        // the retired per-page slugs to the consolidated page. Redirects run
-        // before the .md rewrite, so the Markdown variant must be matched
-        // first and keep its .md suffix; otherwise a cached per-page Markdown
-        // URL would 308 to the HTML page and break the agent Markdown contract.
+        // AI Resources collapsed from four pages to one and now lives under the
+        // Community & Resources section. Redirect the old top-level URL and the
+        // retired per-page slugs to the new home. Redirects run before the .md
+        // rewrite, so the Markdown variants must be matched first and keep their
+        // .md suffix; otherwise a cached Markdown URL would 308 to the HTML page
+        // and break the agent Markdown contract.
+        source: "/docs/ai-resources.md",
+        destination: "/docs/community/ai-resources.md",
+        permanent: true,
+      },
+      {
         source: "/docs/ai-resources/:slug([^/]+\\.md)",
-        destination: "/docs/ai-resources.md",
+        destination: "/docs/community/ai-resources.md",
+        permanent: true,
+      },
+      {
+        source: "/docs/ai-resources",
+        destination: "/docs/community/ai-resources",
         permanent: true,
       },
       {
         source: "/docs/ai-resources/:slug",
-        destination: "/docs/ai-resources",
+        destination: "/docs/community/ai-resources",
         permanent: true,
       },
     ];

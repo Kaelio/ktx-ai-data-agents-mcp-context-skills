@@ -145,20 +145,33 @@ test("/ktx/docs redirects to the docs introduction", async () => {
   );
 });
 
-test("retired AI Resources slugs redirect to the consolidated page", async () => {
-  const response = await fetch(
+test("retired AI Resources URLs redirect to the page under Community", async () => {
+  // The former top-level URL.
+  const bare = await fetch(
+    `${docsSiteUrl}${docsBasePath}/docs/ai-resources`,
+    { redirect: "manual" },
+  );
+
+  assert.equal(bare.status, 308);
+  assert.equal(
+    bare.headers.get("location"),
+    `${docsBasePath}/docs/community/ai-resources`,
+  );
+
+  // A retired per-page slug.
+  const slug = await fetch(
     `${docsSiteUrl}${docsBasePath}/docs/ai-resources/agent-quickstart`,
     { redirect: "manual" },
   );
 
-  assert.equal(response.status, 308);
+  assert.equal(slug.status, 308);
   assert.equal(
-    response.headers.get("location"),
-    `${docsBasePath}/docs/ai-resources`,
+    slug.headers.get("location"),
+    `${docsBasePath}/docs/community/ai-resources`,
   );
 
   // A retired per-page Markdown URL must stay Markdown: it has to redirect to
-  // the consolidated .md route, not fall through to the HTML page.
+  // the new .md route, not fall through to the HTML page.
   const markdown = await fetch(
     `${docsSiteUrl}${docsBasePath}/docs/ai-resources/agent-quickstart.md`,
     { redirect: "manual" },
@@ -167,7 +180,7 @@ test("retired AI Resources slugs redirect to the consolidated page", async () =>
   assert.equal(markdown.status, 308);
   assert.equal(
     markdown.headers.get("location"),
-    `${docsBasePath}/docs/ai-resources.md`,
+    `${docsBasePath}/docs/community/ai-resources.md`,
   );
 
   // Following that redirect end to end must land on Markdown, not HTML.
