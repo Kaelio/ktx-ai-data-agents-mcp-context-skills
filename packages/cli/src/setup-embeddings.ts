@@ -213,7 +213,10 @@ async function chooseCredentialRef(
     return { status: 'ready', ref, value };
   }
   if (args.inputMode === 'disabled') {
-    io.stderr.write('Missing embedding API key: pass --embedding-api-key-env or --embedding-api-key-file.\n');
+    io.stderr.write(
+      'Missing embedding API key for --embedding-backend openai: pass --embedding-api-key-env or --embedding-api-key-file ' +
+        '(or use --embedding-backend sentence-transformers for local embeddings).\n',
+    );
     return { status: 'missing-input' };
   }
 

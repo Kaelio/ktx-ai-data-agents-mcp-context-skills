@@ -60,6 +60,11 @@ prompts.
 | `--vertex-location <location>` | Vertex AI location, `env:NAME`, or `file:/path` reference |
 | `--skip-llm` | Leave LLM setup incomplete |
 
+Non-interactive setup (`--no-input`) requires an explicit `--llm-backend`; it
+does not assume a default. `--llm-backend` is independent of `--target`: the
+target selects which agent client receives integration, while `--llm-backend`
+selects the provider **ktx** itself uses.
+
 Choose only one Anthropic credential source. Anthropic credential flags are only
 valid with the Anthropic backend; Vertex flags are only valid with the Vertex
 backend. The `claude-code` and `codex` backends use local authentication instead
@@ -276,6 +281,7 @@ Use `ktx status` for repeatable readiness checks after setup exits.
 |-------|-------|----------|
 | Setup resumes an unexpected project | `KTX_PROJECT_DIR` or nearest `ktx.yaml` points to another directory | Pass `--project-dir <path>` explicitly |
 | Setup cannot run in CI | Required values are missing and `--no-input` disables prompts | Provide the relevant automation flags or create a fixture `ktx.yaml` |
+| `Missing LLM backend` | `--no-input` without `--llm-backend` | Pass `--llm-backend` with `anthropic`, `vertex`, `claude-code`, or `codex` (the latter two need no API key) |
 | Provider health check fails | Provider key, model id, Vertex project, or Vertex location is invalid | Fix the `env:` or `file:` reference and rerun setup |
 | Python runtime is missing | The selected setup needs runtime-backed agent, query-history, Looker, or local embedding features | Accept the interactive prompt, rerun with `--yes`, or run the suggested `ktx admin runtime install` command |
 | `--enable-query-history` is rejected | The selected database driver does not support query history | Use Postgres, BigQuery, or Snowflake, or rerun without query-history flags |

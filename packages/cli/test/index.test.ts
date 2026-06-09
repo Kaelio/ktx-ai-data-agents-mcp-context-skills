@@ -1522,7 +1522,8 @@ describe('runKtxCli', () => {
     ).resolves.toBe(1);
 
     expect(setup).not.toHaveBeenCalled();
-    expect(setupIo.stderr()).toContain("invalid choice 'deterministic'");
+    expect(setupIo.stderr()).toContain("argument 'deterministic' is invalid");
+    expect(setupIo.stderr()).toContain('Allowed choices are openai, sentence-transformers');
   });
 
   it('rejects gateway as a setup embedding backend', async () => {
@@ -1534,7 +1535,8 @@ describe('runKtxCli', () => {
     ).resolves.toBe(1);
 
     expect(setup).not.toHaveBeenCalled();
-    expect(setupIo.stderr()).toContain("invalid choice 'gateway'");
+    expect(setupIo.stderr()).toContain("argument 'gateway' is invalid");
+    expect(setupIo.stderr()).toContain('Allowed choices are openai, sentence-transformers');
   });
 
   it('rejects conflicting embedding credential setup flags', async () => {

@@ -814,7 +814,7 @@ describe('setup Anthropic model step', () => {
     expect(io.stderr()).toContain(`Missing Anthropic API key file: ${missingSecretPath}`);
   });
 
-  it('does not recommend skipping when non-interactive setup is missing an Anthropic credential source', async () => {
+  it('requires an explicit LLM backend in non-interactive setup instead of silently defaulting to anthropic', async () => {
     const io = makeIo();
 
     const result = await runKtxSetupAnthropicModelStep(
@@ -823,10 +823,33 @@ describe('setup Anthropic model step', () => {
     );
 
     expect(result.status).toBe('missing-input');
-    expect(io.stderr()).toContain(
-      'Missing Anthropic API key: pass --anthropic-api-key-env or --anthropic-api-key-file.',
+    const err = io.stderr();
+    // Names the flag the user actually needs and lists every valid backend.
+    expect(err).toContain('--llm-backend');
+    expect(err).toContain('anthropic');
+    expect(err).toContain('vertex');
+    expect(err).toContain('claude-code');
+    expect(err).toContain('codex');
+    // No silent anthropic default, so the bare api-key error is not the reason shown.
+    expect(err).not.toContain('Missing Anthropic API key: pass --anthropic-api-key-env');
+    expect(err).not.toContain('--skip-llm');
+  });
+
+  it('names --llm-backend when an explicit anthropic backend is missing its API key in non-interactive setup', async () => {
+    const io = makeIo();
+
+    const result = await runKtxSetupAnthropicModelStep(
+      { projectDir: tempDir, inputMode: 'disabled', llmBackend: 'anthropic', skipLlm: false },
+      io.io,
     );
-    expect(io.stderr()).not.toContain('--skip-llm');
+
+    expect(result.status).toBe('missing-input');
+    const err = io.stderr();
+    expect(err).toContain('--anthropic-api-key-env');
+    // Reveals that the backend itself is selectable, so a user who wanted a keyless
+    // backend (claude-code/codex) can discover it from the error.
+    expect(err).toContain('--llm-backend');
+    expect(err).not.toContain('--skip-llm');
   });
 
   it('writes pasted keys to .ktx/secrets and never prints the key', async () => {

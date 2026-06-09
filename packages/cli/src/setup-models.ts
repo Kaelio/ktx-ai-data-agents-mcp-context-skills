@@ -135,7 +135,8 @@ const execFileAsync = promisify(execFile);
 
 type ChooseBackendResult =
   | { status: 'ready'; backend: KtxSetupLlmBackend; prompted: boolean }
-  | { status: 'back' };
+  | { status: 'back' }
+  | { status: 'missing-input' };
 
 type VertexConfigChoice =
   | {
@@ -372,7 +373,10 @@ async function chooseCredentialRef(
     return { status: 'ready', ref, value };
   }
   if (args.inputMode === 'disabled') {
-    io.stderr.write('Missing Anthropic API key: pass --anthropic-api-key-env or --anthropic-api-key-file.\n');
+    io.stderr.write(
+      'Missing Anthropic API key for --llm-backend anthropic: pass --anthropic-api-key-env or --anthropic-api-key-file ' +
+        '(or use --llm-backend claude-code or --llm-backend codex for local subscription auth).\n',
+    );
     return { status: 'missing-input' };
   }
 
@@ -446,7 +450,16 @@ async function chooseBackend(
     return { status: 'ready', backend: explicit, prompted: false };
   }
   if (args.inputMode === 'disabled') {
-    return { status: 'ready', backend: 'anthropic', prompted: false };
+    // No safe default exists: anthropic/vertex need credentials and claude-code/codex
+    // need local auth, so non-interactive setup must be told which backend to use rather
+    // than silently picking one that cannot self-configure.
+    io.stderr.write(
+      'Missing LLM backend: pass --llm-backend with one of anthropic, vertex, claude-code, codex.\n' +
+        '  claude-code, codex — use your local subscription auth (no API key)\n' +
+        '  anthropic — also pass --anthropic-api-key-env or --anthropic-api-key-file\n' +
+        '  vertex — also pass --vertex-project (and optionally --vertex-location)\n',
+    );
+    return { status: 'missing-input' };
   }
 
   const prompts = deps.prompts ?? createPromptAdapter();

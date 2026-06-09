@@ -21,20 +21,6 @@ function positiveInteger(value: string): number {
   return parsed;
 }
 
-function embeddingBackend(value: string): 'openai' | 'sentence-transformers' {
-  if (value === 'openai' || value === 'sentence-transformers') {
-    return value;
-  }
-  throw new InvalidArgumentError(`invalid choice '${value}'`);
-}
-
-function llmBackend(value: string): KtxSetupLlmBackend {
-  if (value === 'anthropic' || value === 'vertex' || value === 'claude-code' || value === 'codex') {
-    return value;
-  }
-  throw new InvalidArgumentError(`invalid choice '${value}'`);
-}
-
 function databaseDriver(value: string): KtxSetupDatabaseDriver {
   if (
     value === 'sqlite' ||
@@ -220,7 +206,11 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .addOption(new Option('--skip-agents', 'Leave agent integration incomplete for now').hideHelp().default(false))
     .option('--yes', 'Accept project creation and runtime install defaults where setup confirms', false)
     .option('--no-input', 'Disable interactive terminal input')
-    .addOption(new Option('--llm-backend <backend>', 'LLM backend').argParser(llmBackend).hideHelp())
+    .addOption(
+      new Option('--llm-backend <backend>', 'LLM backend')
+        .choices(['anthropic', 'vertex', 'claude-code', 'codex'])
+        .hideHelp(),
+    )
     .addOption(
       new Option('--anthropic-api-key-env <name>', 'Environment variable containing the Anthropic API key').hideHelp(),
     )
@@ -230,7 +220,11 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
     .addOption(new Option('--vertex-project <project>', 'Google Vertex AI project ID, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--vertex-location <location>', 'Google Vertex AI location, env:NAME, or file:/path').hideHelp())
     .addOption(new Option('--skip-llm', 'Leave LLM setup incomplete for now').hideHelp().default(false))
-    .addOption(new Option('--embedding-backend <backend>', 'Embedding backend').argParser(embeddingBackend).hideHelp())
+    .addOption(
+      new Option('--embedding-backend <backend>', 'Embedding backend')
+        .choices(['openai', 'sentence-transformers'])
+        .hideHelp(),
+    )
     .addOption(
       new Option(
         '--embedding-api-key-env <name>',
