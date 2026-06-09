@@ -66,7 +66,6 @@ function demoConfig(databasePath: string): string {
     '  state: sqlite',
     '  search: sqlite-fts5',
     '  git:',
-    '    auto_commit: true',
     '    author: ktx <ktx@example.com>',
     'llm:',
     '  provider:',

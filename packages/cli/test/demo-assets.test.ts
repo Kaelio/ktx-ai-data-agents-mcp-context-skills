@@ -133,6 +133,8 @@ describe('demo assets', () => {
     const config = await readFile(join(projectDir, 'ktx.yaml'), 'utf-8');
     expect(config).toContain('backend: anthropic');
     expect(config).toContain('api_key: env:ANTHROPIC_API_KEY');
+    expect(config).not.toContain('auto_commit');
+    expect(config).not.toContain('memory:');
     expect(config).not.toContain('sk-ant-');
   });
 

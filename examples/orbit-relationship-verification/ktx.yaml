@@ -6,7 +6,6 @@ storage:
   state: sqlite
   search: sqlite-fts5
   git:
-    auto_commit: true
     author: "ktx <ktx@example.com>"
 ingest:
   adapters: []
