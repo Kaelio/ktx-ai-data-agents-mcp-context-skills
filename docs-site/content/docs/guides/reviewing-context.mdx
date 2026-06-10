@@ -61,11 +61,14 @@ committing the file.
 
 ## A typical review session
 
-The loop above describes the shape. In practice, one review session looks like
-this:
+The loop above describes the shape. Run these commands from the **ktx** project
+directory. **ktx** keeps that directory as its own git repository, even when the
+directory lives inside another repository, so reviewing context changes never
+requires committing to a parent application repo.
 
 ```bash
 # 1. Run ingest on a branch
+cd /path/to/ktx-project
 git checkout -b ingest/2026-05-21
 ktx ingest --all
 

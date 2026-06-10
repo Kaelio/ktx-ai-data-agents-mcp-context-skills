@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -63,6 +64,11 @@ describe('GitService', () => {
       // beforeEach already ran onModuleInit() against an empty temp dir.
       const head = await service.revParseHead();
       expect(head).toMatch(/^[0-9a-f]{40}$/);
+      const marker = execFileSync('git', ['config', '--local', '--get', 'ktx.managed'], {
+        cwd: tempDir,
+        encoding: 'utf-8',
+      }).trim();
+      expect(marker).toBe('true');
     });
 
     it('does not double-commit when re-initialized', async () => {

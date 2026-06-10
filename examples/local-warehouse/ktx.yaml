@@ -5,7 +5,6 @@ storage:
   state: sqlite
   search: sqlite-fts5
   git:
-    auto_commit: true
     author: "ktx <ktx@example.com>"
 ingest:
   adapters:
@@ -18,5 +17,3 @@ agent:
       - sl_query
       - wiki_search
       - sl_read_source
-memory:
-  auto_commit: true

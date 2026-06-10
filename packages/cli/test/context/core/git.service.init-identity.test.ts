@@ -6,14 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { KtxCoreConfig } from '../../../src/context/core/config.js';
 import { GitService } from '../../../src/context/core/git.service.js';
 
-// Regression for the production exception "Failed to initialize git repository"
-// (PostHog issue 019ea9df-96d6-7882-98e2-6b892bf9c1ab, ktx 0.10.0, darwin).
-//
-// Repro: the project directory is ALREADY a git repo with no commits (the user ran
-// `git init` first, or ktx is pointed at an empty repo), AND the machine has no configured
-// git identity (a fresh Mac with no ~/.gitconfig). GitService only set the committer identity
-// on the path where it created the repo itself, so the bootstrap commit failed with
-// "Committer identity unknown" and was rethrown opaquely.
+// Regression for bootstrapping a marked ktx repo on a machine with no configured
+// git identity. A foreign pre-existing repo is rejected by the ownership rule;
+// this test covers the still-valid path where the repo is already ktx-managed
+// but has no HEAD yet.
 describe('GitService.initialize without a configured git identity', () => {
   let repoDir: string;
   let homeDir: string;
@@ -61,8 +57,12 @@ describe('GitService.initialize without a configured git identity', () => {
       delete process.env[key];
     }
 
-    // Pre-create an empty repo: checkIsRepo() will be true, but there is no HEAD yet.
     execFileSync('git', ['init'], { cwd: repoDir, env: process.env, stdio: 'ignore' });
+    execFileSync('git', ['config', '--local', 'ktx.managed', 'true'], {
+      cwd: repoDir,
+      env: process.env,
+      stdio: 'ignore',
+    });
   });
 
   afterEach(async () => {

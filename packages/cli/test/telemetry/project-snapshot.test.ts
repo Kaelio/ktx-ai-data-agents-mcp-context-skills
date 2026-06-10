@@ -66,10 +66,9 @@ describe('buildProjectStackSnapshotFields', () => {
         storage: {
           state: 'sqlite',
           search: 'sqlite-fts5',
-          git: { auto_commit: true, author: 'ktx <ktx@example.com>' },
+          git: { author: 'ktx <ktx@example.com>' },
         },
         agent: { run_research: { enabled: false, max_iterations: 20, default_toolset: [] } },
-        memory: { auto_commit: true },
       },
     });
 

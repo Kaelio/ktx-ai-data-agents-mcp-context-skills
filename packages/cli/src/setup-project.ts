@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { classifyKtxRepoOwnership } from './context/core/git.service.js';
 import { initKtxProject, type KtxLocalProject, loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete, mergeKtxSetupGitignoreEntries } from './context/project/setup-config.js';
 import { serializeKtxProjectConfig } from './context/project/config.js';
@@ -106,11 +107,32 @@ type ConfirmProjectDirResult =
   | { status: 'cancelled' }
   | { status: 'not-directory' };
 
+/**
+ * ktx owns the git repository at the project dir, so it refuses to create a
+ * project inside a repository it did not create (which it would otherwise have
+ * to adopt or fail on at first commit). Guides the user toward a dedicated
+ * directory instead of letting `GitService.initialize()` throw mid-setup.
+ */
+async function ensureProjectDirIsOwnable(selectedDir: string, io: KtxCliIo): Promise<boolean> {
+  if ((await classifyKtxRepoOwnership(selectedDir)) === 'foreign') {
+    io.stderr.write(
+      `${selectedDir} is already a git repository that ktx did not create.\n` +
+        'ktx keeps its context in a repository it owns. Choose a new subfolder or an empty directory instead.\n',
+    );
+    return false;
+  }
+  return true;
+}
+
 async function confirmProjectDir(
   selectedDir: string,
   io: KtxCliIo,
   prompts: KtxSetupProjectPromptAdapter,
 ): Promise<ConfirmProjectDirResult> {
+  if (!(await ensureProjectDirIsOwnable(selectedDir, io))) {
+    return { status: 'choose-another' };
+  }
+
   const state = await existingFolderState(selectedDir);
 
   if (state === 'not-directory') {
@@ -287,6 +309,9 @@ export async function runKtxSetupProjectStep(
       io.stderr.write('Missing setup choice: pass --yes to create a project in non-interactive setup.\n');
       return { status: 'missing-input', projectDir };
     }
+    if (!(await ensureProjectDirIsOwnable(projectDir, io))) {
+      return { status: 'missing-input', projectDir };
+    }
     const project = await createProject(projectDir, deps);
     printProjectSummary(io, projectDir);
     return {
@@ -332,6 +357,9 @@ export async function runKtxSetupProjectStep(
     }
 
     if (choice === 'current') {
+      if (!(await ensureProjectDirIsOwnable(projectDir, io))) {
+        continue;
+      }
       const project = await createProject(projectDir, deps);
       printProjectSummary(io, projectDir);
       return {
