@@ -14,6 +14,9 @@ function detectUnicodeSupport(env: NodeJS.ProcessEnv = process.env): boolean {
 
 const unicode = detectUnicodeSupport();
 
+/** Whether the active terminal renders Unicode glyphs (block/box drawing, arrows). */
+export const unicodeSupported = unicode;
+
 export const SYMBOLS = {
   middot: unicode ? '·' : '-',
   emDash: unicode ? '—' : '--',
