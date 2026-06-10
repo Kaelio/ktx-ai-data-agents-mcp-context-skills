@@ -88,6 +88,10 @@ Do not discover these inputs across multiple setup runs.
      --skip-agents
    ```
 
+   - `--database-schema` is required for scope-bearing drivers (Postgres,
+     MySQL, ClickHouse, SQL Server, BigQuery, Snowflake) in `--no-input`:
+     setup fails fast without it unless the connection already has scope in
+     `ktx.yaml`. SQLite needs no scope.
    - Configure one new database connection per setup invocation. For multiple
      connections, rerun setup once per connection.
    - Pasting a literal `--database-url` is safe: the CLI relocates the URL
