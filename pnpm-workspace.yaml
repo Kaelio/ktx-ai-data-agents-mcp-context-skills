@@ -7,7 +7,7 @@ overrides:
   "brace-expansion@>=5.0.0 <5.0.6": 5.0.6
   fast-uri: 3.1.2
   fast-xml-builder: 1.1.7
-  hono: 4.12.18
+  hono: 4.12.21
   ip-address: 10.1.1
   postcss: 8.5.10
   ws: 8.20.1
