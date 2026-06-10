@@ -126,7 +126,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('Usage: ktx [options] [command]');
-    expect(testIo.stdout()).toContain('KTX data agent context layer CLI');
+    expect(testIo.stdout()).toContain('ktx data agent context layer CLI');
     for (const command of ['setup', 'connection', 'ingest', 'wiki', 'sl', 'status', 'admin']) {
       expect(testIo.stdout()).toContain(`${command}`);
     }
@@ -407,7 +407,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['admin', 'runtime', 'stop', '--help'], testIo.io)).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('--all');
-    expect(testIo.stdout()).toContain('Stop all KTX daemon processes recorded or discoverable');
+    expect(testIo.stdout()).toContain('Stop all ktx daemon processes recorded or discoverable');
     expect(testIo.stdout()).toContain('on this machine');
     expect(testIo.stderr()).toBe('');
   });
@@ -913,7 +913,7 @@ describe('runKtxCli', () => {
     await expect(runKtxCli(['ingest', '--help'], testIo.io, { publicIngest })).resolves.toBe(0);
 
     expect(testIo.stdout()).toContain('Usage: ktx ingest');
-    expect(testIo.stdout()).toContain('Build or inspect KTX context');
+    expect(testIo.stdout()).toContain('Build or inspect ktx context');
     expect(testIo.stdout()).toContain('--all');
     expect(testIo.stdout()).toContain('--query-history');
     expect(testIo.stdout()).toContain('--no-query-history');

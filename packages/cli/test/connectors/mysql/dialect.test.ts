@@ -13,7 +13,7 @@ describe('KtxMysqlDialect', () => {
     expect(dialect.formatTableName({ catalog: null, db: null, name: 'orders' })).toBe('`orders`');
   });
 
-  it('maps native MySQL types to KTX dimension types', () => {
+  it('maps native MySQL types to ktx dimension types', () => {
     expect(dialect.mapToDimensionType('tinyint(1)')).toBe('boolean');
     expect(dialect.mapToDimensionType('int')).toBe('number');
     expect(dialect.mapToDimensionType('decimal(10,2)')).toBe('number');

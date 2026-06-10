@@ -21,7 +21,7 @@ export class ManagedPythonDaemonStartError extends Error {
   readonly detail: string;
   readonly stderrLog: string;
   constructor(detail: string, stderrLog: string) {
-    super(`KTX daemon failed to start: ${detail}. stderr: ${stderrLog}`);
+    super(`ktx daemon failed to start: ${detail}. stderr: ${stderrLog}`);
     this.name = 'ManagedPythonDaemonStartError';
     this.detail = detail;
     this.stderrLog = stderrLog;
@@ -720,7 +720,7 @@ export async function startManagedPythonDaemon(
     );
     child.unref();
     if (!child.pid) {
-      throw new Error(`KTX daemon did not report a pid. stderr: ${layout.daemonStderrPath}`);
+      throw new Error(`ktx daemon did not report a pid. stderr: ${layout.daemonStderrPath}`);
     }
     const state: ManagedPythonDaemonState = {
       schemaVersion: 1,

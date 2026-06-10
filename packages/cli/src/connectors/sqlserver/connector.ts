@@ -833,7 +833,7 @@ export class KtxSqlServerScanConnector implements KtxScanConnector {
 
   private assertConnection(connectionId: string): void {
     if (connectionId !== this.connectionId) {
-      throw new Error(`KTX SQL Server connector ${this.id} cannot serve connection ${connectionId}`);
+      throw new Error(`ktx SQL Server connector ${this.id} cannot serve connection ${connectionId}`);
     }
   }
 }

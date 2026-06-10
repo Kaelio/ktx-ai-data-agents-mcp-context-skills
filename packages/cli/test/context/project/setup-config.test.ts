@@ -10,7 +10,7 @@ import {
   setKtxSetupDatabaseConnectionIds,
 } from '../../../src/context/project/setup-config.js';
 
-describe('KTX setup config helpers', () => {
+describe('ktx setup config helpers', () => {
   let tempDir: string;
 
   beforeEach(async () => {

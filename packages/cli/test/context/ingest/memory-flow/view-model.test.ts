@@ -93,7 +93,7 @@ describe('buildMemoryFlowViewModel', () => {
   it('builds six readable columns from replay events', () => {
     const view = buildMemoryFlowViewModel(replayInput());
 
-    expect(view.title).toBe('KTX memory flow  warehouse/metricflow  done');
+    expect(view.title).toBe('ktx memory flow  warehouse/metricflow  done');
     expect(view.activeLine).toBe('active: complete');
     expect(view.columns.map((column) => column.id)).toEqual([
       'source',
@@ -179,7 +179,7 @@ describe('buildMemoryFlowViewModel', () => {
       details: { actions: [], provenance: [], transcripts: [] },
     });
 
-    expect(view.title).toBe('KTX memory flow  Warehouse + dbt + BI + Docs  done');
+    expect(view.title).toBe('ktx memory flow  Warehouse + dbt + BI + Docs  done');
     expect(view.columns.find((column) => column.id === 'source')?.counters[0]).toBe('Warehouse, dbt, BI, Docs');
     expect(view.completionLine).toContain('Saved 16 memories from 29 raw files');
   });

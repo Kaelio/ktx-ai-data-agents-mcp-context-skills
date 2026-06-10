@@ -24,7 +24,7 @@ export function registerAdminCommands(program: Command, context: KtxCliCommandCo
 
   admin
     .command('init')
-    .description('Initialize a Git-backed KTX project directory for maintenance scripts')
+    .description('Initialize a Git-backed ktx project directory for maintenance scripts')
     .argument('[directory]', 'Project directory')
     .option('--force', 'Rewrite ktx.yaml and scaffold files in an existing project', false)
     .action(

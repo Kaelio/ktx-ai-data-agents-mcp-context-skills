@@ -8,7 +8,7 @@ const DATABASE_INGEST_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bWriting schema artifacts\b/gi, 'Writing schema context'],
   [/\bEnriching schema metadata\b/gi, 'Building enriched schema context'],
   [
-    /\bKTX scan enrichment failed after structural scan completed\b/gi,
+    /\bktx scan enrichment failed after structural scan completed\b/gi,
     'Database enrichment failed after schema context completed',
   ],
   [/\bstructural scan\b/gi, 'schema context'],

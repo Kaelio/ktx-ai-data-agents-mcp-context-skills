@@ -1,5 +1,5 @@
 #!/bin/bash
-# conductor-run.sh - Starts the long-lived local KTX daemon for Conductor.
+# conductor-run.sh - Starts the long-lived local ktx daemon for Conductor.
 #
 # Uses a fixed port because Conductor runs this workspace in nonconcurrent mode.
 
@@ -82,9 +82,9 @@ resolve_uv_for_project() {
   printf '%s\n' "$workspace_uv"
 }
 
-echo "=== Starting KTX for Conductor ==="
+echo "=== Starting ktx for Conductor ==="
 
-echo "Building KTX packages..."
+echo "Building ktx packages..."
 pnpm run build
 
 KTX_UV_BIN="$(resolve_uv_for_project "pyproject.toml")"
@@ -94,5 +94,5 @@ if [ -f ".venv/bin/activate" ]; then
   source .venv/bin/activate
 fi
 
-echo "KTX daemon: http://127.0.0.1:8765"
+echo "ktx daemon: http://127.0.0.1:8765"
 exec uv run ktx-daemon serve-http --host 127.0.0.1 --port 8765

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildKtxColumnEmbeddingText } from '../../../src/context/scan/embedding-text.js';
 
-describe('KTX scan embedding text', () => {
+describe('ktx scan embedding text', () => {
   it('builds column embedding text with table, description, FK, and sample-value context', () => {
     expect(
       buildKtxColumnEmbeddingText({

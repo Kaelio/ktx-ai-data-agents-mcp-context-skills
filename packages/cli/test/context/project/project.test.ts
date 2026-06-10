@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initKtxProject, loadKtxProject } from '../../../src/context/project/project.js';
 
-describe('KTX local project runtime', () => {
+describe('ktx local project runtime', () => {
   let tempDir: string;
 
   beforeEach(async () => {

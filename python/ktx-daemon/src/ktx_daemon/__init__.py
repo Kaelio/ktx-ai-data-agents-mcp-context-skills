@@ -1,4 +1,4 @@
-"""Portable compute package for KTX."""
+"""Portable compute package for ktx."""
 
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version

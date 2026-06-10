@@ -143,7 +143,7 @@ async function main() {
     if (config.requireConfig) {
       throw new Error(config.reason);
     }
-    process.stdout.write(`Published KTX package smoke skipped: ${config.reason}\n`);
+    process.stdout.write(`Published ktx package smoke skipped: ${config.reason}\n`);
     return;
   }
 

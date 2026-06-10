@@ -65,7 +65,7 @@ async function readOptionalFile(path: string): Promise<{ exists: boolean; conten
 
 function buildResolverSystemPrompt(): string {
   return `<role>
-You repair one failed KTX isolated-diff patch inside the integration worktree.
+You repair one failed ktx isolated-diff patch inside the integration worktree.
 </role>
 
 <rules>

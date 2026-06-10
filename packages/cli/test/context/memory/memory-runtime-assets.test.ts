@@ -20,9 +20,9 @@ const expectedAdapterSkillHeadings: Record<string, string> = {
   historic_sql_table_digest: '# Historic SQL Table Digest',
   live_database_ingest: '# Live Database Ingest',
   looker_ingest: '# Looker Runtime Ingest',
-  lookml_ingest: '# LookML to KTX Semantic Layer',
-  metabase_ingest: '# Metabase to KTX Semantic Layer',
-  metricflow_ingest: '# MetricFlow to KTX Semantic Layer',
+  lookml_ingest: '# LookML to ktx Semantic Layer',
+  metabase_ingest: '# Metabase to ktx Semantic Layer',
+  metricflow_ingest: '# MetricFlow to ktx Semantic Layer',
 };
 const verificationWriterSkills = [
   'notion_synthesize',
@@ -125,7 +125,7 @@ describe('memory runtime assets', () => {
   it('ships Metabase guidance that avoids invalid joins for SQL-only card outputs', async () => {
     const body = await readFile(join(skillsDir, 'metabase_ingest', 'SKILL.md'), 'utf-8');
 
-    expect(body).toContain('Do not declare a KTX join just because the card SQL joins that table internally');
+    expect(body).toContain('Do not declare a ktx join just because the card SQL joins that table internally');
     expect(body).toContain('only when the card output exposes a local key that matches the target source grain');
     expect(body).toContain('If `sl_discover` resolves the table, it is not outside the manifest');
     expect(body).toContain('reason: "parse_error"');
@@ -167,7 +167,7 @@ describe('memory runtime assets', () => {
     }
   });
 
-  it('ships only the KTX connectionId sql_execution call shape in writer guidance', async () => {
+  it('ships only the ktx connectionId sql_execution call shape in writer guidance', async () => {
     const shared = await readFile(join(skillsDir, '_shared', 'identifier-verification.md'), 'utf-8');
     const bodies = [{ name: '_shared/identifier-verification.md', body: shared }];
 

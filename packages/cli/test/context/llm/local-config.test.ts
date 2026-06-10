@@ -12,7 +12,7 @@ import {
   resolveLocalKtxLlmConfig,
 } from '../../../src/context/llm/local-config.js';
 
-describe('local KTX LLM config', () => {
+describe('local ktx LLM config', () => {
   it('resolves env and file references into a KtxLlmConfig', () => {
     const config: KtxProjectLlmConfig = {
       provider: {
@@ -190,7 +190,7 @@ describe('local KTX LLM config', () => {
   });
 });
 
-describe('local KTX embedding config', () => {
+describe('local ktx embedding config', () => {
   it('resolves sentence-transformers config', () => {
     const config: KtxProjectEmbeddingConfig = {
       backend: 'sentence-transformers',

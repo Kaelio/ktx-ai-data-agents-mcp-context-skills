@@ -12,7 +12,7 @@ describe('createKtxEmbeddingProvider', () => {
       }),
     ) as KtxEmbeddingConfig;
 
-    expect(() => createKtxEmbeddingProvider(config)).toThrow('Unsupported KTX embedding backend: deterministic');
+    expect(() => createKtxEmbeddingProvider(config)).toThrow('Unsupported ktx embedding backend: deterministic');
   });
 
   it('rejects gateway embeddings', () => {
@@ -25,7 +25,7 @@ describe('createKtxEmbeddingProvider', () => {
       }),
     ) as KtxEmbeddingConfig;
 
-    expect(() => createKtxEmbeddingProvider(config)).toThrow('Unsupported KTX embedding backend: gateway');
+    expect(() => createKtxEmbeddingProvider(config)).toThrow('Unsupported ktx embedding backend: gateway');
   });
 
   it('uses OpenAI embeddings with configured dimensions', async () => {

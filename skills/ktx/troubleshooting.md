@@ -63,7 +63,7 @@ If `claude-code` cannot be made to work, fall back to `--skip-llm` and let
 the rest of setup complete; the project is still a usable context layer
 without an LLM.
 
-## `KTX cannot work without a database` when resuming setup
+## `ktx cannot work without a database` when resuming setup
 
 `ktx setup` validates the **current invocation's flags**, not the persisted
 `ktx.yaml`. Resuming setup with only `--llm-backend …` fails even when the

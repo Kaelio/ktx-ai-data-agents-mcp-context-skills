@@ -259,7 +259,7 @@ function writeHumanReportBody(report: KtxScanReport, io: KtxCliIo): void {
 
 function writeRunSummary(report: KtxScanReport, projectDir: string, io: KtxCliIo): void {
   const styled = shouldUseStyledOutput(io);
-  io.stdout.write(`${styled ? green('✓') : ''}${styled ? ' ' : ''}KTX scan completed\n`);
+  io.stdout.write(`${styled ? green('✓') : ''}${styled ? ' ' : ''}ktx scan completed\n`);
   io.stdout.write('Status: done\n');
   writeHumanReportBody(report, io);
   const projectDirArg = quoteCliArg(projectDir);

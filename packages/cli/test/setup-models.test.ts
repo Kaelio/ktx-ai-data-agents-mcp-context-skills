@@ -146,7 +146,7 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('back');
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which LLM provider should KTX use?'),
+        message: expect.stringContaining('Which LLM provider should ktx use?'),
         options: [
           { value: 'claude-code', label: 'Claude subscription (Pro/Max)' },
           { value: 'codex', label: 'Codex subscription' },
@@ -199,12 +199,12 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('ready');
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which LLM provider should KTX use?'),
+        message: expect.stringContaining('Which LLM provider should ktx use?'),
       }),
     );
     expect(prompts.select).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which Claude Code model should KTX use?'),
+        message: expect.stringContaining('Which Claude Code model should ktx use?'),
       }),
     );
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
@@ -299,7 +299,7 @@ describe('setup Anthropic model step', () => {
 
     expect(result.status).toBe('ready');
     expect(io.stderr()).toContain('claude-code ignores llm.promptCaching.systemTtl');
-    expect(io.stderr()).toContain('Claude Agent SDK does not expose KTX prompt-cache TTL, tool, or history markers');
+    expect(io.stderr()).toContain('Claude Agent SDK does not expose ktx prompt-cache TTL, tool, or history markers');
   });
 
   it('returns from Anthropic credential Back to provider selection', async () => {
@@ -315,7 +315,7 @@ describe('setup Anthropic model step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
-        message: expect.stringContaining('Which LLM provider should KTX use?'),
+        message: expect.stringContaining('Which LLM provider should ktx use?'),
       }),
     );
   });
@@ -495,7 +495,7 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('ready');
     expect(prompts.select).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('How should KTX authenticate with Google Vertex AI?'),
+        message: expect.stringContaining('How should ktx authenticate with Google Vertex AI?'),
       }),
     );
     expect(readGcloudProject).toHaveBeenCalled();
@@ -503,7 +503,7 @@ describe('setup Anthropic model step', () => {
     expect(prompts.text).not.toHaveBeenCalled();
     expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
+        message: expect.stringContaining('Which Google Cloud project should ktx use for Vertex AI?'),
         options: [
           { value: 'local-gcp-project', label: 'local-gcp-project - Local project (current gcloud project)' },
           { value: 'other-gcp-project', label: 'other-gcp-project - Other project' },
@@ -545,12 +545,12 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('ready');
     expect(prompts.select).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('How should KTX authenticate with Google Vertex AI?'),
+        message: expect.stringContaining('How should ktx authenticate with Google Vertex AI?'),
       }),
     );
     expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
+        message: expect.stringContaining('Which Google Cloud project should ktx use for Vertex AI?'),
       }),
     );
     expect(healthCheck).toHaveBeenCalledWith(
@@ -615,7 +615,7 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('ready');
     expect(prompts.autocomplete).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which Google Cloud project should KTX use for Vertex AI?'),
+        message: expect.stringContaining('Which Google Cloud project should ktx use for Vertex AI?'),
         options: [
           { value: 'manual', label: 'Enter a project ID manually' },
           { value: 'back', label: 'Back' },
@@ -710,7 +710,7 @@ describe('setup Anthropic model step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        message: expect.stringContaining('Which LLM provider should KTX use?'),
+        message: expect.stringContaining('Which LLM provider should ktx use?'),
       }),
     );
   });
@@ -899,20 +899,20 @@ describe('setup Anthropic model step', () => {
     expect(result.status).toBe('back');
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('How should KTX find your Anthropic API key?'),
+        message: expect.stringContaining('How should ktx find your Anthropic API key?'),
         options: expect.not.arrayContaining([expect.objectContaining({ value: 'skip' })]),
       }),
     );
   });
 
-  it('explains why KTX asks for an Anthropic API key', async () => {
+  it('explains why ktx asks for an Anthropic API key', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({ credentialChoice: 'back' });
     const expectedPromptMessage = [
-      'How should KTX find your Anthropic API key?',
+      'How should ktx find your Anthropic API key?',
       '',
       [
-        'KTX uses the key to verify Anthropic model access now and to run ingest agents that turn schemas, SQL,',
+        'ktx uses the key to verify Anthropic model access now and to run ingest agents that turn schemas, SQL,',
         'BI metadata, and docs into semantic-layer sources and wiki context. ktx.yaml stores an env: or file:',
         'reference, not the raw key.',
       ].join(' '),
@@ -930,7 +930,7 @@ describe('setup Anthropic model step', () => {
         message: expectedPromptMessage,
       }),
     );
-    expect(io.stdout()).not.toContain('KTX uses the key');
+    expect(io.stdout()).not.toContain('ktx uses the key');
   });
 
   it('does not persist llm completion when the health check fails', async () => {
@@ -980,7 +980,7 @@ describe('setup Anthropic model step', () => {
     expect(prompts.select).toHaveBeenCalledTimes(3);
     expect(prompts.autocomplete).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Which Anthropic model should KTX use?'),
+        message: expect.stringContaining('Which Anthropic model should ktx use?'),
       }),
     );
     expect(io.stderr()).toContain('Anthropic model health check failed: model not found');

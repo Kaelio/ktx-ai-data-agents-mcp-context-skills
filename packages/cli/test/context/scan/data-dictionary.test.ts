@@ -7,7 +7,7 @@ import {
 
 const defaultPatterns = defaultKtxDataDictionarySettings.excludePatterns;
 
-describe('KTX scan data dictionary policy', () => {
+describe('ktx scan data dictionary policy', () => {
   it('includes text-like and boolean categorical types', () => {
     expect(isKtxDataDictionaryCandidate('varchar(50)', 'status', defaultPatterns)).toBe(true);
     expect(isKtxDataDictionaryCandidate('VARCHAR', 'category', defaultPatterns)).toBe(true);

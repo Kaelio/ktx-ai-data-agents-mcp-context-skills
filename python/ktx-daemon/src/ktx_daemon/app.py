@@ -1,4 +1,4 @@
-"""FastAPI app factory for the KTX daemon semantic compute server."""
+"""FastAPI app factory for the ktx daemon semantic compute server."""
 
 from __future__ import annotations
 
@@ -142,8 +142,8 @@ def create_app(
             )
 
     app = FastAPI(
-        title="KTX Daemon",
-        description="Stateless portable compute server for KTX.",
+        title="ktx Daemon",
+        description="Stateless portable compute server for ktx.",
         version=VERSION,
         lifespan=lifespan,
     )

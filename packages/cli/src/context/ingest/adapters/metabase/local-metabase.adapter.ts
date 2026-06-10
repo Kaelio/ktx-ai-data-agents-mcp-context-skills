@@ -34,7 +34,7 @@ export function metabaseRuntimeConfigFromLocalConnection(
   }
   if (hasNetworkProxy(connection)) {
     throw new Error(
-      `Standalone KTX does not support proxy-bearing Metabase connections yet. Use hosted Metabase ingest for "${connectionId}" until the KTX Metabase proxy support spec lands.`,
+      `Standalone ktx does not support proxy-bearing Metabase connections yet. Use hosted Metabase ingest for "${connectionId}" until the ktx Metabase proxy support spec lands.`,
     );
   }
 

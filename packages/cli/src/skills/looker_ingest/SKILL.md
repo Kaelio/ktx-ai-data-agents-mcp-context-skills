@@ -1,12 +1,12 @@
 ---
 name: looker_ingest
-description: Extract durable KTX knowledge and semantic-layer contribution proposals from staged Looker runtime dashboard, Look, and explore JSON. Load for WorkUnits whose raw files are under explores/, dashboards/, or looks/.
+description: Extract durable ktx knowledge and semantic-layer contribution proposals from staged Looker runtime dashboard, Look, and explore JSON. Load for WorkUnits whose raw files are under explores/, dashboards/, or looks/.
 callers: [memory_agent]
 ---
 
 # Looker Runtime Ingest
 
-Looker runtime ingest turns API-staged dashboards, Looks, and explores into durable KTX memory. Runtime entities are evidence. They are not themselves the final knowledge shape.
+Looker runtime ingest turns API-staged dashboards, Looks, and explores into durable ktx memory. Runtime entities are evidence. They are not themselves the final knowledge shape.
 
 ## Required Workflow
 
@@ -103,7 +103,7 @@ The staged explore file carries warehouse target fields populated before the WU 
 - `rawSqlTableName`: Looker's verbatim `sql_table_name`. Keep it as provenance only.
 - `targetTable`: the parsed target-table union. Use this as the sole branch condition.
 
-When `targetTable.ok === true`, the explore has a complete KTX backing target. Before writing:
+When `targetTable.ok === true`, the explore has a complete ktx backing target. Before writing:
 
 1. Use `targetTable.catalog`, `targetTable.schema`, and `targetTable.name` for `source_tables` preflight matching through `sl_discover` or `sl_read_source`.
 2. Use Looker field `sql`, labels, descriptions, and type metadata to derive source columns, measures, segments, joins, and grain.

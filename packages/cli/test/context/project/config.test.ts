@@ -7,7 +7,7 @@ import {
   validateKtxProjectConfig,
 } from '../../../src/context/project/config.js';
 
-describe('KTX project config', () => {
+describe('ktx project config', () => {
   it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
     expect(
       parseKtxProjectConfig(`

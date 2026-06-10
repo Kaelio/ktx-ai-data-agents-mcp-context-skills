@@ -10,7 +10,7 @@ describe('KtxPostgresDialect', () => {
     expect(dialect.formatTableName({ catalog: null, db: null, name: 'orders' })).toBe('"orders"');
   });
 
-  it('maps native PostgreSQL types to KTX dimension types', () => {
+  it('maps native PostgreSQL types to ktx dimension types', () => {
     expect(dialect.mapToDimensionType('timestamp with time zone')).toBe('time');
     expect(dialect.mapToDimensionType('numeric(12,2)')).toBe('number');
     expect(dialect.mapToDimensionType('uuid')).toBe('string');

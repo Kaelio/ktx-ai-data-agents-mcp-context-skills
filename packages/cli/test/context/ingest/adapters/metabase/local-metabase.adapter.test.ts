@@ -57,7 +57,7 @@ describe('metabaseRuntimeConfigFromLocalConnection', () => {
     };
 
     expect(() => metabaseRuntimeConfigFromLocalConnection('prod-metabase', connection)).toThrow(
-      'Standalone KTX does not support proxy-bearing Metabase connections yet',
+      'Standalone ktx does not support proxy-bearing Metabase connections yet',
     );
   });
 

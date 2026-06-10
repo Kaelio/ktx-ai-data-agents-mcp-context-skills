@@ -569,7 +569,7 @@ export class KtxDescriptionGenerator {
 
     if (!connector.sampleTable) {
       fallbackReason = 'capability_missing';
-      this.logger?.warn('KTX scan connector does not support table sampling; falling back to metadata-only prompt', {
+      this.logger?.warn('ktx scan connector does not support table sampling; falling back to metadata-only prompt', {
         connectorId: input.connector.id,
         table: input.table.name,
       });
@@ -690,7 +690,7 @@ export class KtxDescriptionGenerator {
     let fallbackReason: 'capability_missing' | 'sampling_failed' | 'empty_sample' | null = null;
     if (!input.connector.sampleTable) {
       fallbackReason = 'capability_missing';
-      this.logger?.warn('KTX scan connector does not support table sampling; falling back to metadata-only prompt', {
+      this.logger?.warn('ktx scan connector does not support table sampling; falling back to metadata-only prompt', {
         connectorId: input.connector.id,
         table: input.table.name,
       });
@@ -846,7 +846,7 @@ export class KtxDescriptionGenerator {
     }
 
     if (!input.connector.sampleTable) {
-      this.logger?.warn('KTX scan connector does not support table sampling for data-source description generation', {
+      this.logger?.warn('ktx scan connector does not support table sampling for data-source description generation', {
         connectorId: input.connector.id,
       });
       return 'No accessible tables found in database';
@@ -927,7 +927,7 @@ export class KtxDescriptionGenerator {
       let columnValues = column.sampleValues;
       if (!columnValues || columnValues.length === 0) {
         if (!input.connector.sampleColumn) {
-          this.logger?.warn('KTX scan connector does not support column sampling; using available metadata only', {
+          this.logger?.warn('ktx scan connector does not support column sampling; using available metadata only', {
             connectorId: input.connector.id,
             table: input.table.name,
             column: column.name,

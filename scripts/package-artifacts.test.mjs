@@ -516,8 +516,8 @@ describe('verification snippets', () => {
     assert.match(source, /managed-runtime/);
     assert.match(source, /ktx admin runtime status missing/);
     assert.match(source, /runtimeStatusBefore\.kind, 'missing'/);
-    assert.ok(source.includes(String.raw`Installing KTX Python runtime \(core\) with uv`));
-    assert.match(source, /KTX Python runtime ready:/);
+    assert.ok(source.includes(String.raw`Installing ktx Python runtime \(core\) with uv`));
+    assert.match(source, /ktx Python runtime ready:/);
     assert.match(source, /ktx admin runtime status ready/);
     assert.match(source, /runtimeStatusAfter\.kind, 'ready'/);
     assert.match(source, /runtimeStatusAfter\.manifest\.features/);
@@ -525,7 +525,7 @@ describe('verification snippets', () => {
     assert.match(source, /status: ready/);
     assert.match(source, /ktx admin runtime start/);
     assert.match(source, /ktx admin runtime start reuse/);
-    assert.match(source, /Using existing KTX daemon/);
+    assert.match(source, /Using existing ktx daemon/);
     assert.match(source, /ktx admin runtime stop/);
     assert.doesNotMatch(source, /ktx admin runtime prune/);
     assert.doesNotMatch(source, /staleRuntimeDir/);
@@ -557,7 +557,7 @@ describe('verification snippets', () => {
       assert.match(source, /Usage: ktx setup/);
       assert.doesNotMatch(source, new RegExp(["'demo'", "'--mode'", "'deterministic'"].join(', ')));
       assert.match(source, /'status', '--verbose', '--no-input'/);
-      assert.match(source, /KTX status/);
+      assert.match(source, /ktx status/);
       assert.match(source, /No project here yet/);
       assert.doesNotMatch(source, /function requireProjectStderr/);
       assert.match(source, /Object\.keys\(packageJson\.dependencies\)/);

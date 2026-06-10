@@ -68,8 +68,8 @@ describe('formatDoctorReport', () => {
       },
     ];
 
-    const output = formatDoctorReport({ title: 'KTX status', checks });
-    expect(output).toContain('KTX status');
+    const output = formatDoctorReport({ title: 'ktx status', checks });
+    expect(output).toContain('ktx status');
     expect(output).toContain('✗ Environment');
     expect(output).toContain('1 of 2 need attention');
     expect(output).toContain('✗ Native SQLite: Cannot load better-sqlite3');
@@ -83,7 +83,7 @@ describe('formatDoctorReport', () => {
       { id: 'pnpm', label: 'pnpm 10.20+', status: 'pass', detail: '10.28.0', group: 'toolchain' },
     ];
 
-    const output = formatDoctorReport({ title: 'KTX status', checks });
+    const output = formatDoctorReport({ title: 'ktx status', checks });
     expect(output).toContain('✓ Environment');
     expect(output).toContain('Node 22+ · pnpm 10.20+');
     expect(output).not.toContain('v22.16.0');
@@ -106,7 +106,7 @@ describe('formatDoctorReport', () => {
       },
     ];
 
-    const output = formatDoctorReport({ title: 'KTX status', checks });
+    const output = formatDoctorReport({ title: 'ktx status', checks });
     expect(output).toContain('✓ Semantic search');
     expect(output).toContain('openai/text-embedding-3-small (1536d) probe succeeded');
   });
@@ -116,7 +116,7 @@ describe('formatDoctorReport', () => {
       { id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0', group: 'toolchain' },
     ];
 
-    const output = formatDoctorReport({ title: 'KTX status', checks }, { verbose: true });
+    const output = formatDoctorReport({ title: 'ktx status', checks }, { verbose: true });
     expect(output).toContain('✓ Node 22+: v22.16.0');
   });
 });
@@ -249,7 +249,7 @@ describe('runKtxDoctor', () => {
       ),
     ).resolves.toBe(1);
 
-    expect(testIo.stdout()).toContain('KTX status');
+    expect(testIo.stdout()).toContain('ktx status');
     expect(testIo.stdout()).toContain('No project here yet.');
     expect(testIo.stdout()).toContain('Before you can run');
     expect(testIo.stdout()).toContain('✗ TypeScript package build: Missing packages/cli/dist/bin.js');
@@ -304,7 +304,7 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     expect(JSON.parse(testIo.stdout())).toEqual({
-      title: 'KTX status',
+      title: 'ktx status',
       checks: [{ id: 'node', label: 'Node 22+', status: 'pass', detail: 'v22.16.0 ABI 127' }],
     });
   });
@@ -323,8 +323,8 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(1);
 
     const out = testIo.stdout();
-    expect(out).toContain('KTX status');
-    expect(out).toContain('No KTX project here yet.');
+    expect(out).toContain('ktx status');
+    expect(out).toContain('No ktx project here yet.');
     expect(out).toContain('ktx setup');
     expect(out).toContain('KTX_PROJECT_DIR');
     expect(out).not.toContain('ENOENT');
@@ -377,7 +377,7 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(1);
 
     const out = testIo.stdout();
-    expect(out).toContain('KTX status');
+    expect(out).toContain('ktx status');
     expect(out).toContain('Config');
     expect(out).toContain('Unsupported storrage: unknown field');
     expect(out).toContain('Unsupported ingest.llm: unknown field');
@@ -479,7 +479,7 @@ describe('runKtxDoctor', () => {
     ).resolves.toBe(0);
 
     const out = testIo.stdout();
-    expect(out).toContain('KTX status');
+    expect(out).toContain('ktx status');
     expect(out).toContain(`· ${basename(tempDir)}`);
     expect(out).toContain('Connections (1)');
     expect(out).toContain('LLM');
@@ -759,7 +759,7 @@ describe('runKtxDoctor', () => {
       ).resolves.toBe(0);
 
       const out = testIo.stdout();
-      expect(out).toContain('KTX status');
+      expect(out).toContain('ktx status');
       expect(out).toContain('Config');
       expect(out).toContain('ktx.yaml schema valid');
       expect(out).not.toContain('LLM');
@@ -855,7 +855,7 @@ describe('runKtxDoctor', () => {
         ),
       ).resolves.toBe(1);
 
-      expect(testIo.stdout()).toContain('No KTX project here yet.');
+      expect(testIo.stdout()).toContain('No ktx project here yet.');
     });
 
     it('does not invoke the Postgres query-history probe in validate mode', async () => {

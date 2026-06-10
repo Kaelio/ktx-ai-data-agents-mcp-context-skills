@@ -41,7 +41,7 @@ describe('buildMcpSecurityConfig', () => {
         allowedHosts: [],
         allowedOrigins: [],
       }),
-    ).toThrow('Binding KTX MCP to 0.0.0.0 requires --token or KTX_MCP_TOKEN');
+    ).toThrow('Binding ktx MCP to 0.0.0.0 requires --token or KTX_MCP_TOKEN');
   });
 
   it('validates allowed origins as full origins', () => {
@@ -88,7 +88,7 @@ describe('isMcpRequestAuthorized', () => {
         { path: '/health', headers: { host: 'evil.example.test' } },
         config,
       ),
-    ).toEqual({ ok: false, status: 403, message: 'Host header is not allowed for KTX MCP.' });
+    ).toEqual({ ok: false, status: 403, message: 'Host header is not allowed for ktx MCP.' });
   });
 
   it('rejects browser origins unless explicitly allowed', () => {
@@ -100,7 +100,7 @@ describe('isMcpRequestAuthorized', () => {
         },
         config,
       ),
-    ).toEqual({ ok: false, status: 403, message: 'Origin header is not allowed for KTX MCP.' });
+    ).toEqual({ ok: false, status: 403, message: 'Origin header is not allowed for ktx MCP.' });
   });
 
   it('requires bearer auth on /mcp when token auth is enabled', () => {
@@ -109,7 +109,7 @@ describe('isMcpRequestAuthorized', () => {
         { path: '/mcp', headers: { host: 'mcp.example.test', authorization: 'Bearer wrong' } },
         config,
       ),
-    ).toEqual({ ok: false, status: 401, message: 'Missing or invalid KTX MCP bearer token.' });
+    ).toEqual({ ok: false, status: 401, message: 'Missing or invalid ktx MCP bearer token.' });
   });
 
   it('does not require bearer auth on /health', () => {

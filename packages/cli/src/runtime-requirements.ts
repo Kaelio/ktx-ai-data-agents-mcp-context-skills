@@ -90,7 +90,7 @@ export function resolveProjectRuntimeRequirements(
     requirements.push({
       feature: 'core',
       reason: 'database-introspection',
-      detail: 'Database introspection fallback uses the KTX daemon.',
+      detail: 'Database introspection fallback uses the ktx daemon.',
     });
   }
 

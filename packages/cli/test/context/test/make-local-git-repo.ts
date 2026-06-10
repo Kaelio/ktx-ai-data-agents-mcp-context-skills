@@ -20,7 +20,7 @@ export async function makeLocalGitRepo(fixtureDir: string, destRoot: string): Pr
   await git.init();
   await git.raw(['checkout', '-B', 'main']);
   await git.addConfig('user.email', 'test@ktx.local');
-  await git.addConfig('user.name', 'KTX Test');
+  await git.addConfig('user.name', 'ktx Test');
   await git.add('.');
   await git.commit('initial');
   const commit = async (message: string): Promise<string> => {

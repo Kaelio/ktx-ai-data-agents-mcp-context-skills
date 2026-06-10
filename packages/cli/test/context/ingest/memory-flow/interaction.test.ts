@@ -13,7 +13,7 @@ import type { MemoryFlowInteractionState, MemoryFlowViewModel } from '../../../.
 
 function view(): MemoryFlowViewModel {
   return {
-    title: 'KTX memory flow  warehouse/metricflow  running',
+    title: 'ktx memory flow  warehouse/metricflow  running',
     subtitle: 'Run run-1  Sync sync-1',
     status: 'running',
     activeLine: 'active: WorkUnit orders step 2/4',

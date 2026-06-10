@@ -65,7 +65,7 @@ describe('runIsolatedWorkUnit', () => {
       run: async (child) => {
         await mkdir(join(child.workdir, 'wiki/global'), { recursive: true });
         await writeFile(join(child.workdir, 'wiki/global/a.md'), '---\nsummary: A\nusage_mode: auto\n---\n\nBody\n');
-        await child.git.commitFiles(['wiki/global/a.md'], 'test: write wiki', 'KTX Test', 'system@ktx.local');
+        await child.git.commitFiles(['wiki/global/a.md'], 'test: write wiki', 'ktx Test', 'system@ktx.local');
         return {
           unitKey: 'wu-1',
           status: 'success',

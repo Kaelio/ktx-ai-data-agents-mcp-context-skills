@@ -87,7 +87,7 @@ describe('validateMetabaseMappings', () => {
       }),
     ).toEqual({
       ok: false,
-      errors: [{ key: '2', reason: 'KTX connection missing-target does not exist' }],
+      errors: [{ key: '2', reason: 'ktx connection missing-target does not exist' }],
     });
   });
 });
@@ -149,7 +149,7 @@ describe('validateMappingPhysicalMatch', () => {
     ).toBeNull();
   });
 
-  it('returns null for unknown engines because KTX cannot validate them', () => {
+  it('returns null for unknown engines because ktx cannot validate them', () => {
     expect(
       validateMappingPhysicalMatch(
         { metabaseEngine: 'unknown-engine', metabaseDbName: 'X', metabaseHost: 'host' },
@@ -177,7 +177,7 @@ describe('computeMetabaseMappingPhysicalMismatches', () => {
     ).toEqual([
       {
         mappingId: 'mapping-bad',
-        reason: "Metabase database 'app' does not match KTX connection database 'other_app'",
+        reason: "Metabase database 'app' does not match ktx connection database 'other_app'",
       },
     ]);
   });
@@ -216,7 +216,7 @@ describe('refreshMetabaseMapping', () => {
       physicalMismatches: [
         {
           mappingId: '2',
-          reason: "Metabase database 'analytics' does not match KTX connection database 'wrong_database'",
+          reason: "Metabase database 'analytics' does not match ktx connection database 'wrong_database'",
         },
       ],
     });
@@ -282,7 +282,7 @@ describe('findBestMatch', () => {
 });
 
 describe('METABASE_ENGINE_TO_CONNECTION_TYPE', () => {
-  it('keeps the server-supported Metabase engine table in KTX', () => {
+  it('keeps the server-supported Metabase engine table in ktx', () => {
     expect(METABASE_ENGINE_TO_CONNECTION_TYPE).toMatchObject({
       postgres: 'POSTGRESQL',
       bigquery: 'BIGQUERY',

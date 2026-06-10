@@ -54,9 +54,7 @@ async function createDefaultLookerClient(
       return lookerCredentialsFromLocalConnection(lookerConnectionId, project.config.connections[lookerConnectionId]);
     },
   });
-  return factory.createClient(connectionId) as unknown as Pick<LookerMappingClient, 'listLookerConnections'> & {
-    cleanup?(): Promise<void>;
-  };
+  return factory.createLookerClient(connectionId);
 }
 
 function isLookerConnection(project: KtxLocalProject, connectionId: string): boolean {

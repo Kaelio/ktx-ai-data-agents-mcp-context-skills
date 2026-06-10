@@ -62,7 +62,7 @@ const llmSchema = z
     models: z
       .partialRecord(z.enum(KTX_MODEL_ROLES), z.string().min(1))
       .default({})
-      .describe('Per-role model overrides keyed by KTX model role (e.g. "default", "triage"). Values are provider-specific model identifiers.'),
+      .describe('Per-role model overrides keyed by ktx model role (e.g. "default", "triage"). Values are provider-specific model identifiers.'),
     promptCaching: promptCachingSchema.optional().describe('Optional prompt-caching tunables.'),
   })
   .describe('LLM provider, per-role model overrides, and prompt-caching tunables.');
@@ -230,7 +230,7 @@ const setupSchema = z
 
 const storageGitSchema = z
   .strictObject({
-    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits state changes to the local Git-backed store.'),
+    auto_commit: z.boolean().default(true).describe('When true, ktx automatically commits state changes to the local Git-backed store.'),
     author: z
       .string()
       .min(1)
@@ -244,14 +244,14 @@ const storageSchema = z
     state: z
       .enum(KTX_STORAGE_STATES)
       .default('sqlite')
-      .describe('Backend for KTX state storage. "sqlite" uses .ktx/db.sqlite; "postgres" expects a configured Postgres connection.'),
+      .describe('Backend for ktx state storage. "sqlite" uses .ktx/db.sqlite; "postgres" expects a configured Postgres connection.'),
     search: z
       .enum(KTX_SEARCH_BACKENDS)
       .default('sqlite-fts5')
       .describe('Backend for search indexes. "sqlite-fts5" uses SQLite FTS5; "postgres-hybrid" uses Postgres lexical + vector hybrid search.'),
     git: storageGitSchema.prefault({}).describe('Git-backed storage commit policy.'),
   })
-  .describe('Storage backends and commit policy for KTX state and search indexes.');
+  .describe('Storage backends and commit policy for ktx state and search indexes.');
 
 const connectionSchema = connectionConfigSchema;
 
@@ -278,7 +278,7 @@ const agentSchema = z
 
 const memorySchema = z
   .strictObject({
-    auto_commit: z.boolean().default(true).describe('When true, KTX automatically commits memory updates to the Git-backed store.'),
+    auto_commit: z.boolean().default(true).describe('When true, ktx automatically commits memory updates to the Git-backed store.'),
   })
   .describe('Memory subsystem configuration.');
 
@@ -289,14 +289,14 @@ const ktxProjectConfigSchema = z
       .record(z.string(), connectionSchema)
       .default({})
       .describe('Map of connection ID to connector configuration. Keys are user-chosen names referenced elsewhere in the config.'),
-    storage: storageSchema.prefault({}).describe('Storage backends and commit policy for KTX state and search indexes.'),
+    storage: storageSchema.prefault({}).describe('Storage backends and commit policy for ktx state and search indexes.'),
     llm: llmSchema.prefault({}).describe('LLM provider, per-role model overrides, and prompt-caching tunables.'),
     ingest: ingestSchema.prefault({}).describe('Ingest pipeline configuration.'),
     agent: agentSchema.prefault({}).describe('Agent feature configuration.'),
     memory: memorySchema.prefault({}).describe('Memory subsystem configuration.'),
     scan: scanSchema.prefault({}).describe('Schema-scan configuration: enrichment and relationship discovery.'),
   })
-  .describe('Configuration schema for KTX project files (ktx.yaml).');
+  .describe('Configuration schema for ktx project files (ktx.yaml).');
 
 export type KtxProjectConfig = z.infer<typeof ktxProjectConfigSchema>;
 export type KtxProjectLlmConfig = z.infer<typeof llmSchema>;

@@ -1145,7 +1145,7 @@ export function renderProjectStatus(status: ProjectStatus, options: RenderProjec
 
   const lines: string[] = [];
   const dirStr = abbreviateHome(status.projectDir, env);
-  lines.push(`${bold('KTX status')} ${dim('·')} ${status.projectName} ${dim(`(${dirStr})`)}`);
+  lines.push(`${bold('ktx status')} ${dim('·')} ${status.projectName} ${dim(`(${dirStr})`)}`);
   lines.push('');
 
   const labelPad = 'Connections'.length;

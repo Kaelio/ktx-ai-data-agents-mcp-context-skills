@@ -1,4 +1,4 @@
-"""Semantic-layer compute helpers for the KTX daemon package."""
+"""Semantic-layer compute helpers for the ktx daemon package."""
 
 from __future__ import annotations
 

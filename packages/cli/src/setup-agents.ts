@@ -234,7 +234,7 @@ function codexSnippet(endpoint: KtxMcpEndpointInfo): string {
   if (endpoint.tokenAuth) {
     return [
       'Codex MCP config does not currently document HTTP headers.',
-      'Run KTX on loopback without token auth for Codex, or configure headers after Codex documents support.',
+      'Run ktx on loopback without token auth for Codex, or configure headers after Codex documents support.',
     ].join('\n');
   }
   return [`[mcp_servers.ktx]`, `url = "${endpoint.url}"`].join('\n');
@@ -538,16 +538,16 @@ function cliInstructionContent(input: { projectDir: string; launcher: KtxCliLaun
   return [
     '---',
     'name: ktx',
-    'description: Use local KTX semantic context and wiki knowledge for this project.',
+    'description: Use local ktx semantic context and wiki knowledge for this project.',
     '---',
     '',
-    '# KTX Local Context',
+    '# ktx Local Context',
     '',
-    'This is an admin/developer CLI helper. End-user data agents should use the KTX MCP tools when available.',
+    'This is an admin/developer CLI helper. End-user data agents should use the ktx MCP tools when available.',
     '',
     `Use this project with \`--project-dir ${input.projectDir}\`.`,
-    'Commands are pinned to the local KTX CLI path that created this file, so agents do not need `ktx` in PATH.',
-    'If the CLI path no longer exists after moving this checkout or reinstalling KTX, rerun `ktx setup --agents`.',
+    'Commands are pinned to the local ktx CLI path that created this file, so agents do not need `ktx` in PATH.',
+    'If the CLI path no longer exists after moving this checkout or reinstalling ktx, rerun `ktx setup --agents`.',
     '',
     'Agents must not print secrets, credential references, environment variable values, or file contents from ' +
       '`.ktx/secrets`.',
@@ -676,7 +676,7 @@ function mergeManifest(
 export async function removeKtxAgentInstall(projectDir: string, io: KtxCliIo): Promise<number> {
   const manifest = await readKtxAgentInstallManifest(projectDir);
   if (!manifest) {
-    io.stdout.write('No KTX agent installation manifest found.\n');
+    io.stdout.write('No ktx agent installation manifest found.\n');
     return 0;
   }
   for (const entry of manifest.entries) {
@@ -684,7 +684,7 @@ export async function removeKtxAgentInstall(projectDir: string, io: KtxCliIo): P
     if (entry.kind === 'json-key') await removeJsonKey(entry.path, entry.jsonPath).catch(() => undefined);
   }
   await rm(agentInstallManifestPath(projectDir), { force: true });
-  io.stdout.write('Removed KTX agent integration files from manifest.\n');
+  io.stdout.write('Removed ktx agent integration files from manifest.\n');
   return 0;
 }
 
@@ -990,7 +990,7 @@ function formatAgentNextActions(input: {
   if (claudeCodeInstall) {
     lines.push(`${step}. Open Claude Code`);
     if (claudeCodeInstall.scope === 'project') {
-      lines.push('  Open Claude Code from the KTX project directory:');
+      lines.push('  Open Claude Code from the ktx project directory:');
       lines.push('');
       lines.push('  RUN:');
       lines.push(`  cd ${shellScriptQuote(projectDir)}`);
@@ -1007,7 +1007,7 @@ function formatAgentNextActions(input: {
   if (cursorInstall) {
     lines.push(`${step}. Open Cursor`);
     if (cursorInstall.scope === 'project') {
-      lines.push('  Open Cursor from the KTX project directory:');
+      lines.push('  Open Cursor from the ktx project directory:');
       lines.push('');
       lines.push('  OPEN:');
       lines.push(`  ${projectDir}`);
@@ -1020,7 +1020,7 @@ function formatAgentNextActions(input: {
 
   if (input.installs.some((install) => install.target === 'claude-desktop')) {
     lines.push(`${step}. Restart Claude Desktop`);
-    lines.push('  Claude Desktop loads KTX MCP after restart.');
+    lines.push('  Claude Desktop loads ktx MCP after restart.');
     pushBlankLine(lines);
     step += 1;
 
@@ -1032,7 +1032,7 @@ function formatAgentNextActions(input: {
       for (const path of skillBundlePaths) {
         lines.push(`  ${path}`);
       }
-      lines.push('  Toggle the uploaded KTX skills on.');
+      lines.push('  Toggle the uploaded ktx skills on.');
       pushBlankLine(lines);
       step += 1;
     }
@@ -1104,16 +1104,16 @@ export async function runKtxSetupAgentsStep(
     args.inputMode === 'disabled'
       ? args.mode
       : ((await prompts.select({
-          message: 'What should agents be allowed to do with this KTX project?',
+          message: 'What should agents be allowed to do with this ktx project?',
           options: [
             {
               value: 'mcp',
-              label: 'Ask data questions with KTX MCP',
+              label: 'Ask data questions with ktx MCP',
               hint: 'Installs the MCP connection and analytics workflow skill. Best for normal use.',
             },
             {
               value: 'mcp-cli',
-              label: 'Ask data questions + manage KTX with CLI commands',
+              label: 'Ask data questions + manage ktx with CLI commands',
               hint: 'Adds an admin CLI skill so agents can run ktx status, sl, wiki, and setup commands.',
             },
             {
@@ -1135,7 +1135,7 @@ export async function runKtxSetupAgentsStep(
       : args.inputMode === 'disabled'
         ? []
         : ((await prompts.multiselect({
-            message: 'Which agent targets should KTX install?',
+            message: 'Which agent targets should ktx install?',
             options: [
               { value: 'claude-code', label: 'Claude Code' },
               { value: 'claude-desktop', label: 'Claude Desktop' },
@@ -1163,17 +1163,17 @@ export async function runKtxSetupAgentsStep(
     scopeTargets.length > 0 &&
     scopeTargets.every(targetSupportsGlobalScope)
       ? ((await prompts.select({
-          message: `Where should KTX install supported agent config?\n\nKTX project: ${resolve(args.projectDir)}`,
+          message: `Where should ktx install supported agent config?\n\nktx project: ${resolve(args.projectDir)}`,
           options: [
             {
               value: 'project',
-              label: 'Project scope (KTX project directory)',
-              hint: 'Only agents opened from this KTX project path load the project-scoped config.',
+              label: 'Project scope (ktx project directory)',
+              hint: 'Only agents opened from this ktx project path load the project-scoped config.',
             },
             {
               value: 'global',
               label: 'Global scope (user config)',
-              hint: 'Agents can load this KTX project from any working directory.',
+              hint: 'Agents can load this ktx project from any working directory.',
             },
           ],
         })) as KtxAgentScope | 'back')

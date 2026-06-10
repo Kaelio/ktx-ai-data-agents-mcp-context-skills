@@ -38,7 +38,7 @@ export async function runKtxEmbeddingHealthCheck(
   try {
     const provider = createKtxEmbeddingProvider(config, options.deps);
     const embedding = await withTimeout(
-      provider.embed(options.text ?? 'KTX embedding health check'),
+      provider.embed(options.text ?? 'ktx embedding health check'),
       options.timeoutMs ?? 15_000,
     );
     if (embedding.length !== config.dimensions) {

@@ -16,7 +16,7 @@ describe('public ingest copy sanitizers', () => {
   it('maps database scan failure text into public database ingest wording', () => {
     expect(
       publicDatabaseIngestMessage(
-        'KTX scan enrichment failed after structural scan completed: embedding service timed out',
+        'ktx scan enrichment failed after structural scan completed: embedding service timed out',
       ),
     ).toBe('Database enrichment failed after schema context completed: embedding service timed out');
     expect(publicDatabaseIngestMessage('structural scan wrote partial artifacts')).toBe(
@@ -42,7 +42,7 @@ describe('public ingest copy sanitizers', () => {
   it('sanitizes captured public output lines across database and query-history internals', () => {
     expect(
       publicIngestOutputLine(
-        'KTX scan enrichment failed after structural scan completed in raw-sources/warehouse/live-database/sync-1',
+        'ktx scan enrichment failed after structural scan completed in raw-sources/warehouse/live-database/sync-1',
       ),
     ).toBe('Database enrichment failed after schema context completed in raw-sources/warehouse/database schema/sync-1');
     expect(publicIngestOutputLine('Historic SQL local ingest requires a configured reader')).toBe(

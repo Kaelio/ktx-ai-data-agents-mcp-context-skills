@@ -25,7 +25,7 @@ export async function createKtxCliScanConnector(
   const registration = getDriverRegistration(driver);
   if (!registration) {
     throw new Error(
-      `Connection "${connectionId}" uses driver "${driver}", which has no native standalone KTX scan connector. Supported drivers: ${SUPPORTED_DRIVERS}.`,
+      `Connection "${connectionId}" uses driver "${driver}", which has no native standalone ktx scan connector. Supported drivers: ${SUPPORTED_DRIVERS}.`,
     );
   }
 

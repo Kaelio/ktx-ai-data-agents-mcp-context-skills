@@ -17,7 +17,7 @@ import {
   type KtxSchemaSnapshot,
 } from '../../../src/context/scan/types.js';
 
-describe('KTX scan contract types', () => {
+describe('ktx scan contract types', () => {
   it('defaults to structural-only connector capabilities', () => {
     expect(createKtxConnectorCapabilities()).toEqual({
       structuralIntrospection: true,

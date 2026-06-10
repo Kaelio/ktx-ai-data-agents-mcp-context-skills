@@ -270,7 +270,7 @@ function driverLabel(driver: KtxSetupDatabaseDriver): string {
 }
 
 function connectionNamePrompt(label: string): string {
-  return `Name this ${label} connection\nKTX will use this short name in commands and config. You can rename it now.`;
+  return `Name this ${label} connection\nktx will use this short name in commands and config. You can rename it now.`;
 }
 
 function missingConnectionDetailsPrompt(
@@ -324,13 +324,6 @@ function numberConfigField(connection: KtxProjectConnectionConfig | undefined, f
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function historicSqlConfigRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> | null {
-  const historicSql = connection?.historicSql;
-  return historicSql && typeof historicSql === 'object' && !Array.isArray(historicSql)
-    ? (historicSql as Record<string, unknown>)
-    : null;
-}
-
 function contextRecord(connection: KtxProjectConnectionConfig | undefined): Record<string, unknown> {
   const context = connection?.context;
   return context && typeof context === 'object' && !Array.isArray(context) ? (context as Record<string, unknown>) : {};
@@ -343,34 +336,17 @@ function queryHistoryConfigRecord(connection: KtxProjectConnectionConfig | undef
     : null;
 }
 
-function stripLegacyHistoricSql(connection: KtxProjectConnectionConfig): KtxProjectConnectionConfig {
-  const { historicSql: _historicSql, ...rest } = connection as KtxProjectConnectionConfig & {
-    historicSql?: unknown;
-  };
-  return rest;
-}
-
 function withQueryHistoryConfig(
   connection: KtxProjectConnectionConfig,
   queryHistory: Record<string, unknown>,
 ): KtxProjectConnectionConfig {
   return {
-    ...stripLegacyHistoricSql(connection),
+    ...connection,
     context: {
       ...contextRecord(connection),
       queryHistory,
     },
   };
-}
-
-function migrateLegacyHistoricSqlConnection(connection: KtxProjectConnectionConfig): KtxProjectConnectionConfig {
-  const existingQueryHistory = queryHistoryConfigRecord(connection);
-  const legacy = historicSqlConfigRecord(connection);
-  if (existingQueryHistory || !legacy) {
-    return existingQueryHistory ? stripLegacyHistoricSql(connection) : connection;
-  }
-  const { dialect: _dialect, ...queryHistory } = legacy;
-  return withQueryHistoryConfig(connection, queryHistory);
 }
 
 function setupHistoricSqlProbeResult(
@@ -1203,7 +1179,7 @@ async function disableConnectionQueryHistory(projectDir: string, connectionId: s
   if (!connection) {
     return;
   }
-  const existing = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection) ?? {};
+  const existing = queryHistoryConfigRecord(connection) ?? {};
   await writeConnectionConfig({
     projectDir,
     connectionId,
@@ -1560,18 +1536,7 @@ async function ensureHistoricSqlIngestDefaults(projectDir: string): Promise<void
 
 async function markDatabasesComplete(projectDir: string, connectionIds: string[]): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  const config = setKtxSetupDatabaseConnectionIds(
-    {
-      ...project.config,
-      connections: Object.fromEntries(
-        Object.entries(project.config.connections).map(([connectionId, connection]) => [
-          connectionId,
-          migrateLegacyHistoricSqlConnection(connection),
-        ]),
-      ),
-    },
-    unique(connectionIds),
-  );
+  const config = setKtxSetupDatabaseConnectionIds(project.config, unique(connectionIds));
   await writeFile(project.configPath, serializeKtxProjectConfig(config), 'utf-8');
   await markKtxSetupStateStepComplete(projectDir, 'databases');
 }
@@ -1584,7 +1549,7 @@ async function maybeRunHistoricSqlSetupProbe(input: {
 }): Promise<boolean> {
   const project = await loadKtxProject({ projectDir: input.projectDir });
   const connection = project.config.connections[input.connectionId];
-  const queryHistory = queryHistoryConfigRecord(connection) ?? historicSqlConfigRecord(connection);
+  const queryHistory = queryHistoryConfigRecord(connection);
   if (queryHistory?.enabled !== true) {
     return true;
   }
@@ -1994,7 +1959,7 @@ async function chooseDrivers(
   }
   if (args.inputMode === 'disabled') {
     io.stderr.write(
-      'KTX cannot work without a database. Pass --database or --database-connection-id, or pass --skip-databases to leave setup incomplete.\n',
+      'ktx cannot work without a database. Pass --database or --database-connection-id, or pass --skip-databases to leave setup incomplete.\n',
     );
     return 'missing-input';
   }
@@ -2005,7 +1970,7 @@ async function chooseDrivers(
     io,
   );
   const choices = await prompts.multiselect({
-    message: withMultiselectNavigation('Which databases should KTX connect to?'),
+    message: withMultiselectNavigation('Which databases should ktx connect to?'),
     options: [...DRIVER_OPTIONS],
     ...(initialValues.length > 0 ? { initialValues } : {}),
     required: true,
@@ -2285,7 +2250,7 @@ export async function runKtxSetupDatabasesStep(
   deps: KtxSetupDatabasesDeps = {},
 ): Promise<KtxSetupDatabasesResult> {
   if (args.skipDatabases) {
-    io.stdout.write('│  Database setup skipped. KTX cannot work until you add a database.\n');
+    io.stdout.write('│  Database setup skipped. ktx cannot work until you add a database.\n');
     return { status: 'skipped', projectDir: args.projectDir };
   }
 
@@ -2404,7 +2369,7 @@ export async function runKtxSetupDatabasesStep(
     if (drivers === 'missing-input') return { status: 'missing-input', projectDir: args.projectDir };
     if (drivers.length === 0) {
       await markDatabasesComplete(args.projectDir, []);
-      io.stdout.write('│  KTX cannot work without a database.\n');
+      io.stdout.write('│  ktx cannot work without a database.\n');
       return { status: 'skipped', projectDir: args.projectDir };
     }
 

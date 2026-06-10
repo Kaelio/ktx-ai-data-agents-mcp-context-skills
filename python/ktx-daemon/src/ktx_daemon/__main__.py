@@ -1,4 +1,4 @@
-"""Command entry point for one-shot KTX daemon compute operations."""
+"""Command entry point for one-shot ktx daemon compute operations."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve_http = subcommands.add_parser(
         "serve-http",
-        help="Run the KTX daemon portable compute HTTP server",
+        help="Run the ktx daemon portable compute HTTP server",
     )
     serve_http.add_argument("--host", default="127.0.0.1")
     serve_http.add_argument("--port", type=int, default=8765)

@@ -12,7 +12,7 @@ function assertIncludesAll(text, values) {
   }
 }
 
-describe('standalone KTX CI workflow', () => {
+describe('standalone ktx CI workflow', () => {
   it('runs package checks in parallel jobs from the repository root', async () => {
     const workflow = await readText('.github/workflows/ci.yml');
 

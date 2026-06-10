@@ -11,7 +11,7 @@ function viewWithStatuses(statuses: Array<'waiting' | 'active' | 'complete' | 'w
   const ids = ['source', 'chunks', 'workUnits', 'actions', 'gates', 'saved'] as const;
 
   return {
-    title: 'KTX memory flow  warehouse/metricflow  running',
+    title: 'ktx memory flow  warehouse/metricflow  running',
     subtitle: 'Run run-1  Sync sync-1',
     status: 'running',
     activeLine: 'active: WorkUnit orders',

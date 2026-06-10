@@ -161,13 +161,13 @@ export async function runWorkspaceKtx(argv, options = {}) {
   if (needsBuild) {
     stderr.write(
       binExists
-        ? 'KTX CLI build output is stale. Rebuilding it now with `pnpm run build`...\n'
-        : 'KTX CLI build output is missing. Building it now with `pnpm run build`...\n',
+        ? 'ktx CLI build output is stale. Rebuilding it now with `pnpm run build`...\n'
+        : 'ktx CLI build output is missing. Building it now with `pnpm run build`...\n',
     );
     const buildExitCode = await runCommand('pnpm', ['run', 'build'], { cwd: rootDir, env: commandEnv });
     if (buildExitCode !== 0) {
       stderr.write(
-        '\nKTX CLI build failed. Run `pnpm run setup:dev` from the KTX directory, then retry this command.\n',
+        '\nktx CLI build failed. Run `pnpm run setup:dev` from the ktx directory, then retry this command.\n',
       );
       return buildExitCode;
     }

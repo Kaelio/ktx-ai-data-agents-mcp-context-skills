@@ -51,13 +51,13 @@ function successReportJson() {
 function successfulRunKtxScan(calls = []) {
   return async (args, io) => {
     calls.push(args);
-    io.stdout.write('KTX scan completed\nRun: scan-orbit-1\nConnection: orbit\n  Report: reports/scan-report.json\n');
+    io.stdout.write('ktx scan completed\nRun: scan-orbit-1\nConnection: orbit\n  Report: reports/scan-report.json\n');
     return 0;
   };
 }
 
 describe('relationship Orbit verification helper', () => {
-  it('exposes the Orbit verification command from the KTX workspace package', async () => {
+  it('exposes the Orbit verification command from the ktx workspace package', async () => {
     const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
     assert.equal(
@@ -145,8 +145,8 @@ describe('relationship Orbit verification helper', () => {
   });
 
   it('extracts the run id from human scan output', () => {
-    assert.equal(extractRunId(`KTX scan completed\nStatus: done\nRun: scan-orbit-1\nConnection: orbit\n`), 'scan-orbit-1');
-    assert.equal(extractRunId('KTX scan completed without a run line\n'), null);
+    assert.equal(extractRunId(`ktx scan completed\nStatus: done\nRun: scan-orbit-1\nConnection: orbit\n`), 'scan-orbit-1');
+    assert.equal(extractRunId('ktx scan completed without a run line\n'), null);
     assert.equal(extractReportPath('Artifacts\n  Report: reports/scan-report.json\n'), 'reports/scan-report.json');
   });
 
@@ -159,12 +159,12 @@ describe('relationship Orbit verification helper', () => {
       scanCommand: 'internal runKtxScan connection=orbit mode=relationships projectDir=/tmp/orbit-project',
       reportPath: '/tmp/orbit-project/reports/scan-report.json',
       scanExitCode: 0,
-      scanStdout: 'KTX scan completed\nRun: scan-orbit-1\n',
+      scanStdout: 'ktx scan completed\nRun: scan-orbit-1\n',
       scanStderr: '',
       report: JSON.parse(successReportJson()),
     });
 
-    assert.match(markdown, /# KTX Relationship Discovery Orbit Verification/);
+    assert.match(markdown, /# ktx Relationship Discovery Orbit Verification/);
     assert.match(markdown, /Outcome/);
     assert.match(markdown, /Exit code: 0/);
     assert.match(markdown, /Accepted: 14/);

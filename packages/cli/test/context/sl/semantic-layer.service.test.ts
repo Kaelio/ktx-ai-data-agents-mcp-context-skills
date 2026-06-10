@@ -47,7 +47,7 @@ const baseTable: SemanticLayerSource = {
 };
 
 describe('listConnectionIdsWithNames', () => {
-  it('discovers local KTX connection ids from semantic-layer directories', async () => {
+  it('discovers local ktx connection ids from semantic-layer directories', async () => {
     const configService = {
       listFiles: vi.fn().mockResolvedValue({
         files: [

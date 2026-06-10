@@ -111,7 +111,7 @@ describe('runKtxTextIngest', () => {
       expect.objectContaining({
         userId: 'local-cli',
         chatId: 'cli-text-ingest-1700000000000-1',
-        userMessage: 'Ingest external text artifact "Revenue means gross receipts." into KTX memory.',
+        userMessage: 'Ingest external text artifact "Revenue means gross receipts." into ktx memory.',
         assistantMessage: 'Revenue means gross receipts.',
         sourceType: 'external_ingest',
       }),
@@ -120,7 +120,7 @@ describe('runKtxTextIngest', () => {
       2,
       expect.objectContaining({
         chatId: 'cli-text-ingest-1700000000000-2',
-        userMessage: 'Ingest external text artifact "Orders are completed purchases." into KTX memory.',
+        userMessage: 'Ingest external text artifact "Orders are completed purchases." into ktx memory.',
         assistantMessage: 'Orders are completed purchases.',
       }),
     );
@@ -176,7 +176,7 @@ describe('runKtxTextIngest', () => {
       expect.objectContaining({
         connectionId: 'warehouse',
         userId: 'agent',
-        userMessage: 'Ingest external text artifact "revenue.md" into KTX memory.',
+        userMessage: 'Ingest external text artifact "revenue.md" into ktx memory.',
         assistantMessage: 'file:/tmp/docs/revenue.md',
       }),
     );
@@ -184,7 +184,7 @@ describe('runKtxTextIngest', () => {
       2,
       expect.objectContaining({
         connectionId: 'warehouse',
-        userMessage: 'Ingest external text artifact "stdin" into KTX memory.',
+        userMessage: 'Ingest external text artifact "stdin" into ktx memory.',
         assistantMessage: 'stdin content',
       }),
     );
@@ -228,19 +228,19 @@ describe('runKtxTextIngest', () => {
     expect(ingest.ingest).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        userMessage: 'Ingest external text artifact "remember to call me Andrey" into KTX memory.',
+        userMessage: 'Ingest external text artifact "remember to call me Andrey" into ktx memory.',
       }),
     );
     expect(ingest.ingest).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        userMessage: 'Ingest external text artifact "first line second line" into KTX memory.',
+        userMessage: 'Ingest external text artifact "first line second line" into ktx memory.',
       }),
     );
     expect(ingest.ingest).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
-        userMessage: 'Ingest external text artifact "This inline note is intentionally long xxxxxxxx..." into KTX memory.',
+        userMessage: 'Ingest external text artifact "This inline note is intentionally long xxxxxxxx..." into ktx memory.',
       }),
     );
   });

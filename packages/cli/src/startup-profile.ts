@@ -39,7 +39,7 @@ export function installStartupProfileReporter(): void {
 
   process.once('beforeExit', () => {
     const total = now();
-    process.stderr.write('\nKTX startup profile\n');
+    process.stderr.write('\nktx startup profile\n');
     for (const event of events) {
       const elapsed = event.at.toFixed(1).padStart(7);
       if (event.duration === undefined) {

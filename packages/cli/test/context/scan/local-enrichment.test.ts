@@ -373,7 +373,7 @@ describe('local scan enrichment', () => {
     expect(result.summary.statisticalValidation).toBe('skipped');
     expect(result.warnings).toContainEqual({
       code: 'relationship_validation_failed',
-      message: 'KTX scan connector advertises readOnlySql but does not expose executeReadOnly',
+      message: 'ktx scan connector advertises readOnlySql but does not expose executeReadOnly',
       recoverable: true,
       metadata: { capability: 'readOnlySql' },
     });

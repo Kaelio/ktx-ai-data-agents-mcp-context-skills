@@ -5,7 +5,7 @@ import type { MemoryFlowViewModel } from '../../../../src/context/ingest/memory-
 
 function view(): MemoryFlowViewModel {
   return {
-    title: 'KTX memory flow  warehouse/metricflow  done',
+    title: 'ktx memory flow  warehouse/metricflow  done',
     subtitle: 'Run run-1  Sync sync-1',
     status: 'done',
     activeLine: 'active: complete',
@@ -128,7 +128,7 @@ describe('renderMemoryFlowInteractive', () => {
 
     const output = renderMemoryFlowInteractive(view(), state, { terminalWidth: 140 });
 
-    expect(output).toContain('KTX memory flow  warehouse/metricflow  done');
+    expect(output).toContain('ktx memory flow  warehouse/metricflow  done');
     expect(output).toContain('OK SOURCE -> OK CHUNKS -> !! WORKUNITS -> OK ACTIONS -> !! GATES -> OK SAVED');
     expect(output).toContain('[WORKUNITS]');
     expect(output).toContain('> orders');

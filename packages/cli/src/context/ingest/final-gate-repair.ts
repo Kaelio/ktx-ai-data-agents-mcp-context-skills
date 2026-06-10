@@ -62,7 +62,7 @@ async function readOptionalFile(path: string): Promise<{ exists: boolean; conten
 
 function buildGateRepairSystemPrompt(): string {
   return `<role>
-You repair one KTX isolated-diff artifact gate failure inside the integration worktree.
+You repair one ktx isolated-diff artifact gate failure inside the integration worktree.
 </role>
 
 <rules>

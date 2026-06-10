@@ -449,7 +449,7 @@ describe('production relationship discovery', () => {
     });
     expect(result.warnings).toContainEqual({
       code: 'connector_capability_missing',
-      message: 'KTX scan connector cannot run read-only SQL relationship validation',
+      message: 'ktx scan connector cannot run read-only SQL relationship validation',
       recoverable: true,
       metadata: { capability: 'readOnlySql' },
     });

@@ -77,7 +77,7 @@ class OpenAIEmbeddingProvider implements KtxEmbeddingProvider {
     this.dimensions = config.dimensions;
     this.maxBatchSize = config.batchSize ?? DEFAULT_BATCH_SIZE;
     if (!config.openai?.apiKey) {
-      throw new Error('openai.apiKey is required when KTX embedding backend is openai');
+      throw new Error('openai.apiKey is required when ktx embedding backend is openai');
     }
     this.client = deps.createOpenAIClient
       ? deps.createOpenAIClient({ apiKey: config.openai.apiKey, baseURL: config.openai.baseURL })
@@ -122,7 +122,7 @@ class SentenceTransformersEmbeddingProvider implements KtxEmbeddingProvider {
 
   constructor(config: KtxEmbeddingConfig, deps: KtxEmbeddingProviderDeps) {
     if (!config.sentenceTransformers?.baseURL) {
-      throw new Error('sentenceTransformers.baseURL is required when KTX embedding backend is sentence-transformers');
+      throw new Error('sentenceTransformers.baseURL is required when ktx embedding backend is sentence-transformers');
     }
     this.dimensions = config.dimensions;
     this.maxBatchSize = config.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -207,6 +207,6 @@ export function createKtxEmbeddingProvider(
     case 'sentence-transformers':
       return new SentenceTransformersEmbeddingProvider(config, deps);
     default:
-      throw new Error(`Unsupported KTX embedding backend: ${String((config as { backend?: string }).backend)}`);
+      throw new Error(`Unsupported ktx embedding backend: ${String((config as { backend?: string }).backend)}`);
   }
 }

@@ -186,7 +186,7 @@ describe('createKtxMcpServerFactory', () => {
     factory();
 
     expect(io.stderr.write).toHaveBeenCalledWith(
-      'KTX MCP memory_ingest disabled: missing local memory prerequisites\n',
+      'ktx MCP memory_ingest disabled: missing local memory prerequisites\n',
     );
     expect(createDefaultKtxMcpServer).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -355,7 +355,7 @@ export class KtxSqliteScanConnector implements KtxScanConnector {
 
   private assertConnection(connectionId: string): void {
     if (connectionId !== this.connectionId) {
-      throw new Error(`KTX SQLite connector ${this.id} cannot serve connection ${connectionId}`);
+      throw new Error(`ktx SQLite connector ${this.id} cannot serve connection ${connectionId}`);
     }
   }
 }

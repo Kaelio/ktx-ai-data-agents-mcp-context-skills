@@ -1,4 +1,4 @@
-"""Portable database introspection helpers for KTX daemon."""
+"""Portable database introspection helpers for ktx daemon."""
 
 from __future__ import annotations
 

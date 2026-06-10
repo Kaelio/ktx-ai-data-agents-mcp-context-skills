@@ -791,7 +791,7 @@ try {
   requireSuccessWithStderr(
     'ktx sl query first managed runtime install',
     slQuery,
-    /Installing KTX Python runtime \\(core\\) with uv[\\s\\S]*KTX Python runtime ready:/,
+    /Installing ktx Python runtime \\(core\\) with uv[\\s\\S]*ktx Python runtime ready:/,
   );
   requireOutput('ktx sl query first managed runtime install', slQuery, /"mode": "compile_only"/);
   requireOutput('ktx sl query first managed runtime install', slQuery, /orders/);
@@ -836,26 +836,26 @@ try {
 
   const runtimeDoctor = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'status'])));
   requireSuccess('ktx admin runtime status', runtimeDoctor);
-  requireOutput('ktx admin runtime status', runtimeDoctor, /KTX Python runtime/);
+  requireOutput('ktx admin runtime status', runtimeDoctor, /ktx Python runtime/);
   requireOutput('ktx admin runtime status', runtimeDoctor, /status: ready/);
   process.stdout.write('ktx admin runtime status verified\\n');
 
   const runtimeStart = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'start'])));
   requireSuccess('ktx admin runtime start', runtimeStart);
   daemonStarted = true;
-  requireOutput('ktx admin runtime start', runtimeStart, /Started KTX daemon/);
+  requireOutput('ktx admin runtime start', runtimeStart, /Started ktx daemon/);
   requireOutput('ktx admin runtime start', runtimeStart, /url: http:\\/\\/127\\.0\\.0\\.1:\\d+/);
   requireOutput('ktx admin runtime start', runtimeStart, /features: core/);
 
   const runtimeStartReuse = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'start'])));
   requireSuccess('ktx admin runtime start reuse', runtimeStartReuse);
-  requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /Using existing KTX daemon/);
+  requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /Using existing ktx daemon/);
   requireOutput('ktx admin runtime start reuse', runtimeStartReuse, /features: core/);
 
   const runtimeStop = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'admin', 'runtime', 'stop'])));
   requireSuccess('ktx admin runtime stop', runtimeStop);
   daemonStarted = false;
-  requireOutput('ktx admin runtime stop', runtimeStop, /Stopped KTX daemon/);
+  requireOutput('ktx admin runtime stop', runtimeStop, /Stopped ktx daemon/);
   process.stdout.write('ktx admin runtime daemon lifecycle verified\\n');
 
   const databaseIngest = await run(
@@ -952,7 +952,7 @@ try {
 
   const doctor = await run(...Object.values(pnpmCommand(['exec', 'ktx', 'status', '--verbose', '--no-input'])));
   assert.ok([0, 1].includes(doctor.code), 'ktx status setup exit code must be 0 or 1');
-  requireStdout('ktx status setup', doctor, /KTX status/);
+  requireStdout('ktx status setup', doctor, /ktx status/);
   requireStdout('ktx status setup', doctor, /No project here yet\\./);
   requireStdout('ktx status setup', doctor, /ktx setup/);
   requireStdout('ktx status setup', doctor, /Node 22\\+/);

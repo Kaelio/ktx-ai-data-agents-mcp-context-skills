@@ -1,11 +1,11 @@
 ---
 name: ktx-analytics
-description: Use when answering a question that needs data from a KTX-connected database - investigating, analyzing, "how many", "show me", "what's the breakdown of", finding records by value, exploring tables, comparing periods, explaining metrics, or any data-analysis request. Triggers even when the user does not say "analytics"; if the answer requires querying a configured KTX connection, this skill applies.
+description: Use when answering a question that needs data from a ktx-connected database - investigating, analyzing, "how many", "show me", "what's the breakdown of", finding records by value, exploring tables, comparing periods, explaining metrics, or any data-analysis request. Triggers even when the user does not say "analytics"; if the answer requires querying a configured ktx connection, this skill applies.
 ---
 
-# KTX Analytics Workflow
+# ktx Analytics Workflow
 
-You have access to KTX MCP tools for data discovery, semantic-layer analysis, raw read-only SQL, wiki context, and memory ingest. Follow this workflow.
+You have access to ktx MCP tools for data discovery, semantic-layer analysis, raw read-only SQL, wiki context, and memory ingest. Follow this workflow.
 
 <workflow>
 1. **Discover** - call `discover_data` first to see what exists across wiki pages, semantic-layer sources, metrics, dimensions, raw tables, and columns. Returns refs only.

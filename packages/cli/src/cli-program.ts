@@ -252,8 +252,8 @@ export function resolveCommandProjectDirOverride(command: CommandWithGlobalOptio
 function createBaseProgram(info: KtxCliPackageInfo, io: KtxCliIo): Command {
   return new Command()
     .name('ktx')
-    .description('KTX data agent context layer CLI')
-    .option('--project-dir <path>', 'KTX project directory (default: KTX_PROJECT_DIR, nearest ktx.yaml, or cwd)')
+    .description('ktx data agent context layer CLI')
+    .option('--project-dir <path>', 'ktx project directory (default: KTX_PROJECT_DIR, nearest ktx.yaml, or cwd)')
     .option('--debug', 'Enable diagnostic logging to stderr')
     .version(`${info.name} ${info.version}`, '-v, --version', 'Show CLI version')
     .helpOption('-h, --help', 'Show this help text')
@@ -466,7 +466,7 @@ export function buildKtxProgram(options: BuildKtxProgramOptions): Command {
     const attachProjectGroup = shouldAttachCommandProjectGroup(path, hasProject);
     telemetry.beginCommandSpan({
       commandPath: path,
-      flagsPresent: collectCommandFlagsPresent(commandNode as unknown as CommandUnknownOpts),
+      flagsPresent: collectCommandFlagsPresent(actionCommand),
       projectDir: attachProjectGroup ? projectDir : undefined,
       hasProject,
       attachProjectGroup,

@@ -1644,7 +1644,7 @@ describe('local scan', () => {
     expect(result.report.warnings).toEqual([
       {
         code: 'enrichment_failed',
-        message: 'KTX scan enrichment failed after structural scan completed: embedding service timed out',
+        message: 'ktx scan enrichment failed after structural scan completed: embedding service timed out',
         recoverable: true,
         metadata: {
           mode: 'enriched',

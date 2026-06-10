@@ -214,7 +214,7 @@ export function validateLookerMappings(args: {
     if (!args.knownKtxConnectionIds.has(mapping.ktxConnectionId)) {
       errors.push({
         key: mapping.lookerConnectionName,
-        reason: `KTX connection ${mapping.ktxConnectionId} does not exist`,
+        reason: `ktx connection ${mapping.ktxConnectionId} does not exist`,
       });
       continue;
     }

@@ -129,13 +129,13 @@ describe('localEmbeddingsSmokeCommands', () => {
 describe('parseDaemonBaseUrl', () => {
   it('extracts the daemon URL from runtime start output', () => {
     assert.equal(
-      parseDaemonBaseUrl('Started KTX daemon\nurl: http://127.0.0.1:61234\nfeatures: local-embeddings\n'),
+      parseDaemonBaseUrl('Started ktx daemon\nurl: http://127.0.0.1:61234\nfeatures: local-embeddings\n'),
       'http://127.0.0.1:61234',
     );
   });
 
   it('rejects output without a daemon URL', () => {
-    assert.throws(() => parseDaemonBaseUrl('Started KTX daemon\n'), /Daemon URL was not printed/);
+    assert.throws(() => parseDaemonBaseUrl('Started ktx daemon\n'), /Daemon URL was not printed/);
   });
 });
 

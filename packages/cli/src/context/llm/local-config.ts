@@ -198,7 +198,7 @@ export function resolveLocalKtxEmbeddingConfig(
       batchSize: config.batchSize,
     };
   }
-  throw new Error(`Unsupported KTX embedding backend: ${String((config as { backend?: string }).backend)}`);
+  throw new Error(`Unsupported ktx embedding backend: ${String((config as { backend?: string }).backend)}`);
 }
 
 /** @internal */

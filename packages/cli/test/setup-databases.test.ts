@@ -111,7 +111,7 @@ function makePromptAdapter(options: {
       if (message.startsWith('Enable all tables in ') && message.includes(', or refine tables?')) {
         return 'save';
       }
-      if (message.includes('How much database context should KTX build?')) {
+      if (message.includes('How much database context should ktx build?')) {
         const nextValue = selectValues[0];
         return nextValue === 'fast' || nextValue === 'deep' || nextValue === 'back'
           ? (selectValues.shift() ?? 'fast')
@@ -126,7 +126,7 @@ function makePromptAdapter(options: {
 }
 
 function connectionNamePrompt(label: string): string {
-  return `Name this ${label} connection\nKTX will use this short name in commands and config. You can rename it now.`;
+  return `Name this ${label} connection\nktx will use this short name in commands and config. You can rename it now.`;
 }
 
 function textInputPrompt(message: string): string {
@@ -234,7 +234,7 @@ describe('setup databases step', () => {
     expect(result.status).toBe('back');
     expect(prompts.multiselect).toHaveBeenCalledWith({
       message:
-        'Which databases should KTX connect to?\n' +
+        'Which databases should ktx connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       options: [
         { value: 'postgres', label: 'PostgreSQL' },
@@ -272,7 +272,7 @@ describe('setup databases step', () => {
     });
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
     expect(vi.mocked(prompts.multiselect).mock.calls[1]?.[0].message).toBe(
-      'Which databases should KTX connect to?\n' +
+      'Which databases should ktx connect to?\n' +
         'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
     );
   });
@@ -926,7 +926,7 @@ describe('setup databases step', () => {
       initialValues: ['postgres'],
       required: true,
     }));
-    expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
+    expect(io.stdout()).not.toContain('ktx cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(3, {
       message: 'Databases configured: postgres-warehouse\nWhat would you like to do?',
       options: [
@@ -971,7 +971,7 @@ describe('setup databases step', () => {
       initialValues: ['postgres'],
       required: true,
     }));
-    expect(io.stdout()).not.toContain('KTX cannot work without at least one database');
+    expect(io.stdout()).not.toContain('ktx cannot work without at least one database');
     expect(prompts.select).toHaveBeenNthCalledWith(2, {
       message: 'Databases configured: warehouse\nWhat would you like to do?',
       options: [
@@ -1813,7 +1813,7 @@ describe('setup databases step', () => {
       commandIo.stdout.write('[55%] Semantic layer comparison found 2 changes across 2 tables\n');
       commandIo.stdout.write('[70%] Writing schema artifacts\n');
       commandIo.stdout.write('[100%] Scan completed\n');
-      commandIo.stdout.write('✓ KTX scan completed\n');
+      commandIo.stdout.write('✓ ktx scan completed\n');
       commandIo.stdout.write('Status: done\n');
       commandIo.stdout.write('Run: local-moywh3ky\n');
       commandIo.stdout.write('Connection: postgres-warehouse\n');
@@ -3176,7 +3176,7 @@ describe('setup databases step', () => {
     });
     vi.mocked(prompts.select).mockImplementation(async ({ message, options }) => {
       if (message.startsWith('Enable query-history ingest')) return 'yes';
-      if (message.includes('How much database context should KTX build?')) return 'fast';
+      if (message.includes('How much database context should ktx build?')) return 'fast';
       if (message.startsWith('Connection setup failed for analytics')) {
         failurePromptCount += 1;
         failurePromptOptions.push(options);
@@ -3298,89 +3298,6 @@ describe('setup databases step', () => {
       },
     });
     expect(config.connections.warehouse.historicSql).toBeUndefined();
-  });
-
-  it('migrates legacy historicSql to context.queryHistory during database setup', async () => {
-    await writeFile(
-      join(tempDir, 'ktx.yaml'),
-      [
-        'connections:',
-        '  warehouse:',
-        '    driver: postgres',
-        '    readonly: true',
-        '    schemas:',
-        "      - 'public'",
-        '    historicSql:',
-        '      enabled: true',
-        '      dialect: postgres',
-        '      windowDays: 45',
-        '      minExecutions: 9',
-        '      concurrency: 3',
-        '      staleArchiveAfterDays: 120',
-        '      filters:',
-        '        dropTrivialProbes: true',
-        '        serviceAccounts:',
-        '          mode: exclude',
-        '          patterns:',
-        "            - '^svc_'",
-        '        orchestrators:',
-        '          mode: exclude',
-        '          patterns:',
-        '            - airflow',
-        '        dropFailedBelow: 2',
-        '      redactionPatterns:',
-        "        - '(?i)secret'",
-        '',
-      ].join('\n'),
-      'utf-8',
-    );
-
-    const io = makeIo();
-
-    await expect(
-      runKtxSetupDatabasesStep(
-        {
-          projectDir: tempDir,
-          inputMode: 'disabled',
-          databaseConnectionIds: ['warehouse'],
-          databaseSchemas: [],
-          skipDatabases: false,
-        },
-        io.io,
-        {
-          testConnection: vi.fn(async () => 0),
-          scanConnection: vi.fn(async () => 0),
-          historicSqlReadinessProbe: vi.fn(async () => {
-            const runner = fakeHistoricSqlRunner('postgres', 'pg_stat_statements');
-            return {
-              ok: true as const,
-              dialect: 'postgres' as const,
-              runner,
-              result: { pgServerVersion: 'PostgreSQL 16.4', warnings: [], info: [] },
-            };
-          }),
-        },
-      ),
-    ).resolves.toMatchObject({ status: 'ready' });
-
-    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
-    expect(config.connections.warehouse.historicSql).toBeUndefined();
-    expect(config.connections.warehouse.context).toMatchObject({
-      queryHistory: {
-        enabled: true,
-        windowDays: 45,
-        minExecutions: 9,
-        concurrency: 3,
-        staleArchiveAfterDays: 120,
-        filters: {
-          dropTrivialProbes: true,
-          serviceAccounts: { mode: 'exclude', patterns: ['^svc_'] },
-          orchestrators: { mode: 'exclude', patterns: ['airflow'] },
-          dropFailedBelow: 2,
-        },
-        redactionPatterns: ['(?i)secret'],
-      },
-    });
   });
 
   it('prints a non-blocking Postgres query history probe failure after connection test succeeds', async () => {
@@ -3594,7 +3511,7 @@ describe('setup databases step', () => {
     );
 
     expect(result.status).toBe('skipped');
-    expect(io.stdout()).toContain('KTX cannot work until you add a database.');
+    expect(io.stdout()).toContain('ktx cannot work until you add a database.');
     expect(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8')).not.toContain('completed_steps:');
   });
 });

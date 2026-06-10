@@ -1507,7 +1507,7 @@ describe('runKtxIngest', () => {
     );
   });
 
-  it('passes KTX daemon options to adapters and pull-config options when no explicit daemon URL is set', async () => {
+  it('passes ktx daemon options to adapters and pull-config options when no explicit daemon URL is set', async () => {
     const projectDir = join(tempDir, 'managed-daemon-ingest-project');
     await initKtxProject({ projectDir });
     await writeWarehouseConfig(projectDir);

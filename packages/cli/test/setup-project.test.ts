@@ -117,7 +117,7 @@ describe('setup project step', () => {
     expect(result.projectDir).toBe(projectDir);
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Where should KTX create the project?',
+        message: 'Where should ktx create the project?',
         options: [
           expect.objectContaining({ value: 'current', label: `Current directory (${projectDir})` }),
           expect.objectContaining({
@@ -151,7 +151,7 @@ describe('setup project step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        message: 'Where should KTX create the project?',
+        message: 'Where should ktx create the project?',
         options: expect.arrayContaining([
           expect.objectContaining({
             value: 'new-default',
@@ -162,11 +162,11 @@ describe('setup project step', () => {
     );
     expect(prompts.select).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ message: `Create KTX project at ${projectDir}?` }),
+      expect.objectContaining({ message: `Create ktx project at ${projectDir}?` }),
     );
     expect(prompts.text).not.toHaveBeenCalled();
     expect(result.status === 'ready' ? result.project.configPath : '').toBe(join(projectDir, 'ktx.yaml'));
-    expect(testIo.stdout()).toContain(`│  KTX will create:\n│    ${projectDir}`);
+    expect(testIo.stdout()).toContain(`│  ktx will create:\n│    ${projectDir}`);
     await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
   });
 
@@ -229,7 +229,7 @@ describe('setup project step', () => {
     expect(prompts.select).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        message: `Create KTX project at ${customProjectDir}?`,
+        message: `Create ktx project at ${customProjectDir}?`,
         options: [
           expect.objectContaining({ value: 'create', label: 'Create project' }),
           expect.objectContaining({ value: 'choose-another', label: 'Choose another folder' }),
@@ -239,7 +239,7 @@ describe('setup project step', () => {
     );
     expect(prompts.select).toHaveBeenNthCalledWith(
       3,
-      expect.objectContaining({ message: 'Where should KTX create the project?' }),
+      expect.objectContaining({ message: 'Where should ktx create the project?' }),
     );
     await expect(stat(join(customProjectDir, 'ktx.yaml'))).rejects.toThrow();
   });
@@ -266,7 +266,7 @@ describe('setup project step', () => {
     );
   });
 
-  it('confirms before creating KTX files inside an existing non-empty folder', async () => {
+  it('confirms before creating ktx files inside an existing non-empty folder', async () => {
     const startDir = join(tempDir, 'start');
     const projectDir = join(startDir, 'analytics-ktx');
     await mkdir(projectDir, { recursive: true });
@@ -286,7 +286,7 @@ describe('setup project step', () => {
       expect.objectContaining({
         message: `That folder already exists and is not empty: ${projectDir}`,
         options: expect.arrayContaining([
-          expect.objectContaining({ value: 'use-existing', label: 'Yes, create KTX files there' }),
+          expect.objectContaining({ value: 'use-existing', label: 'Yes, create ktx files there' }),
           expect.objectContaining({ value: 'choose-another', label: 'Choose another folder' }),
         ]),
       }),

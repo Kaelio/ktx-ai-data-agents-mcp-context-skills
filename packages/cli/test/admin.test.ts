@@ -82,7 +82,7 @@ describe('admin Commander tree', () => {
     try {
       await expect(runKtxCli(['admin', 'init', projectDir], testIo.io)).resolves.toBe(0);
 
-      expect(testIo.stdout()).toContain(`Initialized KTX project at ${projectDir}`);
+      expect(testIo.stdout()).toContain(`Initialized ktx project at ${projectDir}`);
       await expect(readFile(join(projectDir, 'ktx.yaml'), 'utf-8')).resolves.not.toContain('project:');
       expect(testIo.stderr()).toBe('');
     } finally {
@@ -103,14 +103,14 @@ describe('admin Commander tree', () => {
         runKtxCli(['--project-dir', projectDir, 'admin', 'init'], testIo.io),
       ).resolves.toBe(0);
 
-      expect(testIo.stdout()).toContain(`Initialized KTX project at ${projectDir}`);
+      expect(testIo.stdout()).toContain(`Initialized ktx project at ${projectDir}`);
       expect(testIo.stderr()).toBe('');
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
 
-  it('prints config schema without requiring a KTX project directory', async () => {
+  it('prints config schema without requiring a ktx project directory', async () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');

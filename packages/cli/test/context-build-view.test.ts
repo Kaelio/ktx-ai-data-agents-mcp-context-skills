@@ -98,7 +98,7 @@ describe('extractProgressMessage', () => {
   });
 
   it('returns null for non-progress output', () => {
-    expect(extractProgressMessage('KTX scan completed\n')).toBeNull();
+    expect(extractProgressMessage('ktx scan completed\n')).toBeNull();
   });
 });
 
@@ -165,7 +165,7 @@ describe('renderContextBuildView', () => {
     ]);
 
     const output = renderContextBuildView(state, { styled: false });
-    expect(output).toContain('Building KTX context');
+    expect(output).toContain('Building ktx context');
     expect(output).toContain('(0/2)');
     expect(output).toContain('○');
     expect(output).toContain('Databases:');
@@ -271,7 +271,7 @@ describe('renderContextBuildView', () => {
 
     const output = renderContextBuildView(state, { styled: false });
     const lines = output.split('\n');
-    const headerLine = lines.find((l) => l.includes('Building KTX context'))!;
+    const headerLine = lines.find((l) => l.includes('Building ktx context'))!;
     const separatorLine = lines.find((l) => /^─+$/.test(l))!;
     expect(separatorLine.length).toBeGreaterThanOrEqual(headerLine.length);
   });
@@ -394,11 +394,11 @@ describe('renderContextBuildView', () => {
       { connectionId: 'warehouse', driver: 'postgres', operation: 'database-ingest', debugCommand: '', steps: ['database-schema'] },
     ]);
     state.primarySources[0].status = 'failed';
-    state.primarySources[0].failureText = 'KTX lost its connection to PostgreSQL while reading schema for warehouse.';
+    state.primarySources[0].failureText = 'ktx lost its connection to PostgreSQL while reading schema for warehouse.';
 
     const output = renderContextBuildView(state, { styled: false });
     expect(output).toContain('✗');
-    expect(output).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
+    expect(output).toContain('ktx lost its connection to PostgreSQL while reading schema for warehouse.');
   });
 
   it('omits empty groups', () => {
@@ -897,7 +897,7 @@ describe('runContextBuild', () => {
     );
 
     expect(result).toEqual({ exitCode: 1 });
-    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
+    expect(io.stdout()).toContain('ktx lost its connection to PostgreSQL while reading schema for warehouse.');
     expect(io.stdout()).toContain('network address unavailable (EADDRNOTAVAIL)');
     expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
     expect(io.stdout()).not.toContain('BoundPool');
@@ -931,11 +931,11 @@ describe('runContextBuild', () => {
 
     expect(result).toEqual({ exitCode: 1 });
     expect(io.stdout()).toContain(
-      'KTX could not reach the local SQL analysis runtime while processing query history for warehouse.',
+      'ktx could not reach the local SQL analysis runtime while processing query history for warehouse.',
     );
     expect(io.stdout()).toContain('connection refused (ECONNREFUSED)');
     expect(io.stdout()).toContain('Retry: ktx setup --project-dir /tmp/project');
-    expect(io.stdout()).not.toContain('KTX lost its connection to PostgreSQL');
+    expect(io.stdout()).not.toContain('ktx lost its connection to PostgreSQL');
   });
 
   it('uses captured query-history stderr instead of generic failed-at detail', async () => {
@@ -944,11 +944,11 @@ describe('runContextBuild', () => {
       warehouse: { driver: 'postgres', context: { queryHistory: { enabled: true } } },
     });
     const executeTarget = vi.fn(async (target, _args, targetIo) => {
-      targetIo.stdout.write('KTX scan completed\n');
+      targetIo.stdout.write('ktx scan completed\n');
       targetIo.stdout.write('Mode: enriched\n');
       targetIo.stderr.write('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json\n');
       targetIo.stderr.write('In a source checkout, build the local runtime assets with: pnpm run artifacts:build\n');
-      targetIo.stderr.write('Then retry the runtime-backed KTX command.\n');
+      targetIo.stderr.write('Then retry the runtime-backed ktx command.\n');
       return {
         connectionId: target.connectionId,
         driver: target.driver,
@@ -976,7 +976,7 @@ describe('runContextBuild', () => {
     expect(result).toEqual({ exitCode: 1 });
     expect(io.stdout()).toContain('Missing bundled Python runtime manifest: /tmp/assets/python/manifest.json.');
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --query-history');
-    expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
+    expect(io.stdout()).not.toContain('Then retry the runtime-backed ktx command');
     expect(io.stdout()).not.toContain('warehouse failed at query-history');
     expect(io.stdout().match(/Retry: /g)).toHaveLength(1);
   });
@@ -999,7 +999,7 @@ describe('runContextBuild', () => {
     );
 
     expect(result).toEqual({ exitCode: 1 });
-    expect(io.stdout()).toContain('KTX lost its connection to PostgreSQL while reading schema for warehouse.');
+    expect(io.stdout()).toContain('ktx lost its connection to PostgreSQL while reading schema for warehouse.');
     expect(io.stdout()).toContain('connection reset (ECONNRESET)');
   });
 
@@ -1149,7 +1149,7 @@ describe('runContextBuild', () => {
     );
 
     const output = io.stdout();
-    expect(output).toContain('Building KTX context');
+    expect(output).toContain('Building ktx context');
     expect(output).toContain('Project: /tmp/project');
     expect(output).toContain('Databases:');
     expect(output).toContain('warehouse');
@@ -1397,7 +1397,7 @@ describe('viewStateFromSourceProgress', () => {
     );
 
     const output = renderContextBuildView(state, { styled: false });
-    expect(output).toContain('Building KTX context');
+    expect(output).toContain('Building ktx context');
     expect(output).toContain('Databases:');
     expect(output).toContain('warehouse');
     expect(output).toContain('42 tables');

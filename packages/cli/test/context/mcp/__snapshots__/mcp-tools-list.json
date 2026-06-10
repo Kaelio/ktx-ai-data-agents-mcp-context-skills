@@ -2,7 +2,7 @@
   {
     "name": "connection_list",
     "title": "Connection List",
-    "description": "List configured read-only data connections available to this KTX project. Use this before connection-scoped tools when the project may have multiple warehouses.",
+    "description": "List configured read-only data connections available to this ktx project. Use this before connection-scoped tools when the project may have multiple warehouses.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -54,7 +54,7 @@
   {
     "name": "wiki_search",
     "title": "Wiki Search",
-    "description": "Search KTX wiki pages for reusable business context. Example: wiki_search({ query: \"revenue recognition\", limit: 5 }).",
+    "description": "Search ktx wiki pages for reusable business context. Example: wiki_search({ query: \"revenue recognition\", limit: 5 }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -181,7 +181,7 @@
   {
     "name": "wiki_read",
     "title": "Wiki Read",
-    "description": "Read a KTX wiki page by key returned from wiki_search. Example: wiki_read({ key: \"global/revenue\" }).",
+    "description": "Read a ktx wiki page by key returned from wiki_search. Example: wiki_read({ key: \"global/revenue\" }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1227,7 +1227,7 @@
   {
     "name": "discover_data",
     "title": "Discover Data",
-    "description": "Search across KTX wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: \"monthly orders by customer\", connectionId: \"warehouse\", kinds: [\"sl_source\", \"table\"] }).",
+    "description": "Search across ktx wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: \"monthly orders by customer\", connectionId: \"warehouse\", kinds: [\"sl_source\", \"table\"] }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1398,7 +1398,7 @@
   {
     "name": "sql_execution",
     "title": "SQL Execution",
-    "description": "Execute one parser-validated read-only SQL query against a configured KTX connection. Example: sql_execution({ connectionId: \"warehouse\", sql: \"select count(*) from public.orders\", maxRows: 100 }).",
+    "description": "Execute one parser-validated read-only SQL query against a configured ktx connection. Example: sql_execution({ connectionId: \"warehouse\", sql: \"select count(*) from public.orders\", maxRows: 100 }).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1472,7 +1472,7 @@
   {
     "name": "memory_ingest",
     "title": "Memory Ingest",
-    "description": "Ingest free-form markdown knowledge into durable KTX memory. Use this for business rules, metric definitions, schema gotchas, recurring findings, or explicit user requests to remember something. Example: memory_ingest({ connectionId: \"warehouse\", content: \"ARR is reported in cents in this warehouse.\" }).",
+    "description": "Ingest free-form markdown knowledge into durable ktx memory. Use this for business rules, metric definitions, schema gotchas, recurring findings, or explicit user requests to remember something. Example: memory_ingest({ connectionId: \"warehouse\", content: \"ARR is reported in cents in this warehouse.\" }).",
     "inputSchema": {
       "type": "object",
       "properties": {

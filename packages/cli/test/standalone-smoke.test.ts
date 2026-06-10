@@ -172,7 +172,7 @@ describe('standalone built ktx CLI smoke', () => {
   it('runs status setup checks through the built binary', async () => {
     const result = await runBuiltCli(['status', '--verbose', '--no-input'], { cwd: tempDir });
 
-    expect(result.stdout).toMatch(/KTX status/);
+    expect(result.stdout).toMatch(/ktx status/);
     if (result.stdout.includes('No project here yet.')) {
       expect(result.stdout).toContain('ktx setup');
     } else {
@@ -203,7 +203,7 @@ describe('standalone built ktx CLI smoke', () => {
     const ingest = await runBuiltCli(['ingest', 'warehouse', '--project-dir', projectDir, '--no-input']);
     expect(ingest.code).toBe(1);
     expect(ingest.stdout).toContain('warehouse cannot be ingested: enrichment is not configured');
-    expect(ingest.stdout).not.toContain('KTX scan completed');
+    expect(ingest.stdout).not.toContain('ktx scan completed');
   }, 30_000);
 
   it('parses gateway LLM config and OpenAI enrichment embeddings used by standalone scans without network calls', async () => {

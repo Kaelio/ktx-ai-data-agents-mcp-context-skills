@@ -232,7 +232,7 @@ describe('MetabaseClient admin auth helpers', () => {
     );
 
     await expect(client.getPermissionGroups()).resolves.toEqual([{ id: 2, name: 'Administrators' }]);
-    await expect(client.createApiKey({ name: 'KTX CLI test', groupId: 2 })).resolves.toBe(mintedMetabaseCredential);
+    await expect(client.createApiKey({ name: 'ktx CLI test', groupId: 2 })).resolves.toBe(mintedMetabaseCredential);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -247,7 +247,7 @@ describe('MetabaseClient admin auth helpers', () => {
       'https://metabase.example.test/api/api-key',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ name: 'KTX CLI test', group_id: 2 }),
+        body: JSON.stringify({ name: 'ktx CLI test', group_id: 2 }),
       }),
     );
   });

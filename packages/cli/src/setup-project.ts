@@ -122,7 +122,7 @@ async function confirmProjectDir(
     const action = await prompts.select({
       message: `That folder already exists and is not empty: ${selectedDir}`,
       options: [
-        { value: 'use-existing', label: 'Yes, create KTX files there' },
+        { value: 'use-existing', label: 'Yes, create ktx files there' },
         { value: 'choose-another', label: 'Choose another folder' },
         { value: 'back', label: 'Back' },
       ],
@@ -133,9 +133,9 @@ async function confirmProjectDir(
     return { status: 'confirmed', confirmedCreation: true };
   }
 
-  io.stdout.write(`│  KTX will create:\n│    ${selectedDir}\n`);
+  io.stdout.write(`│  ktx will create:\n│    ${selectedDir}\n`);
   const action = await prompts.select({
-    message: `Create KTX project at ${selectedDir}?`,
+    message: `Create ktx project at ${selectedDir}?`,
     options: [
       { value: 'create', label: 'Create project' },
       { value: 'choose-another', label: 'Choose another folder' },
@@ -188,7 +188,7 @@ async function promptForNewProjectDir(
 
   while (true) {
     const destinationChoice = await prompts.select({
-      message: 'Where should KTX create the project?',
+      message: 'Where should ktx create the project?',
       options: [
         { value: 'default', label: `Create the default project folder: ${defaultProjectDir}` },
         { value: 'custom', label: 'Enter a custom path' },
@@ -312,7 +312,7 @@ export async function runKtxSetupProjectStep(
   );
   while (true) {
     const choice = await prompts.select({
-      message: 'Where should KTX create the project?',
+      message: 'Where should ktx create the project?',
       options: [
         { value: 'current', label: `Current directory (${projectDir})` },
         { value: 'new-default', label: `New subfolder (${defaultProjectDirLabel})` },
