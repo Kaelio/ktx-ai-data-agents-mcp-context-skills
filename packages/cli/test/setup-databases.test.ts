@@ -2145,17 +2145,11 @@ describe('setup databases step', () => {
     expect(listTables).toHaveBeenCalledWith(tempDir, 'postgres-warehouse', ['analytics']);
   });
 
-  it('auto-selects all discovered Postgres schemas in non-interactive setup', async () => {
+  it('fails non-interactive setup when a scope-bearing connection has no schema configured', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({});
     const testConnection = vi.fn(async () => 0);
-    const scanConnection = vi.fn(async asyncScanProjectDir => {
-      const config = parseKtxProjectConfig(await readFile(join(asyncScanProjectDir, 'ktx.yaml'), 'utf-8'));
-      expect(config.connections.warehouse).toMatchObject({
-        schemas: ['orbit_analytics', 'orbit_raw', 'public'],
-      });
-      return 0;
-    });
+    const scanConnection = vi.fn(async () => 0);
     const listSchemas = vi.fn(async () => ['orbit_analytics', 'orbit_raw', 'public']);
 
     const result = await runKtxSetupDatabasesStep(
@@ -2172,13 +2166,93 @@ describe('setup databases step', () => {
       { prompts, testConnection, scanConnection, listSchemas },
     );
 
+    expect(result.status).toBe('failed');
+    expect(listSchemas).not.toHaveBeenCalled();
+    expect(scanConnection).not.toHaveBeenCalled();
+    expect(io.stderr()).toContain('--database-schema');
+    expect(io.stderr()).toContain('connections.warehouse.schemas');
+  });
+
+  it('preserves existing BigQuery dataset_ids in non-interactive setup without rediscovering', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  bigquery-warehouse:',
+        '    driver: bigquery',
+        '    dataset_ids:',
+        "      - 'sales'",
+        '    credentials_json: env:BIGQUERY_CREDENTIALS_JSON',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['sales', 'stripe', 'posthog', 'linear']);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseConnectionIds: ['bigquery-warehouse'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { testConnection, scanConnection, listSchemas },
+    );
+
     expect(result.status).toBe('ready');
-    expect(prompts.multiselect).not.toHaveBeenCalled();
+    expect(listSchemas).not.toHaveBeenCalled();
+    expect(scanConnection).toHaveBeenCalledWith(tempDir, 'bigquery-warehouse', expect.anything());
+    const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
+    expect(config.connections['bigquery-warehouse']).toMatchObject({
+      driver: 'bigquery',
+      dataset_ids: ['sales'],
+    });
+  });
+
+  it('preserves existing Postgres schemas in non-interactive setup without rediscovering', async () => {
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: postgres',
+        '    url: env:DATABASE_URL',
+        '    schemas:',
+        "      - 'analytics'",
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const io = makeIo();
+    const testConnection = vi.fn(async () => 0);
+    const scanConnection = vi.fn(async () => 0);
+    const listSchemas = vi.fn(async () => ['analytics', 'raw', 'public']);
+
+    const result = await runKtxSetupDatabasesStep(
+      {
+        projectDir: tempDir,
+        inputMode: 'disabled',
+        databaseConnectionIds: ['warehouse'],
+        databaseSchemas: [],
+        skipDatabases: false,
+      },
+      io.io,
+      { testConnection, scanConnection, listSchemas },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(listSchemas).not.toHaveBeenCalled();
+    expect(scanConnection).toHaveBeenCalledWith(tempDir, 'warehouse', expect.anything());
     const config = parseKtxProjectConfig(await readFile(join(tempDir, 'ktx.yaml'), 'utf-8'));
     expect(config.connections.warehouse).toMatchObject({
-      schemas: ['orbit_analytics', 'orbit_raw', 'public'],
+      driver: 'postgres',
+      schemas: ['analytics'],
     });
-    expect(io.stdout()).toContain('✓ orbit_analytics, orbit_raw, public');
   });
 
   it('adds one non-interactive Postgres URL connection, tests it, scans it, and marks databases complete', async () => {

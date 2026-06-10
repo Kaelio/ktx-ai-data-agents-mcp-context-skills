@@ -1382,35 +1382,32 @@ async function maybeConfigureDatabaseScope(input: {
   const cliSchemas = input.args.databaseSchemas;
 
   if (input.args.inputMode === 'disabled') {
-    if (spec) {
-      let scopeToWrite: string[] = cliSchemas;
-      if (scopeToWrite.length === 0) {
-        try {
-          scopeToWrite = unique(
-            await (input.deps.listSchemas ?? defaultListSchemas)(input.projectDir, input.connectionId),
-          );
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : String(error);
-          input.io.stderr.write(
-            `Could not discover ${spec.promptLabel.toLowerCase()} for ${input.connectionId}; ${detail}\n`,
-          );
-          return okValidateResult();
-        }
-      }
-      if (scopeToWrite.length > 0) {
-        await writeScopeConfig({
-          projectDir: input.projectDir,
-          connectionId: input.connectionId,
-          values: scopeToWrite,
-          spec,
-        });
-        const capitalNounPlural = spec.nounPlural[0]!.toUpperCase() + spec.nounPlural.slice(1);
-        writeSetupSection(input.io, `${capitalNounPlural} saved for ${input.connectionId}`, [
-          `✓ ${scopeToWrite.join(', ')}`,
-        ]);
-      }
+    if (!spec) {
+      return okValidateResult();
     }
-    return okValidateResult();
+    if (cliSchemas.length > 0) {
+      await writeScopeConfig({
+        projectDir: input.projectDir,
+        connectionId: input.connectionId,
+        values: cliSchemas,
+        spec,
+      });
+      const capitalNounPlural = spec.nounPlural[0]!.toUpperCase() + spec.nounPlural.slice(1);
+      writeSetupSection(input.io, `${capitalNounPlural} saved for ${input.connectionId}`, [
+        `✓ ${cliSchemas.join(', ')}`,
+      ]);
+      return okValidateResult();
+    }
+    if (existingScope.length > 0) {
+      return okValidateResult();
+    }
+    writePrefixedLines(
+      (chunk) => input.io.stderr.write(chunk),
+      `No ${spec.nounPlural} configured for ${input.connectionId}. ` +
+        `Pass --database-schema <${spec.noun}> (repeatable) or set ` +
+        `connections.${input.connectionId}.${spec.configArrayField} in ktx.yaml.`,
+    );
+    return failedValidateResult();
   }
 
   if (spec && cliSchemas.length > 0) {
