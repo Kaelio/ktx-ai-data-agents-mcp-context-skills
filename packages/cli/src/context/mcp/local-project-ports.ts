@@ -1,4 +1,5 @@
 import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
+import { KtxQueryError, isNativeProgrammingFault } from '../../errors.js';
 import { localConnectionInfoFromConfig } from '../../context/connections/local-warehouse-descriptor.js';
 import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
@@ -110,14 +111,26 @@ async function executeValidatedReadOnlySql(
       throw new Error(`Connection "${connectionId}" does not support read-only SQL execution.`);
     }
     await onProgress?.({ progress: 0.3, message: 'Executing' });
-    const result = await connector.executeReadOnly(
-      {
-        connectionId,
-        sql: input.sql,
-        maxRows: input.maxRows,
-      },
-      { runId: 'mcp-sql-execution' },
-    );
+    const result = await connector
+      .executeReadOnly(
+        {
+          connectionId,
+          sql: input.sql,
+          maxRows: input.maxRows,
+        },
+        { runId: 'mcp-sql-execution' },
+      )
+      .catch((error: unknown) => {
+        // A warehouse/driver rejection (e.g. the agent's SQL failed to compile)
+        // is a surfaced operational outcome, not a ktx fault: mark it expected
+        // while preserving the warehouse's own diagnostics. A native JS error
+        // (TypeError, etc.) signals a bug in connector code — let it propagate
+        // unchanged so Error Tracking still sees it.
+        if (isNativeProgrammingFault(error)) {
+          throw error;
+        }
+        throw new KtxQueryError(error instanceof Error ? error.message : String(error), { cause: error });
+      });
     const response = {
       headers: result.headers,
       ...(result.headerTypes ? { headerTypes: result.headerTypes } : {}),

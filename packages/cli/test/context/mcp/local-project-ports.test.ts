@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject } from '../../../src/context/project/project.js';
+import { KtxQueryError } from '../../../src/errors.js';
 import { createKtxConnectorCapabilities, type KtxQueryResult, type KtxScanConnector, type KtxSchemaSnapshot } from '../../../src/context/scan/types.js';
 import { writeLocalSlSource } from '../../../src/context/sl/local-sl.js';
 import { createLocalProjectMcpContextPorts } from '../../../src/context/mcp/local-project-ports.js';
@@ -323,6 +324,78 @@ describe('createLocalProjectMcpContextPorts', () => {
       }),
     ).rejects.toThrow('SQL contains read/write operation: Insert');
     expect(connector.executeReadOnly).not.toHaveBeenCalled();
+  });
+
+  it('wraps warehouse execution errors as KtxQueryError while preserving the diagnostic message', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    project.config.connections.warehouse = {
+      driver: 'snowflake',
+      url: 'env:DATABASE_URL',
+    };
+    const driverError = new Error("SQL compilation error:\nsyntax error line 4 at position 14 unexpected 'rows'.");
+    driverError.name = 'OperationFailedError';
+    const connector: KtxScanConnector = {
+      ...testConnector(testSnapshot(), { headers: [], rows: [], totalRows: 0, rowCount: 0 }),
+      executeReadOnly: vi.fn(async () => {
+        throw driverError;
+      }),
+    };
+    const sqlAnalysis = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(),
+      validateReadOnly: vi.fn(async () => ({ ok: true, error: null })),
+    };
+    const ports = createLocalProjectMcpContextPorts(project, {
+      sqlAnalysis,
+      localScan: { createConnector: vi.fn(async () => connector) },
+      embeddingService: null,
+    });
+
+    const execution = ports.sqlExecution?.execute({
+      connectionId: 'warehouse',
+      sql: 'select\n  count(*)\nfrom events\nlimit 100 rows',
+      maxRows: 1000,
+    });
+
+    await expect(execution).rejects.toBeInstanceOf(KtxQueryError);
+    await expect(execution).rejects.toThrow("syntax error line 4 at position 14 unexpected 'rows'.");
+    await expect(execution).rejects.toMatchObject({ cause: driverError });
+    expect(connector.cleanup).toHaveBeenCalled();
+  });
+
+  it('lets connector programming faults propagate instead of masking them as query errors', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    project.config.connections.warehouse = {
+      driver: 'snowflake',
+      url: 'env:DATABASE_URL',
+    };
+    const bug = new TypeError("Cannot read properties of undefined (reading 'rows')");
+    const connector: KtxScanConnector = {
+      ...testConnector(testSnapshot(), { headers: [], rows: [], totalRows: 0, rowCount: 0 }),
+      executeReadOnly: vi.fn(async () => {
+        throw bug;
+      }),
+    };
+    const sqlAnalysis = {
+      analyzeForFingerprint: vi.fn(),
+      analyzeBatch: vi.fn(),
+      validateReadOnly: vi.fn(async () => ({ ok: true, error: null })),
+    };
+    const ports = createLocalProjectMcpContextPorts(project, {
+      sqlAnalysis,
+      localScan: { createConnector: vi.fn(async () => connector) },
+      embeddingService: null,
+    });
+
+    const execution = ports.sqlExecution?.execute({
+      connectionId: 'warehouse',
+      sql: 'select 1',
+      maxRows: 10,
+    });
+
+    await expect(execution).rejects.toBe(bug);
+    await expect(execution).rejects.toBeInstanceOf(TypeError);
+    expect(connector.cleanup).toHaveBeenCalled();
   });
 
   it('exposes local scan entity details through MCP ports', async () => {
