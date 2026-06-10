@@ -22,8 +22,12 @@ const slWriteSourceInputSchema = z.object({
   connectionId: slToolConnectionIdSchema.describe('Data source connection ID'),
   sourceName: z
     .string()
-    .regex(/^[a-z0-9][a-z0-9_]*$/, 'Source name must be snake_case (lowercase alphanumeric and underscores)')
-    .describe('Name of the source to create, edit, or delete'),
+    .min(1)
+    .describe(
+      "Name of the source to create, edit, or delete. Must equal the source's `name:`. Use the verbatim " +
+        'warehouse identifier when overlaying a manifest source (e.g. SIGNED_UP); snake_case is recommended ' +
+        'for new standalone sources.',
+    ),
   source: sourceInputSchema
     .optional()
     .describe(
@@ -152,6 +156,17 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
       );
     }
 
+    // The in-file `name:` is the source's identity; the file is written under
+    // source.name while the orphan/shadow checks key on sourceName — a mismatch
+    // would validate one source and save another.
+    if (input.source.name !== sourceName) {
+      return this.buildOutput(
+        false,
+        [`source.name "${input.source.name}" does not match sourceName "${sourceName}" — they must be identical.`],
+        sourceName,
+      );
+    }
+
     return this.writeFullSource(
       connectionId,
       input.source,
@@ -253,12 +268,8 @@ Do NOT join back to a table that the SQL already aggregates from if the grain co
     connectionId: string,
     sourceName: string,
   ): Promise<string | null> {
-    try {
-      const { content } = await service.readSourceFile(connectionId, sourceName);
-      return content;
-    } catch {
-      return null;
-    }
+    const file = await service.readSourceFile(connectionId, sourceName);
+    return file?.content ?? null;
   }
 
   private async rejectOrphanOverlay(

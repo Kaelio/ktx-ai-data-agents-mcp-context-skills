@@ -12,8 +12,8 @@ A MetricFlow `semantic_model` maps to an SL source; MetricFlow `measures` map to
 
 | MetricFlow | KTX form | Notes |
 |---|---|---|
-| `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** at `<connId>/X.yaml` with `measures`, computed-only `columns`, `column_overrides`, `joins` | The `model:` ref resolves to a manifest table. |
-| `semantic_model: X { model: source('s','t') }` | **Overlay** at `<connId>/X.yaml` over table `t`. | Same shape; `source()` still resolves to a physical table. |
+| `semantic_model: X { model: ref('t') }` with measures + dimensions | **Overlay** named `X` with `measures`, computed-only `columns`, `column_overrides`, `joins` | The `model:` ref resolves to a manifest table. |
+| `semantic_model: X { model: source('s','t') }` | **Overlay** named `X` over table `t`. | Same shape; `source()` still resolves to a physical table. |
 | `semantic_model: X { model: <literal> }` with no manifest entry | **Standalone** with explicit `sql:`, `grain:`, `columns:` | Happens when the dbt manifest isn't available. |
 | `semantic_model: Y { extends: X }` | **Merge** Y's measures/dimensions/entities into X's overlay, or write a single overlay named for the most-derived child (Y) containing both X's and Y's primitives | Do not emit a second overlay for X - flatten. |
 | `measures: [{ name, agg, expr }]` | `measures: [{ name, expr: "<agg>(<expr>)" }]` | Aggregation inlined. `agg: count_distinct` → `count(distinct ...)`. |

@@ -8,6 +8,7 @@ import { createRuntimeToolDescriptorFromAiTool } from '../../context/llm/runtime
 import type { KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../context/memory/types.js';
 import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
+import { slSourceFilePath, slSourceNameForFile, sourceNameFromPath } from '../../context/sl/source-files.js';
 import type { SemanticLayerSource } from '../../context/sl/types.js';
 import type { SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
 import { createTouchedSlSources, type TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
@@ -791,14 +792,43 @@ export class IngestBundleRunner {
     ].sort();
   }
 
-  private touchedSlSourcesFromPaths(paths: string[]): TouchedSlSource[] {
-    return paths
-      .filter((path) => path.startsWith('semantic-layer/') && path.endsWith('.yaml') && !path.includes('/_schema/'))
-      .map((path) => {
-        const [, connectionId, fileName] = path.split('/');
-        return { connectionId: connectionId ?? '', sourceName: (fileName ?? '').replace(/\.yaml$/, '') };
-      })
-      .filter((source) => source.connectionId.length > 0 && source.sourceName.length > 0);
+  private async touchedSlSourcesFromPaths(workdir: string, paths: string[]): Promise<TouchedSlSource[]> {
+    const sources: TouchedSlSource[] = [];
+    for (const path of paths) {
+      if (!path.startsWith('semantic-layer/') || !path.endsWith('.yaml') || path.includes('/_schema/')) {
+        continue;
+      }
+      const [, connectionId] = path.split('/');
+      if (!connectionId) {
+        continue;
+      }
+      // The in-file `name:` is the source's identity; the filename is only a
+      // derived label. Deleted files cannot be read — fall back to the
+      // filename-derived name, matching the record loader's keying.
+      let sourceName: string;
+      try {
+        sourceName = slSourceNameForFile(path, await readFile(join(workdir, path), 'utf-8'));
+      } catch {
+        sourceName = sourceNameFromPath(path);
+      }
+      if (sourceName.length > 0) {
+        sources.push({ connectionId, sourceName });
+      }
+    }
+    return sources;
+  }
+
+  // Inverse direction for commits and repair allowlists: resolve each touched
+  // source to its real on-disk path, falling back to the writer's derived
+  // filename when the file was deleted in this run.
+  private async touchedSlSourcePaths(workdir: string, touched: TouchedSlSource[]): Promise<string[]> {
+    const service = this.deps.semanticLayerService.forWorktree(workdir);
+    const paths: string[] = [];
+    for (const source of touched) {
+      const file = await service.readSourceFile(source.connectionId, source.sourceName);
+      paths.push(file?.path ?? slSourceFilePath(source.connectionId, source.sourceName));
+    }
+    return paths;
   }
 
   private touchedSlSourcesFromActions(actions: MemoryAction[], fallbackConnectionId: string): TouchedSlSource[] {
@@ -1558,7 +1588,7 @@ export class IngestBundleRunner {
           projectionTouchedSources = projection.touchedSources;
           projectionChangedWikiPageKeys = projection.changedWikiPageKeys;
           const projectionPaths = [
-            ...projection.touchedSources.map((source) => `semantic-layer/${source.connectionId}/${source.sourceName}.yaml`),
+            ...(await this.touchedSlSourcePaths(sessionWorktree.workdir, projection.touchedSources)),
             ...projection.changedWikiPageKeys.map((pageKey) => `wiki/global/${pageKey}.md`),
           ];
           projectionTouchedPaths = projectionPaths;
@@ -1740,7 +1770,7 @@ export class IngestBundleRunner {
               await validateFinalIngestArtifacts({
                 connectionIds: slConnectionIds,
                 changedWikiPageKeys: this.wikiPageKeysFromPaths(touchedPaths),
-                touchedSlSources: this.touchedSlSourcesFromPaths(touchedPaths),
+                touchedSlSources: await this.touchedSlSourcesFromPaths(sessionWorktree.workdir, touchedPaths),
                 wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
                 semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
                 validateTouchedSources: (touched) =>
@@ -2437,7 +2467,7 @@ export class IngestBundleRunner {
         ...(isolatedDiffEnabled ? projectionTouchedSources : []),
         ...workUnitOutcomes.flatMap((outcome) => outcome.touchedSlSources),
         ...this.touchedSlSourcesFromActions(reconcileActions, job.connectionId),
-        ...this.touchedSlSourcesFromPaths(postReconciliationPaths),
+        ...(await this.touchedSlSourcesFromPaths(sessionWorktree.workdir, postReconciliationPaths)),
         ...finalizationTouchedSources,
       ]);
       const finalWikiGateScope = await this.wikiPageKeysForFinalGates({
@@ -2528,7 +2558,7 @@ export class IngestBundleRunner {
         const gateError = this.errorMessage(error);
         const repairPaths = finalGateRepairPaths({
           changedWikiPageKeys: finalChangedWikiPageKeys,
-          touchedSlSources: finalTouchedSlSources,
+          touchedSlSourcePaths: await this.touchedSlSourcePaths(sessionWorktree.workdir, finalTouchedSlSources),
         });
         emitStageProgress('final_gates', 89, 'Repairing final artifact gates');
         const gateRepair = await repairFinalGateFailure({

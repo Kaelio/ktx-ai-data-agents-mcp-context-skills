@@ -5,6 +5,7 @@ import { SYSTEM_GIT_AUTHOR } from '../../../context/tools/authors.js';
 import type { SlConnectionCatalogPort, SlSourcesIndexPort } from '../ports.js';
 import { sourceOverlaySchema } from '../schemas.js';
 import { SemanticLayerService } from '../semantic-layer.service.js';
+import { resolveSlSourceFile, slSourceFilePath } from '../source-files.js';
 import type { SemanticLayerSource } from '../types.js';
 import { sourceDefinitionSchema } from './base-semantic-layer.tool.js';
 
@@ -22,9 +23,6 @@ export interface SourceValidationResult {
   errors: string[];
   warnings: string[];
 }
-
-const slSourcePath = (connectionId: string, sourceName: string): string =>
-  `semantic-layer/${connectionId}/${sourceName}.yaml`;
 
 function resolveDialect(warehouse: string | null): string | null {
   if (!warehouse) {
@@ -63,24 +61,21 @@ export async function validateSingleSource(
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  let content: string;
-  try {
-    const result = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
-    content = result.content;
-  } catch {
-    errors.push(`${sourceName}.yaml: file not found`);
+  const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
+  if (!file) {
+    errors.push(`${sourceName}: no standalone or overlay file found`);
     return { errors, warnings };
   }
 
   let parsed: Record<string, unknown>;
   try {
-    parsed = YAML.parse(content);
+    parsed = YAML.parse(file.content);
   } catch (e) {
-    errors.push(`${sourceName}.yaml: invalid YAML — ${e instanceof Error ? e.message : String(e)}`);
+    errors.push(`${sourceName}: invalid YAML — ${e instanceof Error ? e.message : String(e)}`);
     return { errors, warnings };
   }
   if (!parsed || typeof parsed !== 'object') {
-    errors.push(`${sourceName}.yaml: top-level content is not an object`);
+    errors.push(`${sourceName}: top-level content is not an object`);
     return { errors, warnings };
   }
 
@@ -89,7 +84,7 @@ export async function validateSingleSource(
     const isManifestBacked = await deps.semanticLayerService.isManifestBacked(connectionId, sourceName);
     if (isManifestBacked) {
       errors.push(
-        `${sourceName}.yaml: standalone source shadows an existing manifest entry — ` +
+        `${sourceName}: standalone source shadows an existing manifest entry — ` +
           `writing it as-is drops the manifest's columns and joins. ` +
           `Remove "sql:", "table:", "grain:", and base-table "columns:" and keep only ` +
           `"name:" plus overlay fields such as "measures:", "segments:", "descriptions:", ` +
@@ -103,21 +98,21 @@ export async function validateSingleSource(
   const result = schema.safeParse(parsed);
   if (!result.success) {
     const issues = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    errors.push(`${sourceName}.yaml: schema — ${issues}`);
+    errors.push(`${sourceName}: schema — ${issues}`);
     const errorPaths = new Set(result.error.issues.map((i) => String(i.path[0])));
     if (errorPaths.has('joins')) {
       warnings.push(
-        `${sourceName}.yaml: hint — join format: {to, on: 'local_col = TARGET.col', relationship: 'many_to_one|one_to_many|one_to_one'}`,
+        `${sourceName}: hint — join format: {to, on: 'local_col = TARGET.col', relationship: 'many_to_one|one_to_many|one_to_one'}`,
       );
     }
     if (errorPaths.has('columns')) {
       warnings.push(
-        `${sourceName}.yaml: hint — overlay columns must be computed: {name, expr, type}. Use column_overrides for manifest column descriptions or metadata.`,
+        `${sourceName}: hint — overlay columns must be computed: {name, expr, type}. Use column_overrides for manifest column descriptions or metadata.`,
       );
     }
     if (errorPaths.has('measures')) {
       warnings.push(
-        `${sourceName}.yaml: hint — measure format: {name, expr, description (optional), filter (optional)}`,
+        `${sourceName}: hint — measure format: {name, expr, description (optional), filter (optional)}`,
       );
     }
     return { errors, warnings };
@@ -135,7 +130,7 @@ export async function validateSingleSource(
   const seenMeasures = new Set<string>();
   for (const m of measures) {
     if (seenMeasures.has(m.name)) {
-      errors.push(`${sourceName}.yaml: duplicate measure name "${m.name}"`);
+      errors.push(`${sourceName}: duplicate measure name "${m.name}"`);
     }
     seenMeasures.add(m.name);
   }
@@ -168,7 +163,7 @@ export async function validateSingleSource(
       const missing = sourceColumns.map((c) => c.name).filter((n) => !actual.has(n.toLowerCase()));
       if (missing.length > 0) {
         errors.push(
-          `${sourceName}.yaml: declared columns absent from sql result — ${missing.join(', ')} (warehouse returned: ${[...actual].slice(0, 10).join(', ')}${actual.size > 10 ? ', …' : ''})`,
+          `${sourceName}: declared columns absent from sql result — ${missing.join(', ')} (warehouse returned: ${[...actual].slice(0, 10).join(', ')}${actual.size > 10 ? ', …' : ''})`,
         );
       }
     } catch (e) {
@@ -205,7 +200,7 @@ function formatProbeError(args: {
   const errMsg = error instanceof Error ? error.message : String(error);
   const refColumns = sourceColumns.filter((c) => referencesColumn(probeSql, c.name));
   const lines: string[] = [
-    measureName ? `${sourceName}.yaml: measure "${measureName}" ${headline}.` : `${sourceName}.yaml: ${headline}.`,
+    measureName ? `${sourceName}: measure "${measureName}" ${headline}.` : `${sourceName}: ${headline}.`,
   ];
   if (warehouse) {
     lines.push(`  Warehouse: ${warehouse}`);
@@ -249,7 +244,7 @@ async function probeOverlayMeasures(
     composed = all.find((s) => s.name === sourceName);
   } catch (e) {
     errors.push(
-      `${sourceName}.yaml: failed to load composed source for probe — ${e instanceof Error ? e.message : String(e)}`,
+      `${sourceName}: failed to load composed source for probe — ${e instanceof Error ? e.message : String(e)}`,
     );
     return errors;
   }
@@ -300,7 +295,11 @@ export async function revertSourceToPreHead(
   preHead: string | null,
   sourceName: string,
 ): Promise<string> {
-  const relPath = slSourcePath(connectionId, sourceName);
+  // Resolve the live file by its in-file `name:`; when the source no longer
+  // exists on disk (restore-after-delete), fall back to the filename the
+  // writer would derive for it.
+  const resolved = await resolveSlSourceFile(deps.configService, connectionId, sourceName);
+  const relPath = resolved?.path ?? slSourceFilePath(connectionId, sourceName);
   let preContent: string | null = null;
   if (preHead) {
     try {

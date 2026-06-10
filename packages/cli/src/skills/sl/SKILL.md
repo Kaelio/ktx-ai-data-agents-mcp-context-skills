@@ -21,7 +21,7 @@ skills must verify warehouse identifiers with `discover_data`,
 
 ## Part 1 - Schema reference
 
-An SL source is a YAML file at `semantic-layer/<connectionId>/<source_name>.yaml`. There are three flavors:
+An SL source is a YAML file under `semantic-layer/<connectionId>/`. The file's `name:` field is the source's identity — it mirrors the warehouse identifier verbatim (e.g. Snowflake's uppercase `SIGNED_UP`); the filename is only a derived label. Always address sources by name through the `sl_*` tools, never by file path. There are three flavors:
 
 ### Overlay sources
 

@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initKtxProject } from '../../../src/context/project/project.js';
 import { createKtxConnectorCapabilities, type KtxQueryResult, type KtxScanConnector, type KtxSchemaSnapshot } from '../../../src/context/scan/types.js';
-import { writeLocalSlSource } from '../../../src/context/sl/local-sl.js';
+import { SemanticLayerService } from '../../../src/context/sl/semantic-layer.service.js';
+import type { SemanticLayerSource } from '../../../src/context/sl/types.js';
+import { seedSlSourceFile } from '../sl/sl-source-seeding.test-utils.js';
 import { createLocalProjectMcpContextPorts } from '../../../src/context/mcp/local-project-ports.js';
 
 describe('createLocalProjectMcpContextPorts', () => {
@@ -666,7 +668,7 @@ describe('createLocalProjectMcpContextPorts', () => {
 
   it('reads seeded semantic-layer sources', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: [
@@ -718,6 +720,44 @@ describe('createLocalProjectMcpContextPorts', () => {
     });
   });
 
+  it('composes an overlay written for an uppercase manifest source at a derived filename', async () => {
+    const project = await initKtxProject({ projectDir: tempDir });
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      [
+        'tables:',
+        '  SIGNED_UP:',
+        '    table: PUBLIC.SIGNED_UP',
+        '    columns:',
+        '      - name: ID',
+        '        type: number',
+        '        pk: true',
+        '',
+      ].join('\n'),
+      'ktx',
+      'ktx@example.com',
+      'seed uppercase manifest shard',
+    );
+
+    // The production write path: agents overlay manifest sources via
+    // SemanticLayerService.writeSource using the verbatim warehouse name.
+    const service = new SemanticLayerService(project.fileStore as never, {} as never, {} as never);
+    const overlay = {
+      name: 'SIGNED_UP',
+      measures: [{ name: 'signup_count', expr: 'count(*)' }],
+    } as SemanticLayerSource;
+    const write = await service.writeSource('warehouse', overlay, 'ktx', 'ktx@example.com');
+    expect(write.path).toMatch(/^semantic-layer\/warehouse\/signed_up-[0-9a-f]{8}\.yaml$/);
+
+    const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
+    await expect(
+      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'SIGNED_UP' }),
+    ).resolves.toMatchObject({
+      sourceName: 'SIGNED_UP',
+      yaml: expect.stringContaining('signup_count'),
+    });
+  });
+
   it('returns a standalone source verbatim even when its YAML is currently broken', async () => {
     const project = await initKtxProject({ projectDir: tempDir });
     await project.fileStore.writeFile(
@@ -764,7 +804,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
     };
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: [
@@ -826,7 +866,7 @@ describe('createLocalProjectMcpContextPorts', () => {
       driver: 'postgres',
       url: 'env:DATABASE_URL',
     };
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: [

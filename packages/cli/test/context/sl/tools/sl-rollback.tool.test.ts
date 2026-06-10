@@ -16,6 +16,9 @@ function makeSession(overrides: Partial<ToolSession> = {}): ToolSession {
     configService: {
       writeFile: vi.fn().mockResolvedValue(undefined),
       deleteFile: vi.fn().mockResolvedValue(undefined),
+      // No live file for `orders` — revert falls back to the derived filename.
+      listFiles: vi.fn().mockResolvedValue({ files: [] }),
+      readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
     } as any,
     gitService: { getFileAtCommit: vi.fn().mockResolvedValue('pre: content') } as any,
     ...overrides,

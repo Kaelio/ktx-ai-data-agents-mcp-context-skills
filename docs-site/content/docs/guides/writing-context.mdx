@@ -44,11 +44,16 @@ Use this order for most context changes:
 Semantic sources are YAML files for queryable tables or custom SQL. They define
 agent-facing measures, dimensions, segments, joins, and grain.
 
-Semantic source files live at:
+Semantic source files live under:
 
 ```text
-semantic-layer/<connection-id>/<source-name>.yaml
+semantic-layer/<connection-id>/
 ```
+
+The file's `name:` field is the source's identity — it carries the warehouse
+identifier verbatim, including case. The filename is a derived label: simple
+lowercase names get `<source-name>.yaml`, anything else gets a slugged
+filename. Renaming a file does not rename the source.
 
 ### Minimal source
 

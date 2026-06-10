@@ -271,16 +271,13 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
   }
 
   async validateSingleSource(deps: SlValidationDeps, connectionId: string, sourceName: string) {
-    let content: string;
-    try {
-      const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
-      content = file.content;
-    } catch (error) {
-      return this.validateComposedSource(deps, connectionId, sourceName, error);
+    const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
+    if (!file) {
+      return this.validateComposedSource(deps, connectionId, sourceName, 'no standalone or overlay file found');
     }
 
     try {
-      const parsed = YAML.parse(content) as unknown as Record<string, unknown>;
+      const parsed = YAML.parse(file.content) as unknown as Record<string, unknown>;
       return this.validateParsedSource(sourceName, parsed);
     } catch (error) {
       return {

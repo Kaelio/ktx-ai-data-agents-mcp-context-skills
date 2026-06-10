@@ -4,6 +4,7 @@ import type { KtxMcpProgressCallback } from '../mcp/types.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
 import { loadLocalSlSourceRecords } from './local-sl.js';
 import { toResolvedWire } from './semantic-layer.service.js';
+import { assertSafeConnectionId } from './source-files.js';
 import type { SemanticLayerQueryExecutionResult, SemanticLayerQueryInput } from './types.js';
 
 const COMPILE_ONLY_REASON =
@@ -22,27 +23,6 @@ export interface CompileLocalSlQueryOptions {
 export interface CompileLocalSlQueryResult extends SemanticLayerQueryExecutionResult {
   connectionId: string;
   dialect: string;
-}
-
-function assertSafePathToken(kind: string, value: string): string {
-  if (
-    value.trim().length === 0 ||
-    value.includes('..') ||
-    value.includes('\\') ||
-    value.startsWith('/') ||
-    value.startsWith('.') ||
-    value.includes('//')
-  ) {
-    throw new Error(`Unsafe ${kind}: ${value}`);
-  }
-  return value;
-}
-
-function assertSafeConnectionId(connectionId: string): string {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
-    throw new Error(`Unsafe connection id: ${connectionId}`);
-  }
-  return assertSafePathToken('connection id', connectionId);
 }
 
 function dialectForDriver(driver: string | undefined): string {

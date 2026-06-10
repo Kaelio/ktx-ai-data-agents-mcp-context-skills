@@ -46,12 +46,8 @@ export abstract class BaseSemanticLayerTool<TInput extends ZodType = ZodType> ex
   ): Promise<string | null> {
     const semanticLayerService = context?.session?.semanticLayerService ?? this.semanticLayerService;
 
-    try {
-      const { content } = await semanticLayerService.readSourceFile(connectionId, sourceName);
-      return content;
-    } catch {
-      return null;
-    }
+    const file = await semanticLayerService.readSourceFile(connectionId, sourceName);
+    return file?.content ?? null;
   }
 
   protected buildMarkdown(

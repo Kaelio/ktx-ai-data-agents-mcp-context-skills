@@ -11,6 +11,7 @@ import type { SqlAnalysisDialect, SqlAnalysisPort } from '../../context/sql-anal
 import { compileLocalSlQuery } from '../../context/sl/local-query.js';
 import { createKtxDictionarySearchService } from '../../context/sl/dictionary-search.js';
 import { readLocalSlSource } from '../../context/sl/local-sl.js';
+import { assertSafeConnectionId } from '../../context/sl/source-files.js';
 import { readLocalKnowledgePage, searchLocalKnowledgePages } from '../wiki/local-knowledge.js';
 import type { KtxMcpContextPorts, KtxMcpProgressCallback, KtxSqlExecutionResponse } from './types.js';
 
@@ -40,27 +41,6 @@ function dialectForDriver(driver: string | undefined): string {
 
 function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDialect {
   return dialectForDriver(driver) as SqlAnalysisDialect;
-}
-
-function assertSafePathToken(kind: string, value: string): string {
-  if (
-    value.trim().length === 0 ||
-    value.includes('..') ||
-    value.includes('\\') ||
-    value.startsWith('/') ||
-    value.startsWith('.') ||
-    value.includes('//')
-  ) {
-    throw new Error(`Unsafe ${kind}: ${value}`);
-  }
-  return value;
-}
-
-function assertSafeConnectionId(connectionId: string): string {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
-    throw new Error(`Unsafe connection id: ${connectionId}`);
-  }
-  return assertSafePathToken('connection id', connectionId);
 }
 
 async function cleanupConnector(connector: KtxScanConnector | null): Promise<void> {

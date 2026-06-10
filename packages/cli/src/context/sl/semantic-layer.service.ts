@@ -6,6 +6,7 @@ import type { TableUsageOutput } from '../ingest/adapters/historic-sql/skill-sch
 import type { SlConnectionCatalogPort, SlPythonPort } from './ports.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { isOverlaySource, resolvedSourceSchema, sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
+import { resolveSlSourceFile, slSourceFilePath } from './source-files.js';
 import type {
   ResolvedSemanticLayerSource,
   SemanticLayerColumnOverride,
@@ -135,8 +136,27 @@ export class SemanticLayerService {
 
   // ── YAML File Operations ────────────────────────────────
 
-  private sourcePath(connectionId: string, sourceName: string): string {
-    return `${SL_DIR_PREFIX}/${connectionId}/${sourceName}.yaml`;
+  // The in-file `name:` is the source's identity; the filename is only a derived
+  // label. Rewrites land on the file that already declares the name (humans may
+  // rename files freely); new sources get a derived filename. A file already
+  // sitting at the derived path necessarily declares a different name (the
+  // resolver would have matched it otherwise) — fail instead of clobbering it.
+  private async resolveWritePath(connectionId: string, sourceName: string): Promise<string> {
+    const existing = await resolveSlSourceFile(this.configService, connectionId, sourceName);
+    if (existing) {
+      return existing.path;
+    }
+    const path = slSourceFilePath(connectionId, sourceName);
+    let occupied = true;
+    try {
+      await this.configService.readFile(path);
+    } catch {
+      occupied = false;
+    }
+    if (occupied) {
+      throw new Error(`Cannot write source '${sourceName}': ${path} already defines a different source`);
+    }
+    return path;
   }
 
   async writeSource(
@@ -185,39 +205,42 @@ export class SemanticLayerService {
       }
     }
 
-    const path = this.sourcePath(connectionId, source.name);
+    const path = await this.resolveWritePath(connectionId, source.name);
     const normalizedSource = normalizeSemanticLayerDescriptions(source);
     const content = YAML.stringify(normalizedSource, { indent: 2, lineWidth: 0, version: '1.1' });
     const message = commitMessage ?? `Update semantic layer source: ${source.name}`;
     const result = await this.configService.writeFile(path, content, author, authorEmail, message, {
       skipLock: options?.skipLock,
     });
-    return { ...result, warnings };
+    // The filename is derived from (or resolved by) the source name — surface
+    // the actual path so callers don't have to re-resolve it.
+    return { ...result, path, warnings };
   }
 
-  async readSourceFile(connectionId: string, sourceName: string): Promise<{ content: string; path: string }> {
-    const path = this.sourcePath(connectionId, sourceName);
-    const result = await this.configService.readFile(path);
-    return { content: result.content, path };
+  /**
+   * Raw standalone/overlay file for a source, resolved by its in-file `name:`.
+   * Returns null when no file declares the name (the source may still exist as
+   * a manifest entry under `_schema/`).
+   */
+  async readSourceFile(connectionId: string, sourceName: string): Promise<{ content: string; path: string } | null> {
+    const file = await resolveSlSourceFile(this.configService, connectionId, sourceName);
+    return file ? { content: file.content, path: file.path } : null;
   }
 
   async loadSource(connectionId: string, sourceName: string): Promise<SemanticLayerSource | null> {
-    let content: string;
-    try {
-      const result = await this.readSourceFile(connectionId, sourceName);
-      content = result.content;
-    } catch {
+    const file = await this.readSourceFile(connectionId, sourceName);
+    if (!file) {
       return null;
     }
     try {
-      return YAML.parse(content) as SemanticLayerSource;
+      return YAML.parse(file.content) as SemanticLayerSource;
     } catch (error) {
       // Distinguish a YAML parse failure from a missing file. The file exists but
       // its contents are unparseable — callers that treat null as "does not exist"
       // could otherwise overwrite the broken file. Surface the parse failure via
       // the service logger so the broken source is at least visible.
       this.logger.warn(
-        `[loadSource] ${connectionId}/${sourceName}.yaml: YAML parse failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[loadSource] ${file.path}: YAML parse failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       return null;
     }
@@ -533,7 +556,7 @@ export class SemanticLayerService {
         .map((c) => c.name);
       if (absentDeclaredColumns.length > 0) {
         errors.push(
-          `${source.name}.yaml: table "${source.table}" matched manifest ${manifestLabel}, ` +
+          `${source.name}: table "${source.table}" matched manifest ${manifestLabel}, ` +
             `but declared column(s) absent from physical table: ${absentDeclaredColumns.join(', ')}. ` +
             `Available columns: ${[...manifestColumns.values()].join(', ')}`,
         );
@@ -545,7 +568,7 @@ export class SemanticLayerService {
       });
       if (missingGrainColumns.length > 0) {
         errors.push(
-          `${source.name}.yaml: grain column(s) absent from physical table "${source.table}": ${missingGrainColumns.join(', ')}`,
+          `${source.name}: grain column(s) absent from physical table "${source.table}": ${missingGrainColumns.join(', ')}`,
         );
       }
 
@@ -562,7 +585,7 @@ export class SemanticLayerService {
         });
         if (missing.length > 0) {
           errors.push(
-            `${source.name}.yaml: computed column "${column.name}" references unknown column(s): ${missing.join(', ')}`,
+            `${source.name}: computed column "${column.name}" references unknown column(s): ${missing.join(', ')}`,
           );
         }
       }
@@ -577,7 +600,7 @@ export class SemanticLayerService {
         });
         if (missing.length > 0) {
           errors.push(
-            `${source.name}.yaml: segment "${segment.name}" references unknown column(s): ${missing.join(', ')}`,
+            `${source.name}: segment "${segment.name}" references unknown column(s): ${missing.join(', ')}`,
           );
         }
       }
@@ -592,7 +615,7 @@ export class SemanticLayerService {
         });
         if (exprMissing.length > 0) {
           errors.push(
-            `${source.name}.yaml: measure "${measure.name}" references unknown column(s): ${exprMissing.join(', ')}`,
+            `${source.name}: measure "${measure.name}" references unknown column(s): ${exprMissing.join(', ')}`,
           );
         }
 
@@ -606,7 +629,7 @@ export class SemanticLayerService {
           });
           if (filterMissing.length > 0) {
             errors.push(
-              `${source.name}.yaml: measure "${measure.name}" filter references unknown column(s): ${filterMissing.join(', ')}`,
+              `${source.name}: measure "${measure.name}" filter references unknown column(s): ${filterMissing.join(', ')}`,
             );
           }
         }
@@ -619,7 +642,7 @@ export class SemanticLayerService {
         }
         if (!validOutputColumns.has(parsed.localColumn.toLowerCase())) {
           errors.push(
-            `${source.name}.yaml: join to "${join.to}" references local column ` +
+            `${source.name}: join to "${join.to}" references local column ` +
               `"${parsed.localColumn}" that is not a valid output column`,
           );
         }
@@ -631,7 +654,7 @@ export class SemanticLayerService {
           const targetColumns = new Set(targetSource.columns.map((c) => c.name.toLowerCase()));
           if (!targetColumns.has(parsed.targetColumn.toLowerCase())) {
             errors.push(
-              `${source.name}.yaml: join to "${join.to}" references target column ` +
+              `${source.name}: join to "${join.to}" references target column ` +
                 `"${parsed.targetColumn}" that does not exist on the target source`,
             );
           }
@@ -650,16 +673,6 @@ export class SemanticLayerService {
     return SemanticLayerService.mapDialect(connection.connectionType);
   }
 
-  async listSourceNames(connectionId: string): Promise<string[]> {
-    const dir = `${SL_DIR_PREFIX}/${connectionId}`;
-    try {
-      const result = await this.configService.listFiles(dir);
-      return result.files.filter((f) => f.endsWith('.yaml')).map((f) => f.replace(`${dir}/`, '').replace('.yaml', ''));
-    } catch {
-      return [];
-    }
-  }
-
   async listFilesForConnection(connectionId: string): Promise<string[]> {
     const dir = `${SL_DIR_PREFIX}/${connectionId}`;
     try {
@@ -670,23 +683,20 @@ export class SemanticLayerService {
     }
   }
 
-  async readFileByPath(connectionId: string, relativePath: string): Promise<{ content: string; readOnly: boolean }> {
-    const fullPath = `${SL_DIR_PREFIX}/${connectionId}/${relativePath}`;
-    const result = await this.configService.readFile(fullPath);
-    return {
-      content: result.content,
-      readOnly: relativePath.startsWith('_schema/'),
-    };
-  }
-
   async deleteSource(connectionId: string, sourceName: string, author: string, authorEmail: string) {
-    const path = this.sourcePath(connectionId, sourceName);
-    return this.configService.deleteFile(path, author, authorEmail, `Delete semantic layer source: ${sourceName}`);
-  }
-
-  async getSourceHistory(connectionId: string, sourceName: string) {
-    const path = this.sourcePath(connectionId, sourceName);
-    return this.configService.getFileHistory(path);
+    const file = await resolveSlSourceFile(this.configService, connectionId, sourceName);
+    if (!file) {
+      // `deleteFile` returns null for a missing path, which would let a no-op
+      // delete read as success. Distinguish the two real cases instead.
+      if (await this.isManifestBacked(connectionId, sourceName)) {
+        throw new Error(
+          `Source '${sourceName}' is defined by the scan manifest (_schema/) and has no overlay file to delete. ` +
+            `Rescan the connection to remove it from the manifest.`,
+        );
+      }
+      throw new Error(`Semantic-layer source not found: ${connectionId}/${sourceName}`);
+    }
+    return this.configService.deleteFile(file.path, author, authorEmail, `Delete semantic layer source: ${sourceName}`);
   }
 
   /**

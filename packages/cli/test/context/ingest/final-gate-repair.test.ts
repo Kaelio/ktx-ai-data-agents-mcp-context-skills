@@ -33,14 +33,14 @@ async function makeHarness() {
 }
 
 describe('finalGateRepairPaths', () => {
-  it('derives sorted wiki and semantic-layer file paths', () => {
+  it('derives sorted, deduplicated wiki and semantic-layer file paths', () => {
     expect(
       finalGateRepairPaths({
         changedWikiPageKeys: ['account-segments', 'overview', 'account-segments'],
-        touchedSlSources: [
-          { connectionId: 'warehouse', sourceName: 'mart_account_segments' },
-          { connectionId: 'warehouse', sourceName: 'orders' },
-          { connectionId: 'warehouse', sourceName: 'orders' },
+        touchedSlSourcePaths: [
+          'semantic-layer/warehouse/mart_account_segments.yaml',
+          'semantic-layer/warehouse/orders.yaml',
+          'semantic-layer/warehouse/orders.yaml',
         ],
       }),
     ).toEqual([

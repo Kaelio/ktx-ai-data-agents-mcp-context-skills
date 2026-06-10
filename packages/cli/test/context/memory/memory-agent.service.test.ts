@@ -357,6 +357,10 @@ describe('MemoryAgentService.gateRevertInvalidSources (J3)', () => {
     const configService = {
       writeFile: overrides.writeFile ?? vi.fn().mockResolvedValue({}),
       deleteFile: overrides.deleteFile ?? vi.fn().mockResolvedValue({}),
+      // Revert resolves the live file by name; with no listing it falls back
+      // to the writer-derived filename.
+      listFiles: vi.fn().mockResolvedValue({ files: [] }),
+      readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
     };
     const gitService = {
       getFileAtCommit: overrides.getFileAtCommit ?? vi.fn().mockRejectedValue(new Error('not present')),

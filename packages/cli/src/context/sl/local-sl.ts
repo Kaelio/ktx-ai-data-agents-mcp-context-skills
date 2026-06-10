@@ -2,7 +2,6 @@ import { join } from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
-import type { KtxFileWriteResult } from '../../context/core/file-store.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
 import { HybridSearchCore } from '../../context/search/hybrid-search-core.js';
 import type { SearchCandidateGenerator } from '../../context/search/types.js';
@@ -18,6 +17,7 @@ import {
 } from './semantic-layer.service.js';
 import type { PgliteSlSearchPrototypeOwnerOptions } from './pglite-sl-search-prototype.js';
 import { loadLatestSlDictionaryEntries } from './sl-dictionary-profile.js';
+import { assertSafeConnectionId, isSafeConnectionId, sourceNameFromPath } from './source-files.js';
 import { buildSemanticLayerSourceSearchText, SlSearchService } from './sl-search.service.js';
 import { SqliteSlSourcesIndex } from './sqlite-sl-sources-index.js';
 import type { SemanticLayerSource, SlDictionaryMatch, SlSearchLaneSummary, SlSearchMatchReason } from './types.js';
@@ -69,65 +69,8 @@ export type ResolvedSlSource =
   | { kind: 'not-found' }
   | { kind: 'ambiguous'; connectionIds: string[] };
 
-const LOCAL_AUTHOR = 'ktx';
-const LOCAL_AUTHOR_EMAIL = 'ktx@example.com';
-
-function assertSafePathToken(kind: string, value: string): string {
-  if (
-    value.trim().length === 0 ||
-    value.includes('..') ||
-    value.includes('\\') ||
-    value.startsWith('/') ||
-    value.startsWith('.') ||
-    value.includes('//')
-  ) {
-    throw new Error(`Unsafe ${kind}: ${value}`);
-  }
-  return value;
-}
-
-function assertSafeConnectionId(connectionId: string): string {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId)) {
-    throw new Error(`Unsafe connection id: ${connectionId}`);
-  }
-  return assertSafePathToken('connection id', connectionId);
-}
-
-function isSafeConnectionId(connectionId: string | undefined): connectionId is string {
-  return typeof connectionId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(connectionId);
-}
-
-// Standalone files live at a path derived from the source name, so only
-// conservative filename-safe names may reach `slPath`. Source names themselves
-// mirror the warehouse identifier verbatim (Snowflake's uppercase `SIGNED_UP`
-// or `EVENT$LOG`); manifest-backed sources are matched by name in memory and
-// must never be gated on this filename rule.
-function isSafeSourceName(sourceName: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9_]*$/.test(sourceName);
-}
-
-function assertSafeSourceName(sourceName: string): string {
-  if (!isSafeSourceName(sourceName)) {
-    throw new Error(`Unsafe semantic-layer source name: ${sourceName}`);
-  }
-  return assertSafePathToken('semantic-layer source name', sourceName);
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function slPath(connectionId: string, sourceName: string): string {
-  return `semantic-layer/${assertSafeConnectionId(connectionId)}/${assertSafeSourceName(sourceName)}.yaml`;
-}
-
-function sourceNameFromPath(path: string): string {
-  return (
-    path
-      .split('/')
-      .at(-1)
-      ?.replace(/\.ya?ml$/, '') ?? path
-  );
 }
 
 function parseYamlRecord(raw: string): Record<string, unknown> {
@@ -325,55 +268,16 @@ export async function validateLocalSlSource(
   }
 }
 
-/** @internal */
-export async function writeLocalSlSource(
-  project: KtxLocalProject,
-  input: { connectionId: string; sourceName: string; yaml: string },
-): Promise<KtxFileWriteResult> {
-  const validation = await validateLocalSlSource(input.yaml, { project, connectionId: input.connectionId });
-  if (!validation.valid) {
-    throw new Error(`Invalid semantic-layer source: ${validation.errors.join('; ')}`);
-  }
-
-  const parsed = parseYamlRecord(input.yaml);
-  if (typeof parsed.name === 'string' && parsed.name !== input.sourceName) {
-    throw new Error(`Semantic-layer source name "${parsed.name}" does not match requested path "${input.sourceName}"`);
-  }
-
-  const path = slPath(input.connectionId, input.sourceName);
-  return project.fileStore.writeFile(
-    path,
-    input.yaml.endsWith('\n') ? input.yaml : `${input.yaml}\n`,
-    LOCAL_AUTHOR,
-    LOCAL_AUTHOR_EMAIL,
-    `Write semantic-layer source: ${input.connectionId}/${input.sourceName}`,
-  );
-}
-
 export async function readLocalSlSource(
   project: KtxLocalProject,
   input: { connectionId: string; sourceName: string },
 ): Promise<LocalSlSource | null> {
-  // Only filename-safe names can have a standalone file; manifest-backed
-  // sources mirror raw warehouse identifiers (e.g. `EVENT$LOG`) and are found
-  // by the record lookup below, which never derives a path from the name.
-  if (isSafeSourceName(input.sourceName)) {
-    const path = slPath(input.connectionId, input.sourceName);
-    try {
-      const result = await project.fileStore.readFile(path);
-      return {
-        ...summarizeSource({ connectionId: input.connectionId, path, raw: result.content }),
-        yaml: result.content,
-      };
-    } catch {
-      // Missing or mid-edit standalone file — the record loader covers both:
-      // it skips absent files and represents a file whose YAML no longer
-      // parses verbatim, so readers — `ktx sl read`, `ktx sl validate`, and
-      // the `sl_read_source` MCP tool — can surface the broken content for
-      // repair instead of failing on it.
-    }
-  }
-
+  // Source identity is the in-file `name:` (mirroring the warehouse identifier
+  // verbatim, e.g. Snowflake's uppercase `SIGNED_UP`), never the filename. The
+  // record loader resolves standalone files, overlays, manifest-backed sources,
+  // and mid-edit files whose YAML no longer parses — so readers — `ktx sl read`,
+  // `ktx sl validate`, and the `sl_read_source` MCP tool — can surface broken
+  // content for repair instead of failing on it.
   const records = await loadLocalSlSourceRecords(project, {
     connectionId: input.connectionId,
   });

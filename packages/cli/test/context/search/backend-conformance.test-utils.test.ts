@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, it } from 'vitest';
 import { SqliteContextEvidenceStore } from '../../../src/context/ingest/context-evidence/sqlite-context-evidence-store.js';
 import type { JsonValue } from '../../../src/context/ingest/ports.js';
 import { initKtxProject, type KtxLocalProject } from '../../../src/context/project/project.js';
-import { type LocalSlSourceSearchResult, searchLocalSlSources, writeLocalSlSource } from '../../../src/context/sl/local-sl.js';
+import { type LocalSlSourceSearchResult, searchLocalSlSources } from '../../../src/context/sl/local-sl.js';
+import { seedSlSourceFile } from '../sl/sl-source-seeding.test-utils.js';
 import type { ContextEvidenceSearchResult } from '../../../src/context/tools/context-evidence-tool-store.js';
 import {
   type LocalKnowledgeSearchResult,
@@ -99,12 +100,12 @@ function toContextConformanceResult(result: ContextEvidenceSearchResult): Search
 }
 
 async function seedSemanticLayerProject(project: KtxLocalProject): Promise<void> {
-  await writeLocalSlSource(project, {
+  await seedSlSourceFile(project, {
     connectionId: 'warehouse',
     sourceName: 'orders',
     yaml: ORDERS_YAML,
   });
-  await writeLocalSlSource(project, {
+  await seedSlSourceFile(project, {
     connectionId: 'finance',
     sourceName: 'orders',
     yaml: FINANCE_ORDERS_YAML,
