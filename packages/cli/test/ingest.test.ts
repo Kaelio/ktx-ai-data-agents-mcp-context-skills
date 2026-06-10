@@ -271,7 +271,7 @@ describe('runKtxIngest', () => {
           databaseDrivers: ['postgres'],
           databaseConnectionId: 'warehouse',
           databaseUrl: 'env:WAREHOUSE_URL',
-          databaseSchemas: [],
+          databaseSchemas: ['public'],
           enableQueryHistory: true,
           skipDatabases: false,
           skipSources: true,
