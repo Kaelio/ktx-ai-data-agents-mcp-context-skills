@@ -2,7 +2,6 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
-import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { IngestTraceWriter } from './ingest-trace.js';
 import { traceTimed } from './ingest-trace.js';
 
@@ -149,11 +148,13 @@ function buildToolSet(input: {
 
 export function finalGateRepairPaths(input: {
   changedWikiPageKeys: string[];
-  touchedSlSources: TouchedSlSource[];
+  // Resolved by the caller: SL filenames are derived labels, so the repair
+  // allowlist must carry the real on-disk paths, not name-interpolated ones.
+  touchedSlSourcePaths: string[];
 }): string[] {
   return [
     ...new Set([
-      ...input.touchedSlSources.map((source) => `semantic-layer/${source.connectionId}/${source.sourceName}.yaml`),
+      ...input.touchedSlSourcePaths,
       ...input.changedWikiPageKeys.map((pageKey) => `wiki/global/${pageKey}.md`),
     ]),
   ].sort();

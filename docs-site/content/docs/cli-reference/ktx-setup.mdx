@@ -125,6 +125,14 @@ incomplete.
 MySQL, and SQL Server; `schema_names` for Snowflake; `dataset_ids` for
 BigQuery; and `databases` for ClickHouse.
 
+With `--no-input`, scope for a scope-bearing driver (PostgreSQL, MySQL,
+ClickHouse, SQL Server, BigQuery, Snowflake) must come from `--database-schema`
+or from existing connection config in `ktx.yaml` (for example
+`connections.<id>.dataset_ids`). When neither is set, the database step fails
+fast and prints the missing scope flag and config key — non-interactive setup
+never auto-discovers and scans every schema. SQLite has no scope and is
+unaffected.
+
 ### Query History
 
 | Flag | Description |

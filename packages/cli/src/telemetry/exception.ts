@@ -1,6 +1,7 @@
 import { inspect } from 'node:util';
 
 import { getKtxCliPackageInfo, type KtxCliIo, type KtxCliPackageInfo } from '../cli-runtime.js';
+import { KtxExpectedError } from '../errors.js';
 import { buildCommonEnvelope } from './events.js';
 import { trackTelemetryException } from './emitter.js';
 import { computeTelemetryProjectId, loadTelemetryIdentity } from './identity.js';
@@ -37,6 +38,17 @@ function consumeHandledPrimitive(value: unknown): boolean {
   }
   recentHandledPrimitives.splice(index, 1);
   return true;
+}
+
+/**
+ * Expected operational errors are surfaced to the caller and recorded by the
+ * outcome-tagged telemetry events; they are not ktx faults, so they never reach
+ * Error Tracking. ktx marks these with KtxExpectedError at the site that knows
+ * the rejection is expected — the classification is never inferred globally from
+ * a generic error type, which would also swallow internal/fatal faults.
+ */
+function isExpectedError(error: unknown): boolean {
+  return error instanceof KtxExpectedError;
 }
 
 function shouldSkipAsAlreadyReported(error: unknown, handled: boolean): boolean {
@@ -151,6 +163,9 @@ export async function reportException(input: {
   redactionSecrets?: ReadonlyArray<string>;
 }): Promise<void> {
   try {
+    if (isExpectedError(input.error)) {
+      return;
+    }
     if (shouldSkipAsAlreadyReported(input.error, input.context.handled)) {
       return;
     }

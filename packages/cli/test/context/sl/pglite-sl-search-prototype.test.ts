@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initKtxProject, type KtxLocalProject } from '../../../src/context/project/project.js';
 import { assertSearchBackendConformanceCase } from '../search/backend-conformance.test-utils.js';
-import { searchLocalSlSources, writeLocalSlSource, type LocalSlSourceSearchResult } from '../../../src/context/sl/local-sl.js';
+import { searchLocalSlSources, type LocalSlSourceSearchResult } from '../../../src/context/sl/local-sl.js';
 import { searchLocalSlSourcesWithPglitePrototype } from '../../../src/context/sl/pglite-sl-search-prototype.js';
+import { seedSlSourceFile } from './sl-source-seeding.test-utils.js';
 
 const ORDERS_YAML = [
   'name: orders',
@@ -107,9 +108,9 @@ function toConformanceResult(result: LocalSlSourceSearchResult) {
 }
 
 async function seedSemanticLayerProject(project: KtxLocalProject): Promise<void> {
-  await writeLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'orders', yaml: ORDERS_YAML });
-  await writeLocalSlSource(project, { connectionId: 'finance', sourceName: 'orders', yaml: FINANCE_ORDERS_YAML });
-  await writeLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'customers', yaml: CUSTOMERS_YAML });
+  await seedSlSourceFile(project, { connectionId: 'warehouse', sourceName: 'orders', yaml: ORDERS_YAML });
+  await seedSlSourceFile(project, { connectionId: 'finance', sourceName: 'orders', yaml: FINANCE_ORDERS_YAML });
+  await seedSlSourceFile(project, { connectionId: 'warehouse', sourceName: 'customers', yaml: CUSTOMERS_YAML });
 
   await project.fileStore.writeFile(
     'raw-sources/warehouse/live-database/sync-1/enrichment/relationship-profile.json',

@@ -113,13 +113,8 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
     }
 
     // Read existing source
-    let currentYaml: string | null = null;
-    try {
-      const { content } = await semanticLayerService.readSourceFile(connectionId, sourceName);
-      currentYaml = content;
-    } catch {
-      currentYaml = null;
-    }
+    const currentFile = await semanticLayerService.readSourceFile(connectionId, sourceName);
+    const currentYaml = currentFile?.content ?? null;
     if (!currentYaml) {
       const manifestBacked = await semanticLayerService.isManifestBacked(connectionId, sourceName);
       if (manifestBacked) {
@@ -165,6 +160,20 @@ If no source exists yet, use sl_write_source instead — this tool will reject t
     } catch (e) {
       return this.buildOutput(false, [`YAML parse error after edits: ${e}`], sourceName);
     }
+
+    // The in-file `name:` is the source's identity — an edited name would make
+    // writeSource create a second source instead of updating this one.
+    if (source.name !== sourceName) {
+      return this.buildOutput(
+        false,
+        [
+          `Edits change "name:" from "${sourceName}" to "${source.name ?? '<missing>'}" — renaming is not supported. ` +
+            `Delete the source and recreate it under the new name.`,
+        ],
+        sourceName,
+      );
+    }
+
     source = normalizeSemanticLayerDescriptions(source, { fillMissing: !!context.session?.ingest });
 
     // Re-serialize and write

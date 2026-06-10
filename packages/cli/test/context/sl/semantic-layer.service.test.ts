@@ -1,5 +1,9 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Mock } from 'vitest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { initKtxProject, type KtxLocalProject } from '../../../src/context/project/project.js';
 
 import {
   ColumnNameCollisionError,
@@ -71,6 +75,7 @@ describe('loadSource', () => {
   it('warns and returns null when an existing source file has invalid YAML', async () => {
     const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const configService = {
+      listFiles: vi.fn().mockResolvedValue({ files: ['semantic-layer/warehouse/orders.yaml'] }),
       readFile: vi.fn().mockResolvedValue({ content: 'name: [' }),
     };
     const service = new SemanticLayerService(configService as never, connectionCatalog(), pythonPort, logger as never);
@@ -79,8 +84,32 @@ describe('loadSource', () => {
 
     expect(configService.readFile).toHaveBeenCalledWith('semantic-layer/warehouse/orders.yaml');
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('[loadSource] warehouse/orders.yaml: YAML parse failed:'),
+      expect.stringContaining('[loadSource] semantic-layer/warehouse/orders.yaml: YAML parse failed:'),
     );
+  });
+
+  it('returns null when no file declares the source name', async () => {
+    const configService = {
+      listFiles: vi.fn().mockResolvedValue({ files: [] }),
+      readFile: vi.fn(),
+    };
+    const service = new SemanticLayerService(configService as never, connectionCatalog(), pythonPort);
+
+    await expect(service.loadSource('warehouse', 'orders')).resolves.toBeNull();
+    expect(configService.readFile).not.toHaveBeenCalled();
+  });
+
+  it('resolves a source by its in-file name when the filename differs', async () => {
+    const configService = {
+      listFiles: vi.fn().mockResolvedValue({ files: ['semantic-layer/warehouse/renamed.yaml'] }),
+      readFile: vi.fn().mockResolvedValue({ content: 'name: SIGNED_UP\nmeasures: []\n' }),
+    };
+    const service = new SemanticLayerService(configService as never, connectionCatalog(), pythonPort);
+
+    await expect(service.loadSource('warehouse', 'SIGNED_UP')).resolves.toEqual({
+      name: 'SIGNED_UP',
+      measures: [],
+    });
   });
 });
 
@@ -1240,5 +1269,179 @@ describe('findDanglingSegmentRefs', () => {
   it('is a no-op for sources with no measures or no segment references', () => {
     expect(findDanglingSegmentRefs({ measures: [{ name: 'simple', expr: 'count(*)' }] })).toEqual([]);
     expect(findDanglingSegmentRefs({})).toEqual([]);
+  });
+});
+
+describe('writeSource / deleteSource file naming', () => {
+  let tempDir: string;
+  let project: KtxLocalProject;
+  let service: SemanticLayerService;
+
+  const author = 'T U';
+  const authorEmail = 't@u.com';
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'ktx-sl-service-files-'));
+    project = await initKtxProject({ projectDir: join(tempDir, 'project') });
+    service = new SemanticLayerService(project.fileStore as never, connectionCatalog() as never, pythonPort as never);
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  const signedUp: SemanticLayerSource = {
+    name: 'SIGNED_UP',
+    table: 'PUBLIC.SIGNED_UP',
+    grain: ['ID'],
+    columns: [{ name: 'ID', type: 'number' }],
+    joins: [],
+    measures: [],
+  };
+
+  it('writes a new uppercase source at a derived filename and reads it back by name', async () => {
+    const result = await service.writeSource('warehouse', signedUp, author, authorEmail);
+
+    expect(result.path).toMatch(/^semantic-layer\/warehouse\/signed_up-[0-9a-f]{8}\.yaml$/);
+
+    const file = await service.readSourceFile('warehouse', 'SIGNED_UP');
+    expect(file?.path).toBe(result.path);
+    expect(file?.content).toContain('name: SIGNED_UP');
+
+    // Rewriting lands on the same file instead of deriving a second one.
+    const rewrite = await service.writeSource('warehouse', signedUp, author, authorEmail);
+    expect(rewrite.path).toBe(result.path);
+  });
+
+  it('repairs a broken file occupying the derived path instead of refusing the write', async () => {
+    const written = await service.writeSource('warehouse', signedUp, author, authorEmail);
+    await project.fileStore.writeFile(
+      written.path,
+      'name: SIGNED_UP\nmeasures: [unterminated\n',
+      author,
+      authorEmail,
+      'break the file',
+    );
+
+    const repaired = await service.writeSource('warehouse', signedUp, author, authorEmail);
+
+    expect(repaired.path).toBe(written.path);
+    const file = await service.readSourceFile('warehouse', 'SIGNED_UP');
+    expect(file?.path).toBe(written.path);
+    expect(file?.content).toContain('name: SIGNED_UP');
+  });
+
+  it('rewrites a human-renamed file in place', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom.yaml',
+      'name: orders\nmeasures: []\n',
+      author,
+      authorEmail,
+      'seed renamed file',
+    );
+
+    const result = await service.writeSource(
+      'warehouse',
+      { name: 'orders', grain: [], columns: [], joins: [], measures: [] },
+      author,
+      authorEmail,
+    );
+
+    expect(result.path).toBe('semantic-layer/warehouse/custom.yaml');
+    const listed = await project.fileStore.listFiles('semantic-layer/warehouse');
+    expect(listed.files).toEqual(['semantic-layer/warehouse/custom.yaml']);
+  });
+
+  it('repairs a human-renamed broken file in place instead of deriving a second one', async () => {
+    // Renamed (filename ≠ name) AND mid-edit broken: identity must survive the
+    // syntax error so the rewrite lands on the original file rather than creating
+    // a duplicate at the derived path that later trips the by-name resolver.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom.yaml',
+      'name: SIGNED_UP\nmeasures: [unterminated\n',
+      author,
+      authorEmail,
+      'seed broken renamed file',
+    );
+
+    const repaired = await service.writeSource('warehouse', signedUp, author, authorEmail);
+
+    expect(repaired.path).toBe('semantic-layer/warehouse/custom.yaml');
+    const listed = await project.fileStore.listFiles('semantic-layer/warehouse');
+    expect(listed.files).toEqual(['semantic-layer/warehouse/custom.yaml']);
+    const file = await service.readSourceFile('warehouse', 'SIGNED_UP');
+    expect(file?.path).toBe('semantic-layer/warehouse/custom.yaml');
+    expect(file?.content).toContain('name: SIGNED_UP');
+  });
+
+  it('keeps a .yml-renamed file visible to the loader and the by-name resolver alike', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom.yml',
+      'name: orders\ntable: public.orders\ngrain: [id]\ncolumns:\n  - name: id\n    type: number\nmeasures: []\n',
+      author,
+      authorEmail,
+      'seed .yml file',
+    );
+
+    const { sources, loadErrors } = await service.loadAllSources('warehouse');
+    expect(loadErrors).toEqual([]);
+    expect(sources.map((source) => source.name)).toEqual(['orders']);
+
+    const file = await service.readSourceFile('warehouse', 'orders');
+    expect(file?.path).toBe('semantic-layer/warehouse/custom.yml');
+  });
+
+  it('refuses to clobber a derived path occupied by a different source', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      'name: other_source\nmeasures: []\n',
+      author,
+      authorEmail,
+      'seed conflicting file',
+    );
+
+    await expect(
+      service.writeSource(
+        'warehouse',
+        { name: 'orders', grain: [], columns: [], joins: [], measures: [] },
+        author,
+        authorEmail,
+      ),
+    ).rejects.toThrow("already defines source 'other_source'");
+  });
+
+  it('deletes the file resolved by name, wherever it lives', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom.yaml',
+      'name: orders\nmeasures: []\n',
+      author,
+      authorEmail,
+      'seed renamed file',
+    );
+
+    await service.deleteSource('warehouse', 'orders', author, authorEmail);
+
+    const listed = await project.fileStore.listFiles('semantic-layer/warehouse');
+    expect(listed.files).toEqual([]);
+  });
+
+  it('explains manifest-backed deletes instead of silently succeeding', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/public.yaml',
+      'tables:\n  payments:\n    table: public.payments\n    columns:\n      - name: id\n        type: number\n',
+      author,
+      authorEmail,
+      'seed manifest shard',
+    );
+
+    await expect(service.deleteSource('warehouse', 'payments', author, authorEmail)).rejects.toThrow(
+      /scan manifest/,
+    );
+  });
+
+  it('throws a plain not-found error for unknown sources', async () => {
+    await expect(service.deleteSource('warehouse', 'missing', author, authorEmail)).rejects.toThrow(
+      'Semantic-layer source not found: warehouse/missing',
+    );
   });
 });

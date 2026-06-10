@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { localConnectionInfoFromConfig } from '../../context/connections/local-warehouse-descriptor.js';
 import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
+import type { SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 import type { KtxLogger } from '../../context/core/config.js';
 import { noopLogger } from '../../context/core/config.js';
@@ -95,6 +96,7 @@ export interface CreateLocalBundleIngestRuntimeOptions {
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
+  sqlAnalysis?: SqlAnalysisPort;
   jobIdFactory?: () => string;
   logger?: KtxLogger;
   embeddingProvider?: KtxEmbeddingProvider | null;
@@ -271,16 +273,13 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
   }
 
   async validateSingleSource(deps: SlValidationDeps, connectionId: string, sourceName: string) {
-    let content: string;
-    try {
-      const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
-      content = file.content;
-    } catch (error) {
-      return this.validateComposedSource(deps, connectionId, sourceName, error);
+    const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
+    if (!file) {
+      return this.validateComposedSource(deps, connectionId, sourceName, 'no standalone or overlay file found');
     }
 
     try {
-      const parsed = YAML.parse(content) as unknown as Record<string, unknown>;
+      const parsed = YAML.parse(file.content) as unknown as Record<string, unknown>;
       return this.validateParsedSource(sourceName, parsed);
     } catch (error) {
       return {
@@ -519,6 +518,7 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
     authorResolver: GitAuthorResolverPort;
     slSourcesRepository: SlSourcesIndexPort;
     connections: SlConnectionCatalogPort;
+    sqlAnalysis?: SqlAnalysisPort;
     contextStore: SqliteContextEvidenceStore;
     embedding: KtxEmbeddingPort;
   }) {
@@ -551,6 +551,7 @@ class LocalIngestToolsetFactory implements IngestToolsetFactoryPort {
     const slDiscoverTool = new SlDiscoverTool(slDeps, { maxSources: 25, minRrfScore: 0, maxDetailedSources: 5 });
     const warehouseVerificationTools = createWarehouseVerificationTools({
       connections: deps.connections,
+      ...(deps.sqlAnalysis ? { sqlAnalysis: deps.sqlAnalysis } : {}),
       fallbackFileStore: deps.project.fileStore,
       wikiSearchTool,
       slDiscoverTool,
@@ -699,6 +700,7 @@ export function createLocalBundleIngestRuntime(
     authorResolver: new LocalAuthorResolver(),
     slSourcesRepository,
     connections,
+    ...(options.sqlAnalysis ? { sqlAnalysis: options.sqlAnalysis } : {}),
     contextStore,
     embedding,
   });

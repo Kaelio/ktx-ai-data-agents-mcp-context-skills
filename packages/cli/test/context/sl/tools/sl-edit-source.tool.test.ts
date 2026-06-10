@@ -188,7 +188,7 @@ describe('SlEditSourceTool — manifest-backed source without overlay', () => {
   it('returns a directed hint pointing at sl_write_source + overlay shape', async () => {
     const { tool, semanticLayerService } = makeTool({
       semanticLayerService: {
-        readSourceFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
+        readSourceFile: vi.fn().mockResolvedValue(null),
         isManifestBacked: vi.fn().mockResolvedValue(true),
       },
     });
@@ -222,7 +222,7 @@ describe('SlEditSourceTool — manifest-backed source without overlay', () => {
   it('still returns the plain "Source not found" error for truly-missing names', async () => {
     const { tool, semanticLayerService } = makeTool({
       semanticLayerService: {
-        readSourceFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
+        readSourceFile: vi.fn().mockResolvedValue(null),
         isManifestBacked: vi.fn().mockResolvedValue(false),
       },
     });
@@ -238,6 +238,23 @@ describe('SlEditSourceTool — manifest-backed source without overlay', () => {
     expect(result.structured.success).toBe(false);
     expect(result.structured.errors).toEqual(['Source not found. Use sl_write_source to create it.']);
     expect(semanticLayerService.isManifestBacked).toHaveBeenCalledTimes(1);
+    expect(semanticLayerService.writeSource).not.toHaveBeenCalled();
+  });
+});
+
+describe('SlEditSourceTool — name edits', () => {
+  it('rejects edits that change the in-file name', async () => {
+    const { tool, semanticLayerService } = makeTool();
+    const result = await tool.call(
+      {
+        connectionId: '11111111-1111-1111-1111-111111111111',
+        sourceName: 'orders',
+        yaml_edits: [{ oldText: 'name: orders', newText: 'name: renamed_orders' }],
+      } as any,
+      baseContext,
+    );
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toMatch(/renaming is not supported/i);
     expect(semanticLayerService.writeSource).not.toHaveBeenCalled();
   });
 });

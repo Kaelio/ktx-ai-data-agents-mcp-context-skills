@@ -13,7 +13,7 @@ function makeTool(overrides: Partial<Record<string, any>> = {}) {
     validateWithProposedSource: vi.fn().mockResolvedValue({ errors: [], warnings: [] }),
     writeSource: vi.fn().mockResolvedValue({ commitHash: 'c1' }),
     deleteSource: vi.fn().mockResolvedValue(undefined),
-    readSourceFile: vi.fn().mockRejectedValue(new Error('not found')),
+    readSourceFile: vi.fn().mockResolvedValue(null),
     ...overrides.semanticLayerService,
   };
   const slSearchService = {
@@ -66,7 +66,7 @@ describe('SlWriteSourceTool — session gating', () => {
         deleteSource: vi.fn().mockResolvedValue(undefined),
         listManifestSourceNames: vi.fn().mockResolvedValue([]),
         isManifestBacked: vi.fn().mockResolvedValue(false),
-        readSourceFile: vi.fn().mockRejectedValue(new Error('not found')),
+        readSourceFile: vi.fn().mockResolvedValue(null),
         findManifestEntryByTableRef: vi.fn().mockResolvedValue(null),
       } as any,
       wikiService: {} as any,
@@ -248,7 +248,7 @@ describe('SlWriteSourceTool — session gating', () => {
         deleteSource: vi.fn().mockResolvedValue(undefined),
         listManifestSourceNames: vi.fn().mockResolvedValue(['mart_account_segments']),
         isManifestBacked: vi.fn().mockResolvedValue(false),
-        readSourceFile: vi.fn().mockRejectedValue(new Error('not found')),
+        readSourceFile: vi.fn().mockResolvedValue(null),
         findManifestEntryByTableRef: vi.fn().mockResolvedValue(null),
       } as any,
     });
@@ -375,5 +375,38 @@ describe('SlWriteSourceTool — standalone shadow guard', () => {
     );
     expect(result.structured.success).toBe(false);
     expect(result.markdown).toMatch(/shadows an existing manifest entry|already exists/i);
+  });
+});
+
+describe('SlWriteSourceTool — source name identity', () => {
+  it('accepts verbatim warehouse identifiers as sourceName', () => {
+    const { tool } = makeTool();
+    const base = { connectionId: '11111111-1111-1111-1111-111111111111' };
+    expect(tool.inputSchema.safeParse({ ...base, sourceName: 'SIGNED_UP' }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ ...base, sourceName: 'EVENT$LOG' }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ ...base, sourceName: 'orders' }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ ...base, sourceName: '' }).success).toBe(false);
+  });
+
+  it('rejects a source whose name does not match sourceName', async () => {
+    const { tool, semanticLayerService } = makeTool();
+    const result = await tool.call(
+      {
+        connectionId: '11111111-1111-1111-1111-111111111111',
+        sourceName: 'orders',
+        source: {
+          name: 'other_orders',
+          sql: 'select 1 as id',
+          grain: ['id'],
+          columns: [{ name: 'id', type: 'string' }],
+          measures: [],
+          joins: [],
+        } as any,
+      } as any,
+      baseContext,
+    );
+    expect(result.structured.success).toBe(false);
+    expect(result.markdown).toMatch(/does not match sourceName/);
+    expect(semanticLayerService.writeSource).not.toHaveBeenCalled();
   });
 });

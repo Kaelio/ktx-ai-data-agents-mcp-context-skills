@@ -483,7 +483,7 @@ export class MemoryAgentService {
     if (session.connectionId) {
       for (const { connectionId, sourceName } of listTouchedSlSources(session.touchedSlSources)) {
         try {
-          const file = await this.deps.semanticLayerService.readSourceFile(connectionId, sourceName).catch(() => null);
+          const file = await this.deps.semanticLayerService.readSourceFile(connectionId, sourceName);
           if (file?.content) {
             const parsed = this.parseYamlOrNull(file.content);
             if (parsed) {

@@ -71,7 +71,7 @@ function ktxCliLookerOptions(
   };
 }
 
-function ktxCliHistoricSqlAnalysis(options: KtxCliLocalIngestAdaptersOptions) {
+export function resolveKtxCliSqlAnalysis(options: KtxCliLocalIngestAdaptersOptions): SqlAnalysisPort {
   if (options.sqlAnalysis) {
     return options.sqlAnalysis;
   }
@@ -289,7 +289,7 @@ function historicSqlOptionsForLocalRun(
   }
 
   const base = {
-    sqlAnalysis: ktxCliHistoricSqlAnalysis(options),
+    sqlAnalysis: resolveKtxCliSqlAnalysis(options),
   };
 
   if (dialect === 'postgres') {

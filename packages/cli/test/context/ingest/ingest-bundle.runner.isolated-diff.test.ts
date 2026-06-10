@@ -70,6 +70,15 @@ async function loadSourcesFromRoot(root: string) {
   };
 }
 
+// Mirrors the production contract: resolve the standalone/overlay file for a
+// source, null when absent. Fixtures keep filename == name, so a direct read
+// is a faithful shortcut.
+async function readSourceFileFromRoot(root: string, connectionId: string, sourceName: string) {
+  const relPath = `semantic-layer/${connectionId}/${sourceName}.yaml`;
+  const content = await readFile(join(root, relPath), 'utf-8').catch(() => null);
+  return content === null ? null : { content, path: relPath };
+}
+
 async function listGlobalWikiPageKeys(root: string): Promise<string[]> {
   const dir = join(root, 'wiki/global');
   const entries = await readdir(dir).catch(() => []);
@@ -172,11 +181,17 @@ function makeDeps(
   const semanticLayerService: any = {
     loadAllSources: vi.fn(async () => loadSourcesFromRoot(runtime.configDir)),
     listFilesForConnection: vi.fn().mockResolvedValue(['mart_account_segments.yaml']),
+    readSourceFile: vi.fn((connectionId: string, sourceName: string) =>
+      readSourceFileFromRoot(runtime.configDir, connectionId, sourceName),
+    ),
   };
   semanticLayerService.forWorktree = vi.fn((workdir: string) => ({
     ...semanticLayerService,
     loadAllSources: vi.fn(async () => loadSourcesFromRoot(workdir)),
     listFilesForConnection: vi.fn().mockResolvedValue(['mart_account_segments.yaml']),
+    readSourceFile: vi.fn((connectionId: string, sourceName: string) =>
+      readSourceFileFromRoot(workdir, connectionId, sourceName),
+    ),
   }));
 
   const deps: IngestBundleRunnerDeps = {
@@ -2366,8 +2381,11 @@ describe('IngestBundleRunner isolated diff path', () => {
         join(runtime.configDir, '.ktx/ingest-traces/job-finalization-target-policy/trace.jsonl'),
         'utf-8',
       );
-      expect(trace).toContain('finalization_committed');
-      expect(trace).toContain('semantic_layer_target_policy');
+      // The policy check runs inside finalization, before touched-source
+      // derivation — an out-of-scope write fails the finalization stage
+      // instead of reading as committed.
+      expect(trace).not.toContain('finalization_committed');
+      expect(trace).toContain('semantic_layer_target_policy_failed');
       expect(trace).toContain('ingest_failed');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });

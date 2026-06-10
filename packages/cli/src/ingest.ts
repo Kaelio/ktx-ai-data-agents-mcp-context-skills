@@ -13,7 +13,7 @@ import { resolveProjectEmbeddingProvider } from './embedding-resolution.js';
 import { createKtxCliIngestQueryExecutor } from './ingest-query-executor.js';
 import { readIngestReportSnapshotFile } from './ingest-report-file.js';
 import { createCliOperationalLogger } from './io/logger.js';
-import { createKtxCliLocalIngestAdapters } from './local-adapters.js';
+import { createKtxCliLocalIngestAdapters, resolveKtxCliSqlAnalysis } from './local-adapters.js';
 import type { KtxManagedPythonInstallPolicy } from './managed-python-command.js';
 import { type KtxMemoryFlowStdin, renderMemoryFlowInteractively } from './memory-flow-interactive.js';
 import {
@@ -87,6 +87,7 @@ export interface KtxIngestDeps {
    | 'memoryModel'
     | 'semanticLayerCompute'
     | 'queryExecutor'
+    | 'sqlAnalysis'
     | 'logger'
     | 'pullConfigOptions'
   >;
@@ -724,7 +725,7 @@ export async function runKtxIngest(
       const localIngestOptions = deps.localIngestOptions ?? {};
       const managedDaemon = managedDaemonOptionsForIngestRun(args, deps.runtimeIo ?? io);
       const operationalLogger = createCliOperationalLogger(io, args.outputMode);
-      const adapterOptions = {
+      const baseAdapterOptions = {
         ...(localIngestOptions.pullConfigOptions ?? {}),
         ...(args.databaseIntrospectionUrl ? { databaseIntrospectionUrl: args.databaseIntrospectionUrl } : {}),
         ...(managedDaemon ? { managedDaemon } : {}),
@@ -734,6 +735,10 @@ export async function runKtxIngest(
           : {}),
         logger: operationalLogger,
       };
+      // One parser-backed SQL analysis port per run: the historic-sql adapter and
+      // the ingest sql_execution tool share the same daemon-backed validator.
+      const sqlAnalysis = localIngestOptions.sqlAnalysis ?? resolveKtxCliSqlAnalysis(baseAdapterOptions);
+      const adapterOptions = { ...baseAdapterOptions, sqlAnalysis };
       const queryExecutor =
         localIngestOptions.queryExecutor ??
         (deps.createQueryExecutor ?? createKtxCliIngestQueryExecutor)(ingestProject);
@@ -783,6 +788,7 @@ export async function runKtxIngest(
             metabaseConnectionId: args.connectionId,
             ...localIngestOptions,
             queryExecutor,
+            sqlAnalysis,
             trigger: 'manual_resync',
             jobIdFactory: deps.jobIdFactory,
             embeddingProvider,
@@ -861,6 +867,7 @@ export async function runKtxIngest(
           jobId,
           ...localIngestOptions,
           queryExecutor,
+          sqlAnalysis,
           pullConfigOptions: adapterOptions,
           embeddingProvider,
           ...(args.debugLlmRequestFile ? { llmDebugRequestFile: args.debugLlmRequestFile } : {}),

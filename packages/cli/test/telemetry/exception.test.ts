@@ -2,8 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type { KtxCliIo } from '../../src/cli-runtime.js';
+import { KtxExpectedError, KtxQueryError } from '../../src/errors.js';
 import { __resetTelemetryEmitterForTests } from '../../src/telemetry/emitter.js';
 import {
   __resetTelemetryExceptionStateForTests,
@@ -148,6 +150,71 @@ describe('reportException', () => {
       (captures[0] as { properties: Record<string, unknown> }).properties.projectId,
     ).toMatch(/^[a-f0-9]{64}$/);
     expect((captures[0] as { properties: Record<string, unknown> }).properties.$groups).toBeUndefined();
+  });
+
+  it('skips Error Tracking for expected operational errors', async () => {
+    const { io } = makeIo();
+
+    await reportException({
+      error: new KtxExpectedError('expected operational rejection surfaced to the caller'),
+      context: { source: 'mcp:sql_execution', handled: true, fatal: false },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+      projectDir: join(homeDir, 'project'),
+    });
+
+    expect(captures).toEqual([]);
+    expect(immediateCaptures).toEqual([]);
+  });
+
+  it('skips Error Tracking for warehouse query errors surfaced to the agent', async () => {
+    const { io } = makeIo();
+    const driverError = new Error("SQL compilation error:\nsyntax error line 4 at position 14 unexpected 'rows'.");
+    driverError.name = 'OperationFailedError';
+
+    await reportException({
+      error: new KtxQueryError(driverError.message, { cause: driverError }),
+      context: { source: 'mcp:sql_execution', handled: true, fatal: false },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+      projectDir: join(homeDir, 'project'),
+    });
+
+    expect(captures).toEqual([]);
+  });
+
+  it('reports ZodError faults instead of skipping them globally', async () => {
+    const { io } = makeIo();
+    let zodError: unknown;
+    try {
+      z.object({ maxRows: z.number() }).parse({ maxRows: 'not-a-number' });
+    } catch (error) {
+      zodError = error;
+    }
+
+    await reportException({
+      error: zodError,
+      context: { source: 'uncaughtException', handled: false, fatal: true },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+      immediate: true,
+    });
+
+    expect(immediateCaptures).toHaveLength(1);
+  });
+
+  it('still reports unexpected faults', async () => {
+    const { io } = makeIo();
+
+    await reportException({
+      error: new TypeError("Cannot read properties of undefined (reading 'rows')"),
+      context: { source: 'mcp:sql_execution', handled: true, fatal: false },
+      io,
+      packageInfo: { name: '@kaelio/ktx', version: '0.0.0-test' },
+      projectDir: join(homeDir, 'project'),
+    });
+
+    expect(captures).toHaveLength(1);
   });
 
   it('uses captureExceptionImmediate for fatal reports', async () => {

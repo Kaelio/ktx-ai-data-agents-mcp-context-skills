@@ -9,8 +9,8 @@ import {
   resolveLocalSlSource,
   searchLocalSlSources,
   validateLocalSlSource,
-  writeLocalSlSource,
 } from '../../../src/context/sl/local-sl.js';
+import { seedSlSourceFile } from './sl-source-seeding.test-utils.js';
 
 const ORDERS_YAML = [
   'name: orders',
@@ -60,7 +60,7 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('writes, reads, lists, and validates semantic-layer sources', async () => {
-    const write = await writeLocalSlSource(project, {
+    const write = await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -92,7 +92,7 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('resolves a scoped source by connection id', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -115,7 +115,7 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('returns not-found for a missing scoped source', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -130,12 +130,12 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('resolves a unique source name across all connections', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
     });
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'analytics',
       sourceName: 'tickets',
       yaml: SUPPORT_YAML,
@@ -157,7 +157,7 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('returns not-found for a missing unscoped source', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -169,12 +169,12 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('reports sorted ambiguous connection ids for duplicate source names', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
     });
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'analytics',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -261,6 +261,153 @@ describe('local semantic-layer helpers', () => {
     );
   });
 
+  it('reads manifest-backed scan sources whose warehouse identifiers are uppercase', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      `tables:
+  WIDGET_SALES:
+    table: PUBLIC.WIDGET_SALES
+    columns:
+      - name: ID
+        type: number
+        pk: true
+      - name: EMAIL
+        type: string
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add uppercase manifest shard',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'WIDGET_SALES' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'WIDGET_SALES',
+        path: 'semantic-layer/warehouse/_schema/PUBLIC.yaml#WIDGET_SALES',
+        yaml: expect.stringContaining('table: PUBLIC.WIDGET_SALES'),
+      }),
+    );
+  });
+
+  it('reads manifest-backed sources whose names are not filename-safe', async () => {
+    // Snowflake and Postgres unquoted identifiers allow `$`; manifest keys
+    // carry the warehouse name verbatim, so the lookup must accept it.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      `tables:
+  EVENT$LOG:
+    table: PUBLIC.EVENT$LOG
+    columns:
+      - name: ID
+        type: number
+        pk: true
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add manifest shard with dollar-sign table name',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'EVENT$LOG' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'EVENT$LOG',
+        path: 'semantic-layer/warehouse/_schema/PUBLIC.yaml#EVENT$LOG',
+        yaml: expect.stringContaining('table: PUBLIC.EVENT$LOG'),
+      }),
+    );
+  });
+
+  it('reads a manifest-backed source while a sibling standalone file has broken YAML', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/_schema/PUBLIC.yaml',
+      `tables:
+  WIDGET_SALES:
+    table: PUBLIC.WIDGET_SALES
+    columns:
+      - name: ID
+        type: number
+        pk: true
+`,
+      'ktx',
+      'ktx@example.com',
+      'Add manifest shard',
+    );
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      'name: orders\nmeasures:\n  - name: revenue\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed a sibling source mid-edit with broken YAML',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'WIDGET_SALES' })).resolves.toEqual(
+      expect.objectContaining({
+        name: 'WIDGET_SALES',
+        yaml: expect.stringContaining('table: PUBLIC.WIDGET_SALES'),
+      }),
+    );
+
+    // The broken sibling stays visible in listings instead of hiding or
+    // failing the whole connection.
+    await expect(listLocalSlSources(project, { connectionId: 'warehouse' })).resolves.toEqual([
+      expect.objectContaining({ name: 'orders', columnCount: 0 }),
+      expect.objectContaining({ name: 'WIDGET_SALES', columnCount: 1 }),
+    ]);
+  });
+
+  it('returns the raw YAML of a standalone source whose content no longer parses', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/orders.yaml',
+      'name: orders\nmeasures:\n  - name: revenue\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed a source mid-edit with broken YAML',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'orders' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'orders',
+        path: 'semantic-layer/warehouse/orders.yaml',
+        yaml: expect.stringContaining('[unterminated'),
+      }),
+    );
+  });
+
+  it('reads a broken source by its declared name even when the filename differs', async () => {
+    // Identity is the intact top-level `name:`, recovered via parseDocument even
+    // when the YAML is broken below it — never the filename. A human-renamed or
+    // hashed-filename source (e.g. an uppercase warehouse name) saved mid-edit
+    // must stay reachable under the name it declares, matching the writer side
+    // (resolveSlSourceFile). Keying it by the filename would make it invisible
+    // under its real name.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/renamed-by-hand.yaml',
+      'name: SIGNED_UP\nmeasures:\n  - name: signups\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed a human-renamed source mid-edit with broken YAML',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'SIGNED_UP' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'SIGNED_UP',
+        path: 'semantic-layer/warehouse/renamed-by-hand.yaml',
+        yaml: expect.stringContaining('[unterminated'),
+      }),
+    );
+
+    // The filename is not the identity, so it does not resolve a source.
+    await expect(
+      readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'renamed-by-hand' }),
+    ).resolves.toBeNull();
+
+    await expect(listLocalSlSources(project, { connectionId: 'warehouse' })).resolves.toEqual([
+      expect.objectContaining({ name: 'SIGNED_UP', columnCount: 0 }),
+    ]);
+  });
+
   it('expands manifest-backed scan sources when listing all connections', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/public.yaml',
@@ -292,12 +439,12 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('searches local semantic-layer source text through SQLite FTS', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
     });
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'tickets',
       yaml: SUPPORT_YAML,
@@ -365,12 +512,12 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('searches all connections with one global hybrid ranking pass', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
     });
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'finance',
       sourceName: 'orders',
       yaml: [
@@ -403,7 +550,7 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('returns dictionary evidence when collected sample values explain a match', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -456,7 +603,7 @@ describe('local semantic-layer helpers', () => {
   });
 
   it('adds the token lane alongside lexical matches for normalized query terms', async () => {
-    await writeLocalSlSource(project, {
+    await seedSlSourceFile(project, {
       connectionId: 'warehouse',
       sourceName: 'orders',
       yaml: ORDERS_YAML,
@@ -471,21 +618,13 @@ describe('local semantic-layer helpers', () => {
     });
   });
 
-  it('reports schema validation errors without writing invalid YAML', async () => {
+  it('reports schema validation errors for invalid YAML', async () => {
     const invalidYaml = ['name: broken', 'table: public.orders', 'columns: []', ''].join('\n');
 
     await expect(validateLocalSlSource(invalidYaml)).resolves.toMatchObject({
       valid: false,
       errors: expect.arrayContaining([expect.stringContaining('grain')]),
     });
-
-    await expect(
-      writeLocalSlSource(project, {
-        connectionId: 'warehouse',
-        sourceName: 'broken',
-        yaml: invalidYaml,
-      }),
-    ).rejects.toThrow('Invalid semantic-layer source');
   });
 
   it('reports overlay columns that are not computed columns', async () => {
@@ -506,12 +645,40 @@ describe('local semantic-layer helpers', () => {
     });
   });
 
-  it('rejects unsafe source paths', async () => {
+  it('never derives a file path from a traversal-style source name', async () => {
+    // Reads match names against loaded records, so a traversal-style name is
+    // simply not found; the writer-side guarantee (derived filenames contain
+    // no separators) is covered by the source-files tests.
     await expect(
       readLocalSlSource(project, {
         connectionId: 'warehouse',
         sourceName: '../orders',
       }),
-    ).rejects.toThrow('Unsafe semantic-layer source name');
+    ).resolves.toBeNull();
+  });
+
+  it('reads a source from a human-renamed file by its in-file name', async () => {
+    // The filename is a derived label, not identity: a file renamed by a human
+    // still resolves under the `name:` it declares.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom-file-name.yaml',
+      ORDERS_YAML,
+      'ktx',
+      'ktx@example.com',
+      'Seed source at a human-chosen filename',
+    );
+
+    await expect(
+      readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'orders' }),
+    ).resolves.toMatchObject({
+      connectionId: 'warehouse',
+      name: 'orders',
+      path: 'semantic-layer/warehouse/custom-file-name.yaml',
+      yaml: ORDERS_YAML,
+    });
+
+    await expect(
+      readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'custom-file-name' }),
+    ).resolves.toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { assertReadOnlySql, limitSqlForExecution } from '../../../../context/connections/read-only-sql.js';
 import type { SlConnectionCatalogPort } from '../../../../context/sl/ports.js';
+import { sqlAnalysisDialectForDriver } from '../../../../context/sql-analysis/dialect.js';
+import type { SqlAnalysisPort } from '../../../../context/sql-analysis/ports.js';
 import { BaseTool, type ToolContext, type ToolOutput } from '../../../../context/tools/base-tool.js';
 
 const sqlExecutionInputSchema = z.object({
@@ -40,7 +42,10 @@ function markdownTable(headers: string[], rows: unknown[][], totalRows: number):
 export class SqlExecutionTool extends BaseTool<typeof sqlExecutionInputSchema> {
   readonly name = 'sql_execution';
 
-  constructor(private readonly connections: SlConnectionCatalogPort) {
+  constructor(
+    private readonly connections: SlConnectionCatalogPort,
+    private readonly sqlAnalysis?: SqlAnalysisPort,
+  ) {
     super();
   }
 
@@ -69,9 +74,24 @@ export class SqlExecutionTool extends BaseTool<typeof sqlExecutionInputSchema> {
       };
     }
 
+    if (!this.sqlAnalysis) {
+      throw new Error('sql_execution requires parser-backed SQL validation.');
+    }
+
     let sql: string;
     let wrappedSql: string;
     try {
+      const connection = await this.connections.getConnectionById(input.connectionId);
+      if (!connection) {
+        throw new Error(`Connection not found: ${input.connectionId}`);
+      }
+      const validation = await this.sqlAnalysis.validateReadOnly(
+        input.sql,
+        sqlAnalysisDialectForDriver(connection.connectionType),
+      );
+      if (!validation.ok) {
+        throw new Error(validation.error ?? 'SQL is not read-only.');
+      }
       sql = assertReadOnlySql(input.sql);
       wrappedSql = limitSqlForExecution(sql, input.rowLimit);
     } catch (error) {

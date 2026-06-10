@@ -375,6 +375,9 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
   async validateSingleSource(deps: SlValidationDeps, connectionId: string, sourceName: string) {
     try {
       const file = await deps.semanticLayerService.readSourceFile(connectionId, sourceName);
+      if (!file) {
+        return { errors: [`${sourceName}: no standalone or overlay file found`], warnings: [] };
+      }
       const parsed = YAML.parse(file.content) as SemanticLayerSource;
       const isOverlay = parsed.table == null && parsed.sql == null;
       const result = (isOverlay ? sourceOverlaySchema : sourceDefinitionSchema).safeParse(parsed);

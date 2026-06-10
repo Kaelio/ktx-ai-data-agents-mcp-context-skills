@@ -97,30 +97,6 @@ function sqlitePathFromUrl(url: string): string {
   return url;
 }
 
-function stripLeadingSqlComments(sql: string): string {
-  let index = 0;
-  while (index < sql.length) {
-    while (/\s/.test(sql[index] ?? '')) {
-      index += 1;
-    }
-    if (sql.startsWith('--', index)) {
-      const end = sql.indexOf('\n', index + 2);
-      index = end === -1 ? sql.length : end + 1;
-      continue;
-    }
-    if (sql.startsWith('/*', index)) {
-      const end = sql.indexOf('*/', index + 2);
-      if (end === -1) {
-        return sql.slice(index);
-      }
-      index = end + 2;
-      continue;
-    }
-    break;
-  }
-  return sql.slice(index);
-}
-
 export function isKtxSqliteConnectionConfig(
   connection: KtxSqliteConnectionConfig | undefined,
 ): connection is KtxSqliteConnectionConfig {
@@ -255,7 +231,7 @@ export class KtxSqliteScanConnector implements KtxScanConnector {
 
   async executeReadOnly(input: KtxSqliteReadOnlyQueryInput, _ctx: KtxScanContext): Promise<KtxQueryResult> {
     this.assertConnection(input.connectionId);
-    const result = this.query(limitSqlForExecution(stripLeadingSqlComments(input.sql), input.maxRows), input.params);
+    const result = this.query(limitSqlForExecution(input.sql, input.maxRows), input.params);
     return { ...result, rowCount: result.rows.length };
   }
 
