@@ -3,6 +3,7 @@ import { dirname, join, relative } from 'node:path';
 import YAML from 'yaml';
 import type { MemoryAction } from '../../../../context/memory/types.js';
 import { rawSourcesDirForSync } from '../../raw-sources-paths.js';
+import { isSlYamlPath } from '../../../sl/source-files.js';
 import type { FinalizationOverrideReplay } from '../../types.js';
 import { mergeUsagePreservingExternal } from '../live-database/manifest.js';
 import { historicSqlEvidenceEnvelopeSchema, type HistoricSqlEvidenceEnvelope } from './evidence.js';
@@ -251,7 +252,7 @@ export async function projectHistoricSqlEvidence(input: HistoricSqlProjectionInp
   const patternEvidence = evidence.filter((entry): entry is HistoricSqlEvidenceEnvelope & { kind: 'pattern' } => entry.kind === 'pattern');
 
   const schemaRoot = join(input.workdir, 'semantic-layer', input.connectionId, '_schema');
-  for (const file of (await walkFiles(schemaRoot)).filter((candidate) => candidate.endsWith('.yaml') || candidate.endsWith('.yml'))) {
+  for (const file of (await walkFiles(schemaRoot)).filter(isSlYamlPath)) {
     const path = join(schemaRoot, file);
     const before = await readFile(path, 'utf-8');
     const shard = (YAML.parse(before) ?? {}) as ManifestShard;

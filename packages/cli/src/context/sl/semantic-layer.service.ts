@@ -6,7 +6,7 @@ import type { TableUsageOutput } from '../ingest/adapters/historic-sql/skill-sch
 import type { SlConnectionCatalogPort, SlPythonPort } from './ports.js';
 import { normalizeSemanticLayerDescriptions } from './description-normalization.js';
 import { isOverlaySource, resolvedSourceSchema, sourceDefinitionSchema, sourceOverlaySchema } from './schemas.js';
-import { resolveSlSourceFile, slSourceFilePath } from './source-files.js';
+import { isSlYamlPath, resolveSlSourceFile, slDeclaredSourceName, slSourceFilePath } from './source-files.js';
 import type {
   ResolvedSemanticLayerSource,
   SemanticLayerColumnOverride,
@@ -139,22 +139,25 @@ export class SemanticLayerService {
   // The in-file `name:` is the source's identity; the filename is only a derived
   // label. Rewrites land on the file that already declares the name (humans may
   // rename files freely); new sources get a derived filename. A file already
-  // sitting at the derived path necessarily declares a different name (the
-  // resolver would have matched it otherwise) — fail instead of clobbering it.
+  // sitting at the derived path that declares a name declares a *different* one
+  // (the resolver would have matched it otherwise) — fail instead of clobbering
+  // it. A nameless/unparseable file there is the broken remains of this very
+  // source (the derived path is a function of the name), so overwriting it is
+  // the repair path, not data loss.
   private async resolveWritePath(connectionId: string, sourceName: string): Promise<string> {
     const existing = await resolveSlSourceFile(this.configService, connectionId, sourceName);
     if (existing) {
       return existing.path;
     }
     const path = slSourceFilePath(connectionId, sourceName);
-    let occupied = true;
+    let occupant: string | null = null;
     try {
-      await this.configService.readFile(path);
+      occupant = slDeclaredSourceName((await this.configService.readFile(path)).content);
     } catch {
-      occupied = false;
+      return path;
     }
-    if (occupied) {
-      throw new Error(`Cannot write source '${sourceName}': ${path} already defines a different source`);
+    if (occupant !== null) {
+      throw new Error(`Cannot write source '${sourceName}': ${path} already defines source '${occupant}'`);
     }
     return path;
   }
@@ -254,7 +257,7 @@ export class SemanticLayerService {
     let allFiles: string[];
     try {
       const result = await this.configService.listFiles(dir);
-      allFiles = result.files.filter((f) => f.endsWith('.yaml'));
+      allFiles = result.files.filter((f) => isSlYamlPath(f));
     } catch (e) {
       const message = `Failed to list semantic-layer files under ${dir}: ${e instanceof Error ? e.message : String(e)}`;
       loadErrors.push(message);
@@ -361,7 +364,7 @@ export class SemanticLayerService {
     let allFiles: string[];
     try {
       const listing = await this.configService.listFiles(dir);
-      allFiles = listing.files.filter((f) => f.endsWith('.yaml'));
+      allFiles = listing.files.filter((f) => isSlYamlPath(f));
     } catch {
       return result;
     }
@@ -431,7 +434,7 @@ export class SemanticLayerService {
     const schemaDir = `${SL_DIR_PREFIX}/${connectionId}/_schema`;
     try {
       const result = await this.configService.listFiles(schemaDir);
-      const yamlFiles = result.files.filter((f) => f.endsWith('.yaml'));
+      const yamlFiles = result.files.filter((f) => isSlYamlPath(f));
       for (const filePath of yamlFiles) {
         try {
           const { content } = await this.configService.readFile(filePath);
@@ -472,7 +475,7 @@ export class SemanticLayerService {
     let yamlFiles: string[];
     try {
       const result = await this.configService.listFiles(schemaDir);
-      yamlFiles = result.files.filter((f) => f.endsWith('.yaml'));
+      yamlFiles = result.files.filter((f) => isSlYamlPath(f));
     } catch {
       return null;
     }
@@ -677,7 +680,7 @@ export class SemanticLayerService {
     const dir = `${SL_DIR_PREFIX}/${connectionId}`;
     try {
       const result = await this.configService.listFiles(dir, true);
-      return result.files.filter((f) => f.endsWith('.yaml'));
+      return result.files.filter((f) => isSlYamlPath(f));
     } catch {
       return [];
     }
@@ -825,7 +828,7 @@ export class SemanticLayerService {
       return [];
     }
 
-    const schemaFiles = files.filter((file) => /^semantic-layer\/[^/]+\/_schema\/.+\.ya?ml$/.test(file));
+    const schemaFiles = files.filter((file) => /^semantic-layer\/[^/]+\/_schema\//.test(file) && isSlYamlPath(file));
     const entries: Array<{ connectionId: string; source: SemanticLayerSource }> = [];
     for (const filePath of schemaFiles) {
       const connectionId = filePath.split('/')[1];
@@ -854,7 +857,7 @@ export class SemanticLayerService {
     let allFiles: string[];
     try {
       const result = await this.configService.listFiles(dir);
-      allFiles = result.files.filter((f) => f.endsWith('.yaml'));
+      allFiles = result.files.filter((f) => isSlYamlPath(f));
     } catch {
       return warnings;
     }
@@ -1040,7 +1043,7 @@ export class SemanticLayerService {
 
     try {
       const result = await this.configService.listFiles(dir);
-      const yamlFiles = result.files.filter((f) => f.endsWith('.yaml'));
+      const yamlFiles = result.files.filter((f) => isSlYamlPath(f));
 
       for (const filePath of yamlFiles) {
         try {

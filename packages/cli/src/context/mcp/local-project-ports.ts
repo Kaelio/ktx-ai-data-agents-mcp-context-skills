@@ -7,7 +7,8 @@ import { createKtxEntityDetailsService } from '../../context/scan/entity-details
 import type { KtxScanConnector } from '../../context/scan/types.js';
 import type { LocalScanMcpOptions } from '../../context/scan/local-scan.js';
 import { createKtxDiscoverDataService } from '../../context/search/discover.js';
-import type { SqlAnalysisDialect, SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
+import { sqlAnalysisDialectForDriver } from '../../context/sql-analysis/dialect.js';
+import type { SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import { compileLocalSlQuery } from '../../context/sl/local-query.js';
 import { createKtxDictionarySearchService } from '../../context/sl/dictionary-search.js';
 import { readLocalSlSource } from '../../context/sl/local-sl.js';
@@ -21,26 +22,6 @@ interface CreateLocalProjectMcpContextPortsOptions {
   sqlAnalysis?: SqlAnalysisPort;
   localScan?: LocalScanMcpOptions;
   embeddingService: KtxEmbeddingPort | null;
-}
-
-function dialectForDriver(driver: string | undefined): string {
-  const normalized = (driver ?? 'postgres').toUpperCase();
-  const map: Record<string, string> = {
-    POSTGRES: 'postgres',
-    BIGQUERY: 'bigquery',
-    SNOWFLAKE: 'snowflake',
-    MYSQL: 'mysql',
-    SQLSERVER: 'tsql',
-    SQLITE: 'sqlite',
-    DUCKDB: 'duckdb',
-    CLICKHOUSE: 'clickhouse',
-    DATABRICKS: 'databricks',
-  };
-  return map[normalized] ?? 'postgres';
-}
-
-function sqlAnalysisDialectForDriver(driver: string | undefined): SqlAnalysisDialect {
-  return dialectForDriver(driver) as SqlAnalysisDialect;
 }
 
 async function cleanupConnector(connector: KtxScanConnector | null): Promise<void> {

@@ -157,7 +157,7 @@ joins:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Source identifier. Use lowercase words and underscores. |
+| `name` | Yes | Source identity (not the filename). When overlaying an ingested table, match the manifest identifier verbatim, including case (e.g. `SIGNED_UP`); for a new standalone source, lowercase words and underscores are recommended. |
 | `descriptions` | No | Description map keyed by source, such as `user`, `dbt`, or `ai`. |
 | `table` or `sql` | Yes | Database table or custom SQL expression. Use exactly one. |
 | `grain` | Yes | Columns that uniquely identify a row at the source grain. |

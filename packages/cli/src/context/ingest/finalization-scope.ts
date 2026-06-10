@@ -1,3 +1,4 @@
+import { isSlYamlPath } from '../../context/sl/source-files.js';
 import type { SemanticLayerSource } from '../../context/sl/types.js';
 import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { IngestReportFinalizationMismatch } from './reports.js';
@@ -64,39 +65,36 @@ export function deriveFinalizationWikiPageKeys(paths: string[]): string[] {
   );
 }
 
-export async function deriveFinalizationTouchedSources(
-  input: DeriveTouchedSourcesInput,
-): Promise<DeriveTouchedSourcesResult> {
+// Source identity is the in-file `name:`; filenames are derived labels (see
+// source-files.ts), so a changed path — manifest shard or standalone file —
+// cannot be mapped to a source by parsing its filename. Instead, every changed
+// semantic-layer file is attributed through the before/after diff of its
+// connection's composed sources. A changed file whose connection diff is empty
+// cannot be attributed to any source and is surfaced as unresolved.
+export function deriveFinalizationTouchedSources(input: DeriveTouchedSourcesInput): DeriveTouchedSourcesResult {
   const touched = new Map<string, TouchedSlSource>();
   const unresolvedPaths: string[] = [];
 
+  const pathsByConnection = new Map<string, string[]>();
   for (const path of input.changedPaths) {
-    if (!path.startsWith('semantic-layer/') || !(path.endsWith('.yaml') || path.endsWith('.yml'))) {
+    if (!path.startsWith('semantic-layer/') || !isSlYamlPath(path)) {
       continue;
     }
-    const parts = path.split('/');
-    const connectionId = parts[1] ?? '';
+    const connectionId = path.split('/')[1] ?? '';
     if (!connectionId) {
       unresolvedPaths.push(path);
       continue;
     }
-    if (parts[2] !== '_schema') {
-      const fileName = parts.at(-1) ?? '';
-      const sourceName = fileName.replace(/\.ya?ml$/, '');
-      if (!sourceName) {
-        unresolvedPaths.push(path);
-        continue;
-      }
-      touched.set(`${connectionId}:${sourceName}`, { connectionId, sourceName });
-      continue;
-    }
+    pathsByConnection.set(connectionId, [...(pathsByConnection.get(connectionId) ?? []), path]);
+  }
 
+  for (const [connectionId, paths] of pathsByConnection) {
     const changedNames = changedSourceNames(
       input.beforeSourcesByConnection.get(connectionId) ?? [],
       input.afterSourcesByConnection.get(connectionId) ?? [],
     );
     if (changedNames.length === 0) {
-      unresolvedPaths.push(path);
+      unresolvedPaths.push(...paths);
       continue;
     }
     for (const sourceName of changedNames) {

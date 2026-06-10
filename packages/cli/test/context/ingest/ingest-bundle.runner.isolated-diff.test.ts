@@ -2381,8 +2381,11 @@ describe('IngestBundleRunner isolated diff path', () => {
         join(runtime.configDir, '.ktx/ingest-traces/job-finalization-target-policy/trace.jsonl'),
         'utf-8',
       );
-      expect(trace).toContain('finalization_committed');
-      expect(trace).toContain('semantic_layer_target_policy');
+      // The policy check runs inside finalization, before touched-source
+      // derivation — an out-of-scope write fails the finalization stage
+      // instead of reading as committed.
+      expect(trace).not.toContain('finalization_committed');
+      expect(trace).toContain('semantic_layer_target_policy_failed');
       expect(trace).toContain('ingest_failed');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });

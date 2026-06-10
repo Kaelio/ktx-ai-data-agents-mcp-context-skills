@@ -8,7 +8,7 @@ import { createRuntimeToolDescriptorFromAiTool } from '../../context/llm/runtime
 import type { KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../context/memory/types.js';
 import type { SemanticLayerService } from '../../context/sl/semantic-layer.service.js';
-import { slSourceFilePath, slSourceNameForFile, sourceNameFromPath } from '../../context/sl/source-files.js';
+import { isSlYamlPath, slSourceFilePath, slSourceNameForFile, sourceNameFromPath } from '../../context/sl/source-files.js';
 import type { SemanticLayerSource } from '../../context/sl/types.js';
 import type { SlValidationDeps } from '../../context/sl/tools/sl-warehouse-validation.js';
 import { createTouchedSlSources, type TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
@@ -499,7 +499,7 @@ export class IngestBundleRunner {
             const files = await this.deps.semanticLayerService.listFilesForConnection(connectionId);
             const names = files
               .filter((f) => !f.startsWith('_schema/'))
-              .map((f) => f.replace(/\.yaml$/, ''))
+              .map((f) => sourceNameFromPath(f))
               .sort((left, right) => left.localeCompare(right));
             const body = names.length > 0 ? names.join('\n') : '(no sources yet)';
             return `## ${connectionId}\n${body}`;
@@ -792,25 +792,34 @@ export class IngestBundleRunner {
     ].sort();
   }
 
-  private async touchedSlSourcesFromPaths(workdir: string, paths: string[]): Promise<TouchedSlSource[]> {
+  private async touchedSlSourcesFromPaths(
+    worktree: IngestSessionWorktree,
+    paths: string[],
+    deletedFileSha: string,
+  ): Promise<TouchedSlSource[]> {
     const sources: TouchedSlSource[] = [];
     for (const path of paths) {
-      if (!path.startsWith('semantic-layer/') || !path.endsWith('.yaml') || path.includes('/_schema/')) {
+      if (!path.startsWith('semantic-layer/') || !isSlYamlPath(path) || path.includes('/_schema/')) {
         continue;
       }
       const [, connectionId] = path.split('/');
       if (!connectionId) {
         continue;
       }
-      // The in-file `name:` is the source's identity; the filename is only a
-      // derived label. Deleted files cannot be read — fall back to the
-      // filename-derived name, matching the record loader's keying.
-      let sourceName: string;
+      // Source identity is the in-file `name:`, never the filename — an uppercase
+      // warehouse source like `WIDGET_SALES` lives in a hash-derived
+      // `widget_sales-<hash>.yaml`, so parsing the basename yields a phantom name.
+      // Read the live file; when it was deleted this run, recover its declared
+      // name from the pre-change commit the way `revertSourceToPreHead` resolves a
+      // gone file from history. The filename is a last resort only when the content
+      // is unrecoverable from both.
+      let content: string | null;
       try {
-        sourceName = slSourceNameForFile(path, await readFile(join(workdir, path), 'utf-8'));
+        content = await readFile(join(worktree.workdir, path), 'utf-8');
       } catch {
-        sourceName = sourceNameFromPath(path);
+        content = await worktree.git.getFileAtCommit(path, deletedFileSha).catch(() => null);
       }
+      const sourceName = content === null ? sourceNameFromPath(path) : slSourceNameForFile(path, content);
       if (sourceName.length > 0) {
         sources.push({ connectionId, sourceName });
       }
@@ -1770,7 +1779,11 @@ export class IngestBundleRunner {
               await validateFinalIngestArtifacts({
                 connectionIds: slConnectionIds,
                 changedWikiPageKeys: this.wikiPageKeysFromPaths(touchedPaths),
-                touchedSlSources: await this.touchedSlSourcesFromPaths(sessionWorktree.workdir, touchedPaths),
+                touchedSlSources: await this.touchedSlSourcesFromPaths(
+                  sessionWorktree,
+                  touchedPaths,
+                  await sessionWorktree.git.revParseHead(),
+                ),
                 wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
                 semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
                 validateTouchedSources: (touched) =>
@@ -2319,20 +2332,34 @@ export class IngestBundleRunner {
               )
             : [];
 
-        const changedConnectionIds = [
-          ...new Set([
-            ...slConnectionIds,
-            ...finalizationTouchedPaths
-              .filter((path) => path.startsWith('semantic-layer/'))
-              .map((path) => path.split('/')[1])
-              .filter((connectionId): connectionId is string => Boolean(connectionId)),
-          ]),
-        ].sort();
+        // Validate the write scope before deriving touched sources: attribution
+        // by before/after diff is only defined for connections whose
+        // pre-finalization snapshot was loaded (slConnectionIds), and an
+        // out-of-scope write would otherwise surface downstream as a bogus
+        // unresolved-path or declaration-mismatch failure instead of the real
+        // policy violation.
+        await traceTimed(
+          runTrace,
+          'finalization',
+          'semantic_layer_target_policy',
+          {
+            sourceKey: job.sourceKey,
+            allowedTargetConnectionIds: slConnectionIds,
+            touchedPaths: [...new Set(finalizationTouchedPaths)].sort(),
+          },
+          async () => {
+            assertSemanticLayerTargetPathsAllowed({
+              paths: finalizationTouchedPaths,
+              allowedConnectionIds: new Set(slConnectionIds),
+            });
+          },
+        );
+
         const postFinalizationSourcesByConnection = await this.loadSourcesByConnection(
           sessionWorktree.workdir,
-          changedConnectionIds,
+          slConnectionIds,
         );
-        const scope = await deriveFinalizationTouchedSources({
+        const scope = deriveFinalizationTouchedSources({
           changedPaths: finalizationTouchedPaths,
           beforeSourcesByConnection: preFinalizationSourcesByConnection,
           afterSourcesByConnection: postFinalizationSourcesByConnection,
@@ -2467,7 +2494,7 @@ export class IngestBundleRunner {
         ...(isolatedDiffEnabled ? projectionTouchedSources : []),
         ...workUnitOutcomes.flatMap((outcome) => outcome.touchedSlSources),
         ...this.touchedSlSourcesFromActions(reconcileActions, job.connectionId),
-        ...(await this.touchedSlSourcesFromPaths(sessionWorktree.workdir, postReconciliationPaths)),
+        ...(await this.touchedSlSourcesFromPaths(sessionWorktree, postReconciliationPaths, preReconciliationSha)),
         ...finalizationTouchedSources,
       ]);
       const finalWikiGateScope = await this.wikiPageKeysForFinalGates({

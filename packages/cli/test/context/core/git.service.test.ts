@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { KtxCoreConfig } from '../../../src/context/core/config.js';
 import { GitService } from '../../../src/context/core/git.service.js';
@@ -35,9 +35,28 @@ describe('GitService', () => {
   });
 
   const writeAndCommit = async (filePath: string, content: string, message = 'msg') => {
+    await mkdir(dirname(join(tempDir, filePath)), { recursive: true });
     await writeFile(join(tempDir, filePath), content, 'utf-8');
     return service.commitFile(filePath, message, 'Test', 'test@example.com');
   };
+
+  describe('listFilesAtCommit', () => {
+    it('lists matching paths at a commit and recovers files deleted since', async () => {
+      await writeAndCommit('semantic-layer/warehouse/custom.yaml', 'name: orders\n');
+      const atSeed = await service.revParseHead();
+      await service.deleteFile('semantic-layer/warehouse/custom.yaml', 'drop', 'Test', 'test@example.com');
+
+      // HEAD no longer has the file; the seed commit still does.
+      await expect(service.listFilesAtCommit('semantic-layer/warehouse', 'HEAD')).resolves.toEqual([]);
+      await expect(service.listFilesAtCommit('semantic-layer/warehouse', atSeed)).resolves.toEqual([
+        'semantic-layer/warehouse/custom.yaml',
+      ]);
+    });
+
+    it('returns [] for a pathspec that matches nothing', async () => {
+      await expect(service.listFilesAtCommit('does/not/exist', 'HEAD')).resolves.toEqual([]);
+    });
+  });
 
   describe('cold-start bootstrap commit', () => {
     it('writes an empty commit on init so HEAD always resolves', async () => {

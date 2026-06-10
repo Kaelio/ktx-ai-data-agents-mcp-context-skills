@@ -16,11 +16,15 @@ function makeSession(overrides: Partial<ToolSession> = {}): ToolSession {
     configService: {
       writeFile: vi.fn().mockResolvedValue(undefined),
       deleteFile: vi.fn().mockResolvedValue(undefined),
-      // No live file for `orders` — revert falls back to the derived filename.
+      // No live file for `orders` — revert recovers the preHead path from history.
       listFiles: vi.fn().mockResolvedValue({ files: [] }),
       readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
     } as any,
-    gitService: { getFileAtCommit: vi.fn().mockResolvedValue('pre: content') } as any,
+    gitService: {
+      // The source lived at its derived filename at preHead.
+      listFilesAtCommit: vi.fn().mockResolvedValue(['semantic-layer/conn-1/orders.yaml']),
+      getFileAtCommit: vi.fn().mockResolvedValue('name: orders\nmeasures: []\n'),
+    } as any,
     ...overrides,
   };
 }
@@ -67,5 +71,34 @@ describe('SlRollbackTool', () => {
     expect((session.configService as any).writeFile).toHaveBeenCalled();
     expect(hasTouchedSlSource(session.touchedSlSources, 'conn-1', 'orders')).toBe(false);
     expect(session.actions).toEqual([]);
+  });
+
+  it('restores a deleted human-renamed source at the path it occupied at preHead', async () => {
+    // The source lived at a custom filename (≠ the writer-derived `orders.yaml`)
+    // and the session deleted it. Revert must recover the custom path from the
+    // preHead commit and restore there, not write/no-op against the derived path.
+    const slSourcesRepository = { deleteByConnectionAndName: vi.fn().mockResolvedValue(undefined) };
+    const tool = new SlRollbackTool(slSourcesRepository as never, connections as never, 1);
+    const renamedContent = 'name: orders\ntable: public.orders\nmeasures: []\n';
+    const session = makeSession({
+      gitService: {
+        listFilesAtCommit: vi.fn().mockResolvedValue(['semantic-layer/conn-1/custom.yaml']),
+        getFileAtCommit: vi.fn().mockResolvedValue(renamedContent),
+      } as any,
+    });
+    const context: ToolContext = { sourceId: 's', messageId: 'm', userId: 'u', session };
+
+    const result = await tool.call({ sourceName: 'orders' } as any, context);
+
+    expect(result.structured.success).toBe(true);
+    expect((session.configService as any).writeFile).toHaveBeenCalledWith(
+      'semantic-layer/conn-1/custom.yaml',
+      renamedContent,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect((session.configService as any).deleteFile).not.toHaveBeenCalled();
   });
 });

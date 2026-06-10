@@ -698,8 +698,8 @@ describe('createLocalProjectMcpContextPorts', () => {
       'semantic-layer/warehouse/_schema/PUBLIC.yaml',
       [
         'tables:',
-        '  SIGNED_UP:',
-        '    table: PUBLIC.SIGNED_UP',
+        '  WIDGET_SALES:',
+        '    table: PUBLIC.WIDGET_SALES',
         '    columns:',
         '      - name: ID',
         '        type: number',
@@ -713,10 +713,10 @@ describe('createLocalProjectMcpContextPorts', () => {
     const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
 
     await expect(
-      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'SIGNED_UP' }),
+      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'WIDGET_SALES' }),
     ).resolves.toMatchObject({
-      sourceName: 'SIGNED_UP',
-      yaml: expect.stringContaining('table: PUBLIC.SIGNED_UP'),
+      sourceName: 'WIDGET_SALES',
+      yaml: expect.stringContaining('table: PUBLIC.WIDGET_SALES'),
     });
   });
 
@@ -726,8 +726,8 @@ describe('createLocalProjectMcpContextPorts', () => {
       'semantic-layer/warehouse/_schema/PUBLIC.yaml',
       [
         'tables:',
-        '  SIGNED_UP:',
-        '    table: PUBLIC.SIGNED_UP',
+        '  WIDGET_SALES:',
+        '    table: PUBLIC.WIDGET_SALES',
         '    columns:',
         '      - name: ID',
         '        type: number',
@@ -743,18 +743,18 @@ describe('createLocalProjectMcpContextPorts', () => {
     // SemanticLayerService.writeSource using the verbatim warehouse name.
     const service = new SemanticLayerService(project.fileStore as never, {} as never, {} as never);
     const overlay = {
-      name: 'SIGNED_UP',
-      measures: [{ name: 'signup_count', expr: 'count(*)' }],
+      name: 'WIDGET_SALES',
+      measures: [{ name: 'widget_sales_count', expr: 'count(*)' }],
     } as SemanticLayerSource;
     const write = await service.writeSource('warehouse', overlay, 'ktx', 'ktx@example.com');
-    expect(write.path).toMatch(/^semantic-layer\/warehouse\/signed_up-[0-9a-f]{8}\.yaml$/);
+    expect(write.path).toMatch(/^semantic-layer\/warehouse\/widget_sales-[0-9a-f]{8}\.yaml$/);
 
     const ports = createLocalProjectMcpContextPorts(project, { embeddingService: null });
     await expect(
-      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'SIGNED_UP' }),
+      ports.semanticLayer?.readSource({ connectionId: 'warehouse', sourceName: 'WIDGET_SALES' }),
     ).resolves.toMatchObject({
-      sourceName: 'SIGNED_UP',
-      yaml: expect.stringContaining('signup_count'),
+      sourceName: 'WIDGET_SALES',
+      yaml: expect.stringContaining('widget_sales_count'),
     });
   });
 

@@ -1,6 +1,6 @@
 import YAML from 'yaml';
 import type { GitService } from '../../../context/core/git.service.js';
-import type { KtxFileStorePort } from '../../../context/core/file-store.js';
+import type { KtxFileListResult, KtxFileReadResult, KtxFileStorePort } from '../../../context/core/file-store.js';
 import { SYSTEM_GIT_AUTHOR } from '../../../context/tools/authors.js';
 import type { SlConnectionCatalogPort, SlSourcesIndexPort } from '../ports.js';
 import { sourceOverlaySchema } from '../schemas.js';
@@ -285,6 +285,26 @@ async function probeOverlayMeasures(
 }
 
 /**
+ * A read-only view of the config repo at one commit, shaped for
+ * `resolveSlSourceFile` so name→file resolution runs against history exactly as
+ * it does against the working tree — one resolver, two backing stores. Used to
+ * recover the path a source occupied at `preHead` after the live file is gone.
+ */
+function gitCommitFileStore(
+  git: GitService,
+  commitHash: string,
+): Pick<KtxFileStorePort, 'listFiles' | 'readFile'> {
+  return {
+    async listFiles(path: string): Promise<KtxFileListResult> {
+      return { files: await git.listFilesAtCommit(path, commitHash) };
+    },
+    async readFile(path: string): Promise<KtxFileReadResult> {
+      return { content: await git.getFileAtCommit(path, commitHash) };
+    },
+  };
+}
+
+/**
  * Restore `sourceName` to the content it had at `preHead`, or delete it if it didn't
  * exist then. Used by sl_rollback (agent-driven) and the pre-squash revert gate
  * (automatic). Returns a short human-readable description of what happened.
@@ -295,18 +315,29 @@ export async function revertSourceToPreHead(
   preHead: string | null,
   sourceName: string,
 ): Promise<string> {
-  // Resolve the live file by its in-file `name:`; when the source no longer
-  // exists on disk (restore-after-delete), fall back to the filename the
-  // writer would derive for it.
-  const resolved = await resolveSlSourceFile(deps.configService, connectionId, sourceName);
-  const relPath = resolved?.path ?? slSourceFilePath(connectionId, sourceName);
+  // Find the file that defines this source. While it is still on disk
+  // (invalid-but-present) the live resolver finds it by its in-file `name:`.
+  // Once the session deleted it, the path is gone too — and humans rename files
+  // freely, so it is NOT the writer-derived filename. Recover it from history by
+  // resolving the name against the preHead commit instead of guessing.
+  const live = await resolveSlSourceFile(deps.configService, connectionId, sourceName);
+  let relPath: string;
   let preContent: string | null = null;
-  if (preHead) {
-    try {
-      preContent = await deps.gitService.getFileAtCommit(relPath, preHead);
-    } catch {
-      preContent = null;
+  if (live) {
+    relPath = live.path;
+    if (preHead) {
+      try {
+        preContent = await deps.gitService.getFileAtCommit(relPath, preHead);
+      } catch {
+        preContent = null;
+      }
     }
+  } else {
+    const atPreHead = preHead
+      ? await resolveSlSourceFile(gitCommitFileStore(deps.gitService, preHead), connectionId, sourceName)
+      : null;
+    relPath = atPreHead?.path ?? slSourceFilePath(connectionId, sourceName);
+    preContent = atPreHead?.content ?? null;
   }
 
   if (preContent !== null) {

@@ -1313,6 +1313,24 @@ describe('writeSource / deleteSource file naming', () => {
     expect(rewrite.path).toBe(result.path);
   });
 
+  it('repairs a broken file occupying the derived path instead of refusing the write', async () => {
+    const written = await service.writeSource('warehouse', signedUp, author, authorEmail);
+    await project.fileStore.writeFile(
+      written.path,
+      'name: SIGNED_UP\nmeasures: [unterminated\n',
+      author,
+      authorEmail,
+      'break the file',
+    );
+
+    const repaired = await service.writeSource('warehouse', signedUp, author, authorEmail);
+
+    expect(repaired.path).toBe(written.path);
+    const file = await service.readSourceFile('warehouse', 'SIGNED_UP');
+    expect(file?.path).toBe(written.path);
+    expect(file?.content).toContain('name: SIGNED_UP');
+  });
+
   it('rewrites a human-renamed file in place', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/custom.yaml',
@@ -1334,6 +1352,45 @@ describe('writeSource / deleteSource file naming', () => {
     expect(listed.files).toEqual(['semantic-layer/warehouse/custom.yaml']);
   });
 
+  it('repairs a human-renamed broken file in place instead of deriving a second one', async () => {
+    // Renamed (filename ≠ name) AND mid-edit broken: identity must survive the
+    // syntax error so the rewrite lands on the original file rather than creating
+    // a duplicate at the derived path that later trips the by-name resolver.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom.yaml',
+      'name: SIGNED_UP\nmeasures: [unterminated\n',
+      author,
+      authorEmail,
+      'seed broken renamed file',
+    );
+
+    const repaired = await service.writeSource('warehouse', signedUp, author, authorEmail);
+
+    expect(repaired.path).toBe('semantic-layer/warehouse/custom.yaml');
+    const listed = await project.fileStore.listFiles('semantic-layer/warehouse');
+    expect(listed.files).toEqual(['semantic-layer/warehouse/custom.yaml']);
+    const file = await service.readSourceFile('warehouse', 'SIGNED_UP');
+    expect(file?.path).toBe('semantic-layer/warehouse/custom.yaml');
+    expect(file?.content).toContain('name: SIGNED_UP');
+  });
+
+  it('keeps a .yml-renamed file visible to the loader and the by-name resolver alike', async () => {
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/custom.yml',
+      'name: orders\ntable: public.orders\ngrain: [id]\ncolumns:\n  - name: id\n    type: number\nmeasures: []\n',
+      author,
+      authorEmail,
+      'seed .yml file',
+    );
+
+    const { sources, loadErrors } = await service.loadAllSources('warehouse');
+    expect(loadErrors).toEqual([]);
+    expect(sources.map((source) => source.name)).toEqual(['orders']);
+
+    const file = await service.readSourceFile('warehouse', 'orders');
+    expect(file?.path).toBe('semantic-layer/warehouse/custom.yml');
+  });
+
   it('refuses to clobber a derived path occupied by a different source', async () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/orders.yaml',
@@ -1350,7 +1407,7 @@ describe('writeSource / deleteSource file naming', () => {
         author,
         authorEmail,
       ),
-    ).rejects.toThrow('already defines a different source');
+    ).rejects.toThrow("already defines source 'other_source'");
   });
 
   it('deletes the file resolved by name, wherever it lives', async () => {

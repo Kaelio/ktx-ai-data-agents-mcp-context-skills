@@ -1,4 +1,4 @@
-import { assertReadOnlySql } from '../../context/connections/read-only-sql.js';
+import { assertReadOnlySql, stripTrailingSqlNoise } from '../../context/connections/read-only-sql.js';
 import { getDialectForDriver } from '../../context/connections/dialects.js';
 import { tryConstraintQuery } from '../../context/scan/constraint-discovery.js';
 import { scopedTableNames } from '../../context/scan/table-ref.js';
@@ -284,7 +284,7 @@ function isDeniedError(error: unknown): boolean {
 }
 
 function limitSqlForSqlServerExecution(sqlText: string, maxRows: number | undefined): string {
-  const trimmed = assertReadOnlySql(sqlText).replace(/;+\s*$/, '');
+  const trimmed = stripTrailingSqlNoise(assertReadOnlySql(sqlText));
   if (!maxRows) {
     return trimmed;
   }

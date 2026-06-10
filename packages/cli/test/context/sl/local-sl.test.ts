@@ -265,8 +265,8 @@ describe('local semantic-layer helpers', () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/PUBLIC.yaml',
       `tables:
-  SIGNED_UP:
-    table: PUBLIC.SIGNED_UP
+  WIDGET_SALES:
+    table: PUBLIC.WIDGET_SALES
     columns:
       - name: ID
         type: number
@@ -279,12 +279,12 @@ describe('local semantic-layer helpers', () => {
       'Add uppercase manifest shard',
     );
 
-    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'SIGNED_UP' })).resolves.toEqual(
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'WIDGET_SALES' })).resolves.toEqual(
       expect.objectContaining({
         connectionId: 'warehouse',
-        name: 'SIGNED_UP',
-        path: 'semantic-layer/warehouse/_schema/PUBLIC.yaml#SIGNED_UP',
-        yaml: expect.stringContaining('table: PUBLIC.SIGNED_UP'),
+        name: 'WIDGET_SALES',
+        path: 'semantic-layer/warehouse/_schema/PUBLIC.yaml#WIDGET_SALES',
+        yaml: expect.stringContaining('table: PUBLIC.WIDGET_SALES'),
       }),
     );
   });
@@ -321,8 +321,8 @@ describe('local semantic-layer helpers', () => {
     await project.fileStore.writeFile(
       'semantic-layer/warehouse/_schema/PUBLIC.yaml',
       `tables:
-  SIGNED_UP:
-    table: PUBLIC.SIGNED_UP
+  WIDGET_SALES:
+    table: PUBLIC.WIDGET_SALES
     columns:
       - name: ID
         type: number
@@ -340,10 +340,10 @@ describe('local semantic-layer helpers', () => {
       'seed a sibling source mid-edit with broken YAML',
     );
 
-    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'SIGNED_UP' })).resolves.toEqual(
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'WIDGET_SALES' })).resolves.toEqual(
       expect.objectContaining({
-        name: 'SIGNED_UP',
-        yaml: expect.stringContaining('table: PUBLIC.SIGNED_UP'),
+        name: 'WIDGET_SALES',
+        yaml: expect.stringContaining('table: PUBLIC.WIDGET_SALES'),
       }),
     );
 
@@ -351,7 +351,7 @@ describe('local semantic-layer helpers', () => {
     // failing the whole connection.
     await expect(listLocalSlSources(project, { connectionId: 'warehouse' })).resolves.toEqual([
       expect.objectContaining({ name: 'orders', columnCount: 0 }),
-      expect.objectContaining({ name: 'SIGNED_UP', columnCount: 1 }),
+      expect.objectContaining({ name: 'WIDGET_SALES', columnCount: 1 }),
     ]);
   });
 
@@ -372,6 +372,40 @@ describe('local semantic-layer helpers', () => {
         yaml: expect.stringContaining('[unterminated'),
       }),
     );
+  });
+
+  it('reads a broken source by its declared name even when the filename differs', async () => {
+    // Identity is the intact top-level `name:`, recovered via parseDocument even
+    // when the YAML is broken below it — never the filename. A human-renamed or
+    // hashed-filename source (e.g. an uppercase warehouse name) saved mid-edit
+    // must stay reachable under the name it declares, matching the writer side
+    // (resolveSlSourceFile). Keying it by the filename would make it invisible
+    // under its real name.
+    await project.fileStore.writeFile(
+      'semantic-layer/warehouse/renamed-by-hand.yaml',
+      'name: SIGNED_UP\nmeasures:\n  - name: signups\n    expr: [unterminated\n',
+      'ktx',
+      'ktx@example.com',
+      'seed a human-renamed source mid-edit with broken YAML',
+    );
+
+    await expect(readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'SIGNED_UP' })).resolves.toEqual(
+      expect.objectContaining({
+        connectionId: 'warehouse',
+        name: 'SIGNED_UP',
+        path: 'semantic-layer/warehouse/renamed-by-hand.yaml',
+        yaml: expect.stringContaining('[unterminated'),
+      }),
+    );
+
+    // The filename is not the identity, so it does not resolve a source.
+    await expect(
+      readLocalSlSource(project, { connectionId: 'warehouse', sourceName: 'renamed-by-hand' }),
+    ).resolves.toBeNull();
+
+    await expect(listLocalSlSources(project, { connectionId: 'warehouse' })).resolves.toEqual([
+      expect.objectContaining({ name: 'SIGNED_UP', columnCount: 0 }),
+    ]);
   });
 
   it('expands manifest-backed scan sources when listing all connections', async () => {

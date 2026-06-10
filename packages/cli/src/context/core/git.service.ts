@@ -552,12 +552,13 @@ export class GitService {
   }
 
   /**
-   * List all paths under the working tree that match `pathSpec`, scoped to HEAD.
-   * Used for the reconciler's first-ever run when there's no watermark to diff from.
+   * List all paths matching `pathSpec` as they exist at `commitHash`. Reads from
+   * git object storage, so it's safe against concurrent working-tree mutations
+   * and can recover paths (e.g. a human-renamed file) that no longer exist on disk.
    */
-  async listFilesAtHead(pathSpec: string): Promise<string[]> {
+  async listFilesAtCommit(pathSpec: string, commitHash: string): Promise<string[]> {
     try {
-      const raw = await this.git.raw(['ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', pathSpec]);
+      const raw = await this.git.raw(['ls-tree', '-r', '-z', '--name-only', commitHash, '--', pathSpec]);
       if (!raw) {
         return [];
       }
@@ -565,6 +566,14 @@ export class GitService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * List all paths under the working tree that match `pathSpec`, scoped to HEAD.
+   * Used for the reconciler's first-ever run when there's no watermark to diff from.
+   */
+  async listFilesAtHead(pathSpec: string): Promise<string[]> {
+    return this.listFilesAtCommit(pathSpec, 'HEAD');
   }
 
   /**

@@ -1776,12 +1776,24 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
         },
       ],
     });
-    deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
-      Promise.resolve({ sources: [{ name: `${connectionId}_source` }], loadErrors: [] }),
-    );
     let head = 'pre-finalization';
+    // Touched-source derivation diffs composed sources before/after finalization
+    // (the filename never carries identity), so the mock must reflect the write:
+    // `orders` exists only once the finalization commit lands.
+    deps.semanticLayerService.loadAllSources.mockImplementation((connectionId: string) =>
+      Promise.resolve({
+        sources:
+          connectionId === 'warehouse-2' && head === 'post-finalization'
+            ? [{ name: `${connectionId}_source` }, { name: 'orders' }]
+            : [{ name: `${connectionId}_source` }],
+        loadErrors: [],
+      }),
+    );
     const git = {
       revParseHead: vi.fn(async () => head),
+      // Touched-source derivation reads each changed file's `name:`; the worktree
+      // is mocked (no files on disk), so serve the source content from history.
+      getFileAtCommit: vi.fn(async () => 'name: orders\n'),
       commitFiles: vi.fn().mockImplementation(async (paths: string[]) => {
         if (paths.includes('semantic-layer/warehouse-2/orders.yaml')) {
           head = 'post-finalization';
@@ -1854,8 +1866,39 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       }),
     );
     expect(deps.semanticLayerService.loadAllSources).toHaveBeenCalledWith('warehouse-2');
-    expect(deps.slSearchService.indexSources).toHaveBeenCalledWith('warehouse-2', [{ name: 'warehouse-2_source' }]);
+    expect(deps.slSearchService.indexSources).toHaveBeenCalledWith('warehouse-2', [
+      { name: 'warehouse-2_source' },
+      { name: 'orders' },
+    ]);
     expect(deps.sessionWorktreeService.cleanup).toHaveBeenCalledWith(expect.any(Object), 'success');
+  });
+
+  it('recovers a deleted hash-named SL source by its in-file name, not its filename', async () => {
+    const runner = buildRunner();
+    // An uppercase warehouse source lives in a hash-derived filename, so parsing
+    // the basename yields the phantom `widget_sales-1a2b3c4d`. The real name must
+    // come from the file's `name:`, recovered from history once it was deleted.
+    const deletedPath = 'semantic-layer/warehouse/widget_sales-1a2b3c4d.yaml';
+    const getFileAtCommit = vi.fn(async () => 'name: WIDGET_SALES\ntable: WIDGET_SALES\n');
+    const worktree = { workdir: join(tmpdir(), 'ktx-absent-worktree-recover'), git: { getFileAtCommit } };
+
+    const touched = await (runner as any).touchedSlSourcesFromPaths(worktree, [deletedPath], 'pre-change-sha');
+
+    expect(touched).toEqual([{ connectionId: 'warehouse', sourceName: 'WIDGET_SALES' }]);
+    expect(getFileAtCommit).toHaveBeenCalledWith(deletedPath, 'pre-change-sha');
+  });
+
+  it('falls back to the filename only when a deleted SL file is unrecoverable from history', async () => {
+    const runner = buildRunner();
+    const deletedPath = 'semantic-layer/warehouse/orders.yaml';
+    const getFileAtCommit = vi.fn(async () => {
+      throw new Error('path not present at commit');
+    });
+    const worktree = { workdir: join(tmpdir(), 'ktx-absent-worktree-fallback'), git: { getFileAtCommit } };
+
+    const touched = await (runner as any).touchedSlSourcesFromPaths(worktree, [deletedPath], 'pre-change-sha');
+
+    expect(touched).toEqual([{ connectionId: 'warehouse', sourceName: 'orders' }]);
   });
 
   it('includes finalization actions in memory-flow saved counts', async () => {

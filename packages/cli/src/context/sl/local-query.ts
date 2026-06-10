@@ -2,6 +2,7 @@ import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-ex
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
 import type { KtxMcpProgressCallback } from '../mcp/types.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
+import { sqlAnalysisDialectForDriver } from '../sql-analysis/dialect.js';
 import { loadLocalSlSourceRecords } from './local-sl.js';
 import { toResolvedWire } from './semantic-layer.service.js';
 import { assertSafeConnectionId } from './source-files.js';
@@ -23,22 +24,6 @@ export interface CompileLocalSlQueryOptions {
 export interface CompileLocalSlQueryResult extends SemanticLayerQueryExecutionResult {
   connectionId: string;
   dialect: string;
-}
-
-function dialectForDriver(driver: string | undefined): string {
-  const normalized = (driver ?? 'postgres').toUpperCase();
-  const map: Record<string, string> = {
-    POSTGRES: 'postgres',
-    BIGQUERY: 'bigquery',
-    SNOWFLAKE: 'snowflake',
-    MYSQL: 'mysql',
-    SQLSERVER: 'tsql',
-    SQLITE: 'sqlite',
-    DUCKDB: 'duckdb',
-    CLICKHOUSE: 'clickhouse',
-    DATABRICKS: 'databricks',
-  };
-  return map[normalized] ?? 'postgres';
 }
 
 function resolveLocalConnectionId(project: KtxLocalProject, requested: string | undefined): string {
@@ -73,7 +58,7 @@ export async function compileLocalSlQuery(
 ): Promise<CompileLocalSlQueryResult> {
   await options.onProgress?.({ progress: 0, message: 'Compiling query' });
   const connectionId = resolveLocalConnectionId(project, options.connectionId);
-  const dialect = dialectForDriver(project.config.connections[connectionId]?.driver);
+  const dialect = sqlAnalysisDialectForDriver(project.config.connections[connectionId]?.driver);
   const sources = await loadComputableSources(project, connectionId);
 
   await options.onProgress?.({ progress: 0.3, message: 'Generating SQL' });

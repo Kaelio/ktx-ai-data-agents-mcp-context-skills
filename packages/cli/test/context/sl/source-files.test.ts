@@ -78,6 +78,15 @@ describe('slSourceNameForFile', () => {
     expect(slSourceNameForFile('semantic-layer/warehouse/orders.yaml', 'measures: []\n')).toBe('orders');
     expect(slSourceNameForFile('semantic-layer/warehouse/orders.yaml', 'measures: [unterminated\n')).toBe('orders');
   });
+
+  it('recovers the declared name when the file is broken below the name: line', () => {
+    // A human-renamed file left mid-edit keeps its identity: the syntax error is
+    // under `measures:`, so the top-level `name:` is still recoverable and must
+    // win over the (unrelated) filename.
+    expect(slSourceNameForFile('semantic-layer/warehouse/renamed-by-hand.yaml', 'name: SIGNED_UP\nmeasures: [oops\n')).toBe(
+      'SIGNED_UP',
+    );
+  });
 });
 
 describe('resolveSlSourceFile', () => {
@@ -118,6 +127,18 @@ describe('resolveSlSourceFile', () => {
 
     await expect(resolveSlSourceFile(project.fileStore, 'warehouse', 'orders')).resolves.toEqual({
       path: 'semantic-layer/warehouse/orders.yaml',
+      content: broken,
+    });
+  });
+
+  it('matches a human-renamed broken file by its still-recoverable name', async () => {
+    // Filename ≠ name, so the filename fallback cannot find it; resolution must
+    // come from the intact top-level `name:` even though the YAML is broken.
+    const broken = 'name: SIGNED_UP\nmeasures: [unterminated\n';
+    await seed('semantic-layer/warehouse/renamed-by-hand.yaml', broken);
+
+    await expect(resolveSlSourceFile(project.fileStore, 'warehouse', 'SIGNED_UP')).resolves.toEqual({
+      path: 'semantic-layer/warehouse/renamed-by-hand.yaml',
       content: broken,
     });
   });

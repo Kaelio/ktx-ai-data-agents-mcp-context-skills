@@ -3,6 +3,7 @@ import { buildLiveDatabaseManifestShards, type LiveDatabaseManifestExistingDescr
 import type { TableUsageOutput } from '../../context/ingest/adapters/historic-sql/skill-schemas.js';
 import type { KtxScanRelationshipConfig } from '../project/config.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
+import { isSlYamlPath } from '../../context/sl/source-files.js';
 import type { KtxLocalScanEnrichmentResult } from './local-enrichment.js';
 import {
   buildKtxRelationshipArtifacts,
@@ -205,7 +206,7 @@ async function loadExistingManifestState(
 
   let files: string[];
   try {
-    files = (await project.fileStore.listFiles(schemaDir(connectionId))).files.filter((file) => file.endsWith('.yaml'));
+    files = (await project.fileStore.listFiles(schemaDir(connectionId))).files.filter(isSlYamlPath);
   } catch {
     return { descriptions, preservedJoins, usage };
   }

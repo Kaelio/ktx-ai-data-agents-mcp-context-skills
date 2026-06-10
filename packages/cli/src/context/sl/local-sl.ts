@@ -17,7 +17,13 @@ import {
 } from './semantic-layer.service.js';
 import type { PgliteSlSearchPrototypeOwnerOptions } from './pglite-sl-search-prototype.js';
 import { loadLatestSlDictionaryEntries } from './sl-dictionary-profile.js';
-import { assertSafeConnectionId, isSafeConnectionId, sourceNameFromPath } from './source-files.js';
+import {
+  assertSafeConnectionId,
+  isSafeConnectionId,
+  isSlYamlPath,
+  slSourceNameForFile,
+  sourceNameFromPath,
+} from './source-files.js';
 import { buildSemanticLayerSourceSearchText, SlSearchService } from './sl-search.service.js';
 import { SqliteSlSourcesIndex } from './sqlite-sl-sources-index.js';
 import type { SemanticLayerSource, SlDictionaryMatch, SlSearchLaneSummary, SlSearchMatchReason } from './types.js';
@@ -167,7 +173,7 @@ export async function loadLocalSlSourceRecords(
   const dir = `semantic-layer/${connectionId}`;
   const schemaDir = `${dir}/_schema`;
   const listed = await project.fileStore.listFiles(dir);
-  const paths = listed.files.filter((file) => file.endsWith('.yaml') || file.endsWith('.yml')).sort();
+  const paths = listed.files.filter(isSlYamlPath).sort();
   const sources = new Map<string, LocalSlSourceRecord>();
 
   for (const path of paths.filter((file) => file.startsWith(`${schemaDir}/`))) {
@@ -199,9 +205,12 @@ export async function loadLocalSlSourceRecords(
       parsed = parseYamlRecord(raw.content);
     } catch {
       // A source mid-edit (e.g. an agent saved half-written YAML) must not take
-      // down reads, listings, or search for its siblings. Keep the file visible
-      // under its filename and surface the raw content for repair.
-      const brokenName = sourceNameFromPath(path);
+      // down reads, listings, or search for its siblings. Key it by the same
+      // name the writer side uses (the intact top-level `name:`, recovered even
+      // when the YAML is broken below it; filename only as a last resort) so a
+      // broken uppercase/hashed/human-renamed source stays reachable under its
+      // real name, and surface the raw content for repair.
+      const brokenName = slSourceNameForFile(path, raw.content);
       sources.set(brokenName, {
         connectionId,
         name: brokenName,
@@ -273,7 +282,7 @@ export async function readLocalSlSource(
   input: { connectionId: string; sourceName: string },
 ): Promise<LocalSlSource | null> {
   // Source identity is the in-file `name:` (mirroring the warehouse identifier
-  // verbatim, e.g. Snowflake's uppercase `SIGNED_UP`), never the filename. The
+  // verbatim, e.g. Snowflake's uppercase `WIDGET_SALES`), never the filename. The
   // record loader resolves standalone files, overlays, manifest-backed sources,
   // and mid-edit files whose YAML no longer parses — so readers — `ktx sl read`,
   // `ktx sl validate`, and the `sl_read_source` MCP tool — can surface broken

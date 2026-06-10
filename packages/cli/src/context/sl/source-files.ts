@@ -43,6 +43,15 @@ export function sourceNameFromPath(path: string): string {
   );
 }
 
+// The one predicate for "this path is a semantic-layer YAML file". ktx itself
+// always writes `.yaml` (see `slSourceFileName`), but humans rename freely and
+// the dbt ecosystem's habit is `.yml`, so every reader must accept both — a
+// listing that recognizes only one extension makes the same file visible to
+// some entry points and invisible to others.
+export function isSlYamlPath(path: string): boolean {
+  return path.endsWith('.yaml') || path.endsWith('.yml');
+}
+
 // Windows refuses these basenames regardless of extension — a genuinely universal
 // filesystem invariant, so the static list is acceptable.
 const WINDOWS_RESERVED_BASENAME = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
@@ -86,21 +95,36 @@ export interface SlSourceFile {
 }
 
 // Same keying as `loadLocalSlSourceRecords`: the in-file `name:` is the identity;
-// the filename is only a fallback for unparseable or nameless files (a broken file
-// is therefore addressed by its filename-derived name until it is repaired).
+// the filename is only a fallback for files so broken that even the `name:` is
+// unrecoverable, or genuinely nameless ones. A file left mid-edit with a syntax
+// error below its `name:` line keeps its declared identity (see
+// `slDeclaredSourceName`), so a human-renamed source is still addressed by name
+// while broken instead of silently reverting to its filename.
 export function slSourceNameForFile(path: string, content: string): string {
+  return slDeclaredSourceName(content) ?? sourceNameFromPath(path);
+}
+
+/**
+ * The `name:` a semantic-layer YAML file declares, or null when the file is
+ * nameless or so broken even the name is unrecoverable. Null is how
+ * `writeSource` tells a genuine name conflict at a derived path apart from the
+ * broken remains of the source being written, which a rewrite must repair
+ * rather than refuse.
+ *
+ * Uses `parseDocument`, not `parse`: a file with a syntax error below the
+ * `name:` line still parses into a partial tree whose top-level `name:` is
+ * intact. `parse` would throw on the same input and drop the source to its
+ * filename — wrong for human-renamed files, whose filename is not the name.
+ */
+export function slDeclaredSourceName(content: string): string | null {
+  let doc: ReturnType<typeof YAML.parseDocument>;
   try {
-    const parsed = YAML.parse(content) as unknown;
-    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const name = (parsed as Record<string, unknown>).name;
-      if (typeof name === 'string' && name.length > 0) {
-        return name;
-      }
-    }
+    doc = YAML.parseDocument(content);
   } catch {
-    // Unparseable — fall through to the filename.
+    return null;
   }
-  return sourceNameFromPath(path);
+  const name = doc.get('name');
+  return typeof name === 'string' && name.length > 0 ? name : null;
 }
 
 /**
@@ -118,9 +142,7 @@ export async function resolveSlSourceFile(
   const dir = `semantic-layer/${assertSafeConnectionId(connectionId)}`;
   const schemaDir = `${dir}/_schema`;
   const listed = await fileStore.listFiles(dir);
-  const paths = listed.files
-    .filter((file) => (file.endsWith('.yaml') || file.endsWith('.yml')) && !file.startsWith(`${schemaDir}/`))
-    .sort();
+  const paths = listed.files.filter((file) => isSlYamlPath(file) && !file.startsWith(`${schemaDir}/`)).sort();
 
   const matches: SlSourceFile[] = [];
   for (const path of paths) {

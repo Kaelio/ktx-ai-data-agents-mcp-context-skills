@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
+import type { SqlAnalysisPort } from '../../context/sql-analysis/ports.js';
 import type { KtxLogger } from '../../context/core/config.js';
 import { createAbortError, isAbortError } from '../../context/core/abort.js';
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
@@ -35,6 +36,7 @@ export interface RunLocalIngestOptions {
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
+  sqlAnalysis?: SqlAnalysisPort;
   logger?: KtxLogger;
   embeddingProvider?: import('../../llm/types.js').KtxEmbeddingProvider | null;
   abortSignal?: AbortSignal;
@@ -159,6 +161,7 @@ async function runScheduledPullJob(options: {
   memoryModel?: string;
   semanticLayerCompute?: KtxSemanticLayerComputePort;
   queryExecutor?: KtxSqlQueryExecutorPort;
+  sqlAnalysis?: SqlAnalysisPort;
   logger?: KtxLogger;
   embeddingProvider?: import('../../llm/types.js').KtxEmbeddingProvider | null;
   abortSignal?: AbortSignal;
@@ -214,6 +217,7 @@ export async function runLocalIngest(options: RunLocalIngestOptions): Promise<Lo
       memoryModel: options.memoryModel,
       semanticLayerCompute: options.semanticLayerCompute,
       queryExecutor: options.queryExecutor,
+      sqlAnalysis: options.sqlAnalysis,
       logger: options.logger,
       embeddingProvider: options.embeddingProvider,
       abortSignal: options.abortSignal,
@@ -397,6 +401,7 @@ export async function runLocalMetabaseIngest(
         memoryModel: options.memoryModel,
         semanticLayerCompute: options.semanticLayerCompute,
         queryExecutor: options.queryExecutor,
+        sqlAnalysis: options.sqlAnalysis,
         logger: options.logger,
         embeddingProvider: options.embeddingProvider,
         abortSignal: options.abortSignal,
