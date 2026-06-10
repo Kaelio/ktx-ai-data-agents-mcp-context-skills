@@ -165,7 +165,6 @@ async function writeHistoricSqlProject(project: KtxLocalProject): Promise<KtxLoc
       '  state: sqlite',
       '  search: sqlite-fts5',
       '  git:',
-      '    auto_commit: false',
       '    author: ktx Test <system@ktx.local>',
       '',
     ].join('\n'),

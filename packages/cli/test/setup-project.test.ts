@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,6 +43,19 @@ function defaultSubfolderLabel(parentDir: string): string {
   const childName = 'ktx-project';
   const childDir = join(parentDir, childName);
   return `New subfolder (${gray(childDir.slice(0, -childName.length))}${childName})`;
+}
+
+function initForeignRepo(dir: string): void {
+  execFileSync('git', ['init'], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'Foreign User',
+      GIT_AUTHOR_EMAIL: 'foreign@example.com',
+      GIT_COMMITTER_NAME: 'Foreign User',
+      GIT_COMMITTER_EMAIL: 'foreign@example.com',
+    },
+  });
 }
 
 describe('setup project step', () => {
@@ -293,6 +307,59 @@ describe('setup project step', () => {
     );
     await expect(readFile(join(projectDir, 'README.md'), 'utf-8')).resolves.toBe('Existing project notes\n');
     await expect(stat(join(projectDir, 'ktx.yaml'))).resolves.toBeDefined();
+  });
+
+  it('refuses to create a project in a foreign git repo in non-interactive mode', async () => {
+    const projectDir = join(tempDir, 'app-repo');
+    await mkdir(projectDir, { recursive: true });
+    initForeignRepo(projectDir);
+    const testIo = makeIo();
+
+    await expect(
+      runKtxSetupProjectStep({ projectDir, mode: 'auto', inputMode: 'disabled', yes: true }, testIo.io),
+    ).resolves.toMatchObject({ status: 'missing-input', projectDir });
+
+    expect(testIo.stderr()).toContain('already a git repository that ktx did not create');
+    await expect(stat(join(projectDir, 'ktx.yaml'))).rejects.toThrow();
+  });
+
+  it('re-prompts away from a foreign current directory and creates the project in a subfolder', async () => {
+    const projectDir = join(tempDir, 'app-repo');
+    await mkdir(projectDir, { recursive: true });
+    initForeignRepo(projectDir);
+    const subfolderDir = join(projectDir, 'ktx-project');
+    const prompts = makePromptAdapter({ choices: ['current', 'new-default', 'create'] });
+    const testIo = makeIo({ stdoutIsTty: true });
+
+    const result = await runKtxSetupProjectStep(
+      { projectDir, mode: 'auto', inputMode: 'auto', yes: false },
+      testIo.io,
+      { prompts },
+    );
+
+    expect(result.status).toBe('ready');
+    expect(result.projectDir).toBe(subfolderDir);
+    expect(testIo.stderr()).toContain('already a git repository that ktx did not create');
+    await expect(stat(join(subfolderDir, 'ktx.yaml'))).resolves.toBeDefined();
+    await expect(stat(join(projectDir, 'ktx.yaml'))).rejects.toThrow();
+  });
+
+  it('rejects a custom path that points at an existing file without crashing', async () => {
+    const startDir = join(tempDir, 'start');
+    await mkdir(startDir, { recursive: true });
+    await writeFile(join(startDir, 'notes.txt'), 'a file, not a folder\n', 'utf-8');
+    const prompts = makePromptAdapter({ choices: ['new-custom'], textValue: 'notes.txt' });
+    const testIo = makeIo({ stdoutIsTty: true });
+
+    await expect(
+      runKtxSetupProjectStep(
+        { projectDir: startDir, mode: 'auto', inputMode: 'auto', yes: false },
+        testIo.io,
+        { prompts },
+      ),
+    ).resolves.toMatchObject({ status: 'missing-input', projectDir: startDir });
+
+    expect(testIo.stderr()).toContain('exists and is not a directory');
   });
 
   it('prompts to exit and returns cancelled in interactive auto mode', async () => {

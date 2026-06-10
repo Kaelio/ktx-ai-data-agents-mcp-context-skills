@@ -230,14 +230,13 @@ const setupSchema = z
 
 const storageGitSchema = z
   .strictObject({
-    auto_commit: z.boolean().default(true).describe('When true, ktx automatically commits state changes to the local Git-backed store.'),
     author: z
       .string()
       .min(1)
       .default('ktx <ktx@example.com>')
-      .describe('Git author identity used for auto-commits, in standard "Name <email>" form.'),
+      .describe('Git author identity used for commits, in standard "Name <email>" form.'),
   })
-  .describe('Git-backed storage commit policy.');
+  .describe('Git-backed storage author policy.');
 
 const storageSchema = z
   .strictObject({
@@ -276,12 +275,6 @@ const agentSchema = z
   })
   .describe('Agent feature configuration.');
 
-const memorySchema = z
-  .strictObject({
-    auto_commit: z.boolean().default(true).describe('When true, ktx automatically commits memory updates to the Git-backed store.'),
-  })
-  .describe('Memory subsystem configuration.');
-
 const ktxProjectConfigSchema = z
   .strictObject({
     setup: setupSchema.optional().describe('Setup-wizard state. Written by `ktx setup`; may be omitted.'),
@@ -293,7 +286,6 @@ const ktxProjectConfigSchema = z
     llm: llmSchema.prefault({}).describe('LLM provider, per-role model overrides, and prompt-caching tunables.'),
     ingest: ingestSchema.prefault({}).describe('Ingest pipeline configuration.'),
     agent: agentSchema.prefault({}).describe('Agent feature configuration.'),
-    memory: memorySchema.prefault({}).describe('Memory subsystem configuration.'),
     scan: scanSchema.prefault({}).describe('Schema-scan configuration: enrichment and relationship discovery.'),
   })
   .describe('Configuration schema for ktx project files (ktx.yaml).');

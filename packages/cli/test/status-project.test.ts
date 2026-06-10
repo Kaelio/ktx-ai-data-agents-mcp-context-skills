@@ -60,6 +60,7 @@ function baseProjectConfig(): KtxProjectConfig {
 }
 
 const stubClaudeCodeAuthProbe = async () => ({ ok: true as const });
+const removedAutoCommitKey = ['auto', 'commit'].join('_');
 
 describe('buildProjectStatus embeddings', () => {
   it('reports sentence-transformers with explicit base_url as ok', async () => {
@@ -399,6 +400,19 @@ describe('buildProjectStatus --fast', () => {
     const rendered = renderProjectStatus(status, { verbose: false, useColor: false });
     expect(rendered).toContain('auth probe skipped (--fast)');
     expect(rendered).toContain('pg_stat_statements probe skipped (--fast)');
+  });
+});
+
+describe('renderProjectStatus config cleanup', () => {
+  it('does not render removed auto-commit status fields in verbose output', async () => {
+    const project = projectWithConfig(baseProjectConfig());
+    const status = await buildProjectStatus(project, {
+      claudeCodeAuthProbe: stubClaudeCodeAuthProbe,
+    });
+    const rendered = renderProjectStatus(status, { verbose: true, useColor: false });
+
+    expect(rendered).not.toContain(removedAutoCommitKey);
+    expect(rendered).toContain('author=ktx <ktx@example.com>');
   });
 });
 
