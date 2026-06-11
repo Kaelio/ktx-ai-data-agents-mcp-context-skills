@@ -27,11 +27,9 @@ export interface WorktreeEntry {
   head: string | null;
 }
 
-const KTX_MANAGED_GIT_CONFIG_KEY = 'ktx.managed';
-
 export type KtxRepoOwnership = 'unowned' | 'ktx-managed' | 'foreign';
 
-class KtxForeignGitRepositoryError extends Error {
+export class KtxForeignGitRepositoryError extends Error {
   constructor(configDir: string) {
     super(
       `${configDir} is already a git repository that ktx did not create. ` +
@@ -48,19 +46,30 @@ function isNodeErrnoException(error: unknown): error is NodeJS.ErrnoException {
 /**
  * Classify whether ktx may own a git repository rooted exactly at `dir`.
  *
+ * Ownership is derived from observed state, not from persisted markers: a ktx
+ * project always has its `ktx.yaml` at the repo root (`initKtxProject` writes it
+ * before the repo is even initialized), and a user's own repo never does. A
+ * derived signal cannot go stale the way a stamp can — repos created by any past
+ * or future ktx classify identically.
+ *
  * - `unowned`: there is no git repository for ktx to avoid here → ktx may
  *   `git init`. Covers a fresh standalone directory, a fresh directory nested
  *   inside a parent repo, a path that does not exist yet, and a path that is not
  *   a directory at all (whether the path is a usable project directory is a
  *   separate concern for the caller to validate).
- * - `ktx-managed`: `<dir>/.git` is a directory carrying ktx's ownership marker.
- * - `foreign`: a repo ktx did not create — a `.git` directory without the marker,
- *   or a `.git` *file* (a linked worktree). ktx must never adopt or mutate it.
+ * - `ktx-managed`: `<dir>/.git` is a directory and a `ktx.yaml` file sits at the
+ *   repo root — ktx's defining artifact. The working tree decides, not the git
+ *   history: older ktx versions left `ktx.yaml` uncommitted (it holds secret
+ *   references).
+ * - `foreign`: a repo ktx did not create — a `.git` directory without a root
+ *   `ktx.yaml`, or a `.git` *file* (a linked worktree, never ktx's own repo
+ *   regardless of what files live in it). ktx must never adopt or mutate it.
  *
- * Reads only `<dir>/.git` directly and never walks up the directory tree, so the
- * classification of a project dir never depends on whether a parent repo exists.
- * Shared by `GitService.initialize()` (the invariant) and the setup wizard (the
- * pre-flight guidance) so both decide ownership from the same rule.
+ * Reads only `<dir>/.git` and `<dir>/ktx.yaml`; never walks up the directory
+ * tree, so the classification of a project dir never depends on whether a parent
+ * repo exists. Shared by `initKtxProject()` (the init-time guard, run before
+ * ktx.yaml is written), `GitService.initialize()` (the invariant), and the setup
+ * wizard (the pre-flight guidance), so they all decide ownership from one rule.
  */
 export async function classifyKtxRepoOwnership(dir: string): Promise<KtxRepoOwnership> {
   let dotGitIsDirectory: boolean;
@@ -78,13 +87,9 @@ export async function classifyKtxRepoOwnership(dir: string): Promise<KtxRepoOwne
     return 'foreign';
   }
   try {
-    const marker = await createSimpleGit(dir).raw([
-      'config',
-      '--local',
-      '--get',
-      KTX_MANAGED_GIT_CONFIG_KEY,
-    ]);
-    return marker.trim() === 'true' ? 'ktx-managed' : 'foreign';
+    // stat (not lstat): follow symlinks, matching what `loadKtxProject`'s
+    // readFile accepts — a dir that loads as a ktx project classifies as one.
+    return (await fs.stat(join(dir, 'ktx.yaml'))).isFile() ? 'ktx-managed' : 'foreign';
   } catch {
     return 'foreign';
   }
@@ -168,10 +173,11 @@ export class GitService {
       }
       if (ownership === 'unowned') {
         await this.git.init();
-        await this.git.addConfig(KTX_MANAGED_GIT_CONFIG_KEY, 'true');
         this.logger.log('Initialized ktx-managed git repository');
       }
-      // ownership === 'ktx-managed' → ktx's own repo; proceed with the normal re-run path.
+      // ownership === 'ktx-managed' → ktx's own repo, recognized by its root ktx.yaml; proceed
+      // with the normal re-run path. A repo created by any earlier ktx version classifies the
+      // same way, so no adoption step is needed.
 
       // Keep any auto-maintenance triggered by writes in-process. Detached maintenance can
       // keep object-pack directories alive briefly after awaited git commands complete,

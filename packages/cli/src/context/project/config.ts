@@ -301,6 +301,15 @@ export interface KtxConfigIssue {
   path: string;
   message: string;
   fix?: string;
+  /**
+   * 'error' is a real misconfiguration that blocks the project (bad value on a
+   * recognized field). 'warning' is a tolerated condition that ktx recovers
+   * from on its own — currently only keys left over from a different ktx
+   * version (unknown object fields or record keys such as `llm.models` roles),
+   * which the loader ignores (it strips them from the in-memory config but
+   * leaves ktx.yaml on disk untouched).
+   */
+  severity: 'error' | 'warning';
 }
 
 export interface KtxConfigValidation {
@@ -325,24 +334,65 @@ function valueAtPath(root: unknown, path: ReadonlyArray<PropertyKey>): unknown {
   return cursor;
 }
 
-function formatIssue(issue: z.core.$ZodIssue, input: unknown): KtxConfigIssue[] {
-  const basePath = dottedPath(issue.path);
+interface UnknownKeyLocation {
+  containerPath: ReadonlyArray<PropertyKey>;
+  key: string;
+}
 
+/**
+ * Unknown keys surface in two shapes in zod's issue stream: strict objects
+ * report `unrecognized_keys` (path → container, `keys` → offenders), and
+ * enum-keyed records (`llm.models` roles) report one `invalid_key` per
+ * offender (path ends with the key). Both mean the same thing for a ktx.yaml
+ * written by a different ktx version, so one extractor feeds both the warning
+ * report and the in-memory strip — the two can never disagree. Zod does not
+ * validate the value of an entry it already flagged via either shape, so
+ * stripping the key removes exactly that issue and nothing else.
+ */
+function unknownKeyLocations(issue: z.core.$ZodIssue): UnknownKeyLocation[] {
   if (issue.code === 'unrecognized_keys') {
-    const keys = (issue as { keys?: readonly string[] }).keys ?? [];
-    return keys.map((key) => {
-      const fullPath = basePath.length > 0 ? `${basePath}.${key}` : key;
-      return { path: fullPath, message: `Unsupported ${fullPath}: unknown field` };
+    return issue.keys.map((key) => ({ containerPath: issue.path, key }));
+  }
+  if (issue.code === 'invalid_key' && issue.path.length > 0) {
+    return [
+      {
+        containerPath: issue.path.slice(0, -1),
+        key: String(issue.path[issue.path.length - 1]),
+      },
+    ];
+  }
+  return [];
+}
+
+function formatIssue(issue: z.core.$ZodIssue, input: unknown): KtxConfigIssue[] {
+  const unknownKeys = unknownKeyLocations(issue);
+  if (unknownKeys.length > 0) {
+    return unknownKeys.map(({ containerPath, key }) => {
+      const base = dottedPath(containerPath);
+      const fullPath = base.length > 0 ? `${base}.${key}` : key;
+      return {
+        path: fullPath,
+        message: `Unsupported ${fullPath}: unknown field (ignored)`,
+        fix: 'Unknown to this ktx version; it is ignored. Delete it from ktx.yaml when convenient.',
+        severity: 'warning',
+      };
     });
   }
 
+  const basePath = dottedPath(issue.path);
   const lastSegment = issue.path[issue.path.length - 1];
   if (lastSegment === 'backend' && (issue.code === 'invalid_value' || issue.code === 'invalid_type')) {
     const value = valueAtPath(input, issue.path);
-    return [{ path: basePath, message: `Unsupported ${basePath}: ${String(value)}` }];
+    return [{ path: basePath, message: `Unsupported ${basePath}: ${String(value)}`, severity: 'error' }];
   }
 
-  return [{ path: basePath, message: basePath.length > 0 ? `${basePath}: ${issue.message}` : issue.message }];
+  return [
+    {
+      path: basePath,
+      message: basePath.length > 0 ? `${basePath}: ${issue.message}` : issue.message,
+      severity: 'error',
+    },
+  ];
 }
 
 function collectIssues(error: z.ZodError, input: unknown): KtxConfigIssue[] {
@@ -359,16 +409,60 @@ export function buildDefaultKtxProjectConfig(): KtxProjectConfig {
   return ktxProjectConfigSchema.parse({});
 }
 
+/**
+ * Remove keys the current schema does not recognize, deriving the set to drop
+ * from the strict schema itself rather than a hand-maintained list of removed
+ * fields. This makes loading forward-tolerant: a ktx.yaml written by a different
+ * ktx version (e.g. with `storage.git.auto_commit`, a top-level `memory` block,
+ * or an `llm.models` role this version does not define) still loads instead of
+ * bricking every command. The strip is purely in-memory — the file on disk is
+ * never rewritten here — so an unknown key is ignored, not destroyed (a typo or
+ * a field from a newer ktx survives for the user to keep or fix). Malformed
+ * values on recognized fields are left in place so they still surface as real
+ * errors.
+ */
+function stripUnrecognizedKeys(input: Record<string, unknown>): Record<string, unknown> {
+  const result = ktxProjectConfigSchema.safeParse(input);
+  if (result.success) {
+    return input;
+  }
+  const unknownKeys = result.error.issues.flatMap(unknownKeyLocations);
+  if (unknownKeys.length === 0) {
+    return input;
+  }
+  const value = structuredClone(input);
+  for (const { containerPath, key } of unknownKeys) {
+    const container = valueAtPath(value, containerPath);
+    if (container === null || typeof container !== 'object') continue;
+    delete (container as Record<string, unknown>)[key];
+  }
+  return value;
+}
+
+function parseTolerant(input: Record<string, unknown>): KtxProjectConfig {
+  const value = stripUnrecognizedKeys(input);
+  const result = ktxProjectConfigSchema.safeParse(value);
+  if (!result.success) {
+    throw new Error(formatZodError(result.error, value));
+  }
+  return result.data;
+}
+
+/**
+ * Parse and validate a ktx.yaml document. Tolerant of keys this ktx version does
+ * not recognize: a config written by a different ktx version still loads, with
+ * unknown keys stripped from the returned config (see {@link stripUnrecognizedKeys}).
+ * Malformed values on recognized fields still throw. This is a pure read — it
+ * never writes back; {@link validateKtxProjectConfig} reports the ignored keys
+ * for `ktx doctor`, and the next legitimate config write re-serializes the
+ * cleaned form.
+ */
 export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
   const parsed = YAML.parse(raw) as unknown;
   if (!isRecord(parsed)) {
     throw new Error('ktx.yaml must contain a YAML object');
   }
-  const result = ktxProjectConfigSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error(formatZodError(result.error, parsed));
-  }
-  return result.data;
+  return parseTolerant(parsed);
 }
 
 export function validateKtxProjectConfig(raw: string): KtxConfigValidation {
@@ -377,16 +471,19 @@ export function validateKtxProjectConfig(raw: string): KtxConfigValidation {
     parsed = YAML.parse(raw);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, issues: [{ path: '', message: `ktx.yaml parse error: ${message}` }] };
+    return { ok: false, issues: [{ path: '', message: `ktx.yaml parse error: ${message}`, severity: 'error' }] };
   }
   if (!isRecord(parsed)) {
-    return { ok: false, issues: [{ path: '', message: 'ktx.yaml must contain a YAML object' }] };
+    return { ok: false, issues: [{ path: '', message: 'ktx.yaml must contain a YAML object', severity: 'error' }] };
   }
   const result = ktxProjectConfigSchema.safeParse(parsed);
   if (result.success) {
     return { ok: true, issues: [] };
   }
-  return { ok: false, issues: collectIssues(result.error, parsed) };
+  const issues = collectIssues(result.error, parsed);
+  // Unrecognized keys are warnings ktx recovers from; only real errors block.
+  const ok = !issues.some((issue) => issue.severity === 'error');
+  return { ok, issues };
 }
 
 export function generateKtxProjectConfigJsonSchema(): Record<string, unknown> {

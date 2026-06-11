@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { KtxCoreConfig } from '../../../src/context/core/config.js';
 import { GitService } from '../../../src/context/core/git.service.js';
 
-// Regression for bootstrapping a marked ktx repo on a machine with no configured
+// Regression for bootstrapping a ktx-owned repo on a machine with no configured
 // git identity. A foreign pre-existing repo is rejected by the ownership rule;
-// this test covers the still-valid path where the repo is already ktx-managed
-// but has no HEAD yet.
+// this test covers the still-valid path where the repo is already ktx's own
+// (root ktx.yaml present) but has no HEAD yet.
 describe('GitService.initialize without a configured git identity', () => {
   let repoDir: string;
   let homeDir: string;
@@ -58,11 +58,7 @@ describe('GitService.initialize without a configured git identity', () => {
     }
 
     execFileSync('git', ['init'], { cwd: repoDir, env: process.env, stdio: 'ignore' });
-    execFileSync('git', ['config', '--local', 'ktx.managed', 'true'], {
-      cwd: repoDir,
-      env: process.env,
-      stdio: 'ignore',
-    });
+    await writeFile(join(repoDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
   });
 
   afterEach(async () => {

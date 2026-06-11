@@ -666,11 +666,21 @@ agent:
 
 ## Validating your config
 
-**ktx** validates `ktx.yaml` strictly: unknown keys at the top level or inside
-strict blocks cause setup and CLI commands to fail with a precise path
-(`scan.relationships.acceptThreshhold: Unrecognized key`). Warehouse
-connections accept extra driver-specific fields, so passthrough values like
-`historicSql` and `context.queryHistory` are allowed.
+**ktx** validates `ktx.yaml` when it loads, and treats two kinds of problems
+differently:
+
+- **An invalid value on a field ktx recognizes** (for example
+  `llm.provider.backend: nope`) is a hard error. Setup and CLI commands stop and
+  report the exact path so you can fix it.
+- **An unrecognized key** — one left over from a different **ktx** version, or a
+  typo such as `scan.relationships.acceptThreshhold` — is tolerated, not fatal.
+  **ktx** ignores the key and keeps running, so a misspelled field quietly falls
+  back to its default instead of taking effect. `ktx status` lists each ignored
+  key as a warning (and exits `0`) so you can remove or correct it when
+  convenient.
+
+Warehouse connections accept extra driver-specific fields, so passthrough values
+like `historicSql` and `context.queryHistory` are allowed.
 
 To re-validate without running anything else:
 

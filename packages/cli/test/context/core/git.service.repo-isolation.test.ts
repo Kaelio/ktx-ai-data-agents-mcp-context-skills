@@ -56,10 +56,11 @@ describe('GitService repository ownership', () => {
     git(parentDir, ['commit', '-m', 'parent baseline']);
     const parentHeadBefore = git(parentDir, ['rev-parse', 'HEAD']);
 
+    await writeFile(join(projectDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     const service = new GitService(coreConfig(projectDir));
     await service.onModuleInit();
 
-    expect(git(projectDir, ['config', '--local', '--get', 'ktx.managed'])).toBe('true');
+    expect(await classifyKtxRepoOwnership(projectDir)).toBe('ktx-managed');
     expect(git(parentDir, ['rev-parse', 'HEAD'])).toBe(parentHeadBefore);
     expect(await realpath(git(projectDir, ['rev-parse', '--show-toplevel']))).toBe(await realpath(projectDir));
 
@@ -83,18 +84,22 @@ describe('GitService repository ownership', () => {
     expect(await readFile(join(projectDir, '.git', 'config'), 'utf-8')).toBe(configBefore);
   });
 
-  it('rejects a gitfile at the project dir as foreign', async () => {
+  it('rejects a gitfile at the project dir as foreign even when a ktx.yaml sits beside it', async () => {
+    // A linked worktree is never ktx's own repo, whatever files live in it.
     const projectDir = join(tempDir, 'linked-worktree');
     await mkdir(projectDir, { recursive: true });
     await writeFile(join(projectDir, '.git'), 'gitdir: ../actual.git\n', 'utf-8');
+    await writeFile(join(projectDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
 
     const service = new GitService(coreConfig(projectDir));
 
     await expect(service.onModuleInit()).rejects.toThrow(/already a git repository that ktx did not create/);
   });
 
-  it('accepts a marked ktx repo and does not create a second bootstrap commit', async () => {
+  it('re-initializes an existing ktx project repo without a second bootstrap commit', async () => {
     const projectDir = join(tempDir, 'owned');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(join(projectDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     const service = new GitService(coreConfig(projectDir));
     await service.onModuleInit();
     const before = await service.revParseHead();
@@ -103,7 +108,38 @@ describe('GitService repository ownership', () => {
     await second.onModuleInit();
 
     expect(await second.revParseHead()).toBe(before);
-    expect(git(projectDir, ['config', '--local', '--get', 'ktx.managed'])).toBe('true');
+  });
+
+  it('accepts a project created by an older ktx: repo history plus an untracked root ktx.yaml', async () => {
+    // Real older projects have ktx commit history and an uncommitted ktx.yaml
+    // at the root (it holds secret refs). The on-disk ktx.yaml IS the ownership
+    // signal — no marker or adoption step involved.
+    const projectDir = join(tempDir, 'legacy');
+    await mkdir(join(projectDir, '.ktx'), { recursive: true });
+    git(projectDir, ['init']);
+    await writeFile(join(projectDir, '.ktx', '.gitignore'), 'secrets/\n', 'utf-8');
+    git(projectDir, ['add', '.ktx/.gitignore']);
+    git(projectDir, ['commit', '-m', 'Initialize KTX project: legacy']);
+    await writeFile(join(projectDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
+    const headBefore = git(projectDir, ['rev-parse', 'HEAD']);
+
+    const service = new GitService(coreConfig(projectDir));
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+
+    expect(await service.revParseHead()).toBe(headBefore);
+    expect(git(projectDir, ['status', '--short'])).toContain('?? ktx.yaml');
+  });
+
+  it('still rejects a user repo with history but no root ktx.yaml', async () => {
+    const projectDir = join(tempDir, 'app-repo');
+    await mkdir(projectDir, { recursive: true });
+    git(projectDir, ['init']);
+    await writeFile(join(projectDir, 'README.md'), '# App\n', 'utf-8');
+    git(projectDir, ['add', 'README.md']);
+    git(projectDir, ['commit', '-m', 'app baseline']);
+
+    const service = new GitService(coreConfig(projectDir));
+    await expect(service.onModuleInit()).rejects.toThrow(/already a git repository that ktx did not create/);
   });
 });
 
@@ -132,9 +168,14 @@ describe('classifyKtxRepoOwnership', () => {
     expect(await classifyKtxRepoOwnership(nestedDir)).toBe('unowned');
   });
 
-  it('reports ktx-managed for a repo ktx initialized', async () => {
+  it('reports ktx-managed for a repo with a root ktx.yaml (even untracked)', async () => {
+    // The project config at the repo root is ktx's defining artifact and the
+    // sole ownership signal. Older ktx leaves it uncommitted (it holds secret
+    // refs), so the working-tree file decides, not the git history.
     const dir = join(tempDir, 'owned');
-    await new GitService(coreConfig(dir)).onModuleInit();
+    await mkdir(dir, { recursive: true });
+    git(dir, ['init']);
+    await writeFile(join(dir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     expect(await classifyKtxRepoOwnership(dir)).toBe('ktx-managed');
   });
 
@@ -142,6 +183,16 @@ describe('classifyKtxRepoOwnership', () => {
     const dir = join(tempDir, 'foreign');
     await mkdir(dir, { recursive: true });
     git(dir, ['init']);
+    expect(await classifyKtxRepoOwnership(dir)).toBe('foreign');
+  });
+
+  it('reports foreign for a non-ktx repo that has commits but no ktx.yaml', async () => {
+    const dir = join(tempDir, 'app');
+    await mkdir(dir, { recursive: true });
+    git(dir, ['init']);
+    await writeFile(join(dir, 'README.md'), '# App\n', 'utf-8');
+    git(dir, ['add', 'README.md']);
+    git(dir, ['commit', '-m', 'baseline']);
     expect(await classifyKtxRepoOwnership(dir)).toBe('foreign');
   });
 

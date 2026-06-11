@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -27,8 +26,12 @@ describe('GitService', () => {
       },
     };
 
+    // Mirror production: initKtxProject writes ktx.yaml before the git repo is
+    // initialized (the root ktx.yaml is the ownership signal) and commits it.
+    await writeFile(join(tempDir, 'ktx.yaml'), 'connections: {}\n', 'utf-8');
     service = new GitService(coreConfig);
     await service.onModuleInit();
+    await service.commitFile('ktx.yaml', 'Initialize KTX project', 'Test', 'test@example.com');
   });
 
   afterEach(async () => {
@@ -61,14 +64,9 @@ describe('GitService', () => {
 
   describe('cold-start bootstrap commit', () => {
     it('writes an empty commit on init so HEAD always resolves', async () => {
-      // beforeEach already ran onModuleInit() against an empty temp dir.
+      // beforeEach already ran onModuleInit() against a fresh temp dir.
       const head = await service.revParseHead();
       expect(head).toMatch(/^[0-9a-f]{40}$/);
-      const marker = execFileSync('git', ['config', '--local', '--get', 'ktx.managed'], {
-        cwd: tempDir,
-        encoding: 'utf-8',
-      }).trim();
-      expect(marker).toBe('true');
     });
 
     it('does not double-commit when re-initialized', async () => {

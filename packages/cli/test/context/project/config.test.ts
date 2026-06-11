@@ -91,25 +91,63 @@ connections:
     });
   });
 
-  it('rejects removed auto-commit config keys', () => {
-    expect(() =>
-      parseKtxProjectConfig(`
+  it('tolerates unrecognized keys left over from older ktx versions', () => {
+    // A project written by an older ktx still carries fields that newer ktx
+    // removed (storage.git.auto_commit, the top-level memory block). Loading
+    // must not brick every command — the keys are dropped, not rejected.
+    const config = parseKtxProjectConfig(`
 storage:
   git:
     ${removedAutoCommitKey}: false
-`),
-    ).toThrow(new RegExp(`storage\\.git\\.${removedAutoCommitKey}`));
-
-    expect(() =>
-      parseKtxProjectConfig(`
 memory:
   ${removedAutoCommitKey}: false
-`),
-    ).toThrow(/memory/);
+`);
+    expect(config.storage.git).toEqual({ author: 'ktx <ktx@example.com>' });
+    expect(config).not.toHaveProperty('memory');
+  });
 
-    expect(validateKtxProjectConfig(`storage:\n  git:\n    ${removedAutoCommitKey}: false\n`)).toMatchObject({
+  it('reports dropped keys as warnings, not blocking errors', () => {
+    const validation = validateKtxProjectConfig(
+      `storage:\n  git:\n    ${removedAutoCommitKey}: false\nmemory:\n  ${removedAutoCommitKey}: false\n`,
+    );
+    expect(validation.ok).toBe(true);
+    expect(validation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: `storage.git.${removedAutoCommitKey}`, severity: 'warning' }),
+        expect.objectContaining({ path: 'memory', severity: 'warning' }),
+      ]),
+    );
+  });
+
+  it('tolerates llm.models roles this ktx version does not define', () => {
+    // Role keys come from an enum-keyed record, so zod reports them as
+    // invalid_key rather than unrecognized_keys. A role added by a newer ktx
+    // (or removed by this one) is the same upgrade situation as an unknown
+    // object field: ignore the entry, keep the recognized ones.
+    const config = parseKtxProjectConfig(`
+llm:
+  models:
+    default: claude-sonnet-4-6
+    summarizer_from_the_future: some-model
+`);
+    expect(config.llm.models).toEqual({ default: 'claude-sonnet-4-6' });
+
+    const validation = validateKtxProjectConfig(
+      'llm:\n  models:\n    default: claude-sonnet-4-6\n    summarizer_from_the_future: some-model\n',
+    );
+    expect(validation.ok).toBe(true);
+    expect(validation.issues).toEqual([
+      expect.objectContaining({ path: 'llm.models.summarizer_from_the_future', severity: 'warning' }),
+    ]);
+  });
+
+  it('still rejects malformed values on recognized fields', () => {
+    // Tolerance is only for unknown keys. A bad value on a known field is a
+    // real misconfiguration and must still fail loudly.
+    expect(() => parseKtxProjectConfig('storage:\n  state: mariadb\n')).toThrow(/storage\.state/);
+    expect(validateKtxProjectConfig('storage:\n  state: mariadb\n')).toMatchObject({
       ok: false,
-      issues: [expect.objectContaining({ path: `storage.git.${removedAutoCommitKey}` })],
+      issues: [expect.objectContaining({ path: 'storage.state', severity: 'error' })],
     });
   });
 
@@ -471,41 +509,34 @@ scan:
     expect(() => parseKtxProjectConfig(yaml)).toThrow(/scan\.relationships\.validationBudget/);
   });
 
-  it('rejects unsupported local LLM and embedding fields', () => {
+  it('tolerates unsupported nested fields and surfaces them as warnings', () => {
+    // Unknown nested keys (whether obsolete or a typo) are dropped rather than
+    // bricking the command; ktx status surfaces them via validate warnings.
     expect(() =>
       parseKtxProjectConfig(`
 ingest:
   llm:
     backend: anthropic
 `),
-    ).toThrow('Unsupported ingest.llm: unknown field');
+    ).not.toThrow();
 
-    expect(() =>
-      parseKtxProjectConfig(`
+    const validation = validateKtxProjectConfig(`
+ingest:
+  llm:
+    backend: anthropic
 scan:
   enrichment:
     backend: gateway
-`),
-    ).toThrow('Unsupported scan.enrichment.backend: unknown field');
-
-    expect(() =>
-      parseKtxProjectConfig(`
-scan:
-  enrichment:
-    mode: llm
-    llm:
-      backend: gateway
-`),
-    ).toThrow('Unsupported scan.enrichment.llm: unknown field');
-
-    expect(() =>
-      parseKtxProjectConfig(`
-ingest:
-  embeddings:
-    provider: gateway
-    max_batch_size: 32
-`),
-    ).toThrow('Unsupported ingest.embeddings.provider');
+ingest_embeddings_typo:
+  provider: gateway
+`);
+    expect(validation.ok).toBe(true);
+    expect(validation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'ingest.llm', severity: 'warning' }),
+        expect.objectContaining({ path: 'scan.enrichment.backend', severity: 'warning' }),
+      ]),
+    );
   });
 
   it('rejects gateway embedding configs', () => {
@@ -552,13 +583,19 @@ scan:
     });
   });
 
-  it('rejects unknown top-level fields under strict mode', () => {
+  it('tolerates an unknown top-level field but warns about it', () => {
+    // A typo like `storrage` no longer bricks every command; it is dropped and
+    // reported as a warning so the user can notice the setting did not apply.
     expect(() =>
       parseKtxProjectConfig(`
 storrage:
   state: sqlite
 `),
-    ).toThrow(/Unsupported storrage/);
+    ).not.toThrow();
+
+    const validation = validateKtxProjectConfig('storrage:\n  state: sqlite\n');
+    expect(validation.ok).toBe(true);
+    expect(validation.issues).toEqual([expect.objectContaining({ path: 'storrage', severity: 'warning' })]);
   });
 });
 
@@ -598,7 +635,7 @@ scan:
     const result = validateKtxProjectConfig('- nope\n');
     expect(result).toEqual({
       ok: false,
-      issues: [{ path: '', message: 'ktx.yaml must contain a YAML object' }],
+      issues: [{ path: '', message: 'ktx.yaml must contain a YAML object', severity: 'error' }],
     });
   });
 });

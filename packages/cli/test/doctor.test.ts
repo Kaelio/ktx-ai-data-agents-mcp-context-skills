@@ -9,6 +9,8 @@ import {
   type DoctorCheck,
 } from '../src/doctor.js';
 
+const removedAutoCommitKey = ['auto', 'commit'].join('_');
+
 function makeIo() {
   let stdout = '';
   let stderr = '';
@@ -353,17 +355,10 @@ describe('runKtxDoctor', () => {
     expect(parsed.projectDir).toBe(tempDir);
   });
 
-  it('prints schema issues and exits 1 when ktx.yaml fails Zod validation', async () => {
+  it('prints schema issues and exits 1 when ktx.yaml has an invalid value', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
-      [
-        'storrage:',
-        '  state: sqlite',
-        'ingest:',
-        '  llm:',
-        '    backend: anthropic',
-        '',
-      ].join('\n'),
+      ['storage:', '  state: mariadb', ''].join('\n'),
       'utf-8',
     );
     const testIo = makeIo();
@@ -379,15 +374,14 @@ describe('runKtxDoctor', () => {
     const out = testIo.stdout();
     expect(out).toContain('KTX status');
     expect(out).toContain('Config');
-    expect(out).toContain('Unsupported storrage: unknown field');
-    expect(out).toContain('Unsupported ingest.llm: unknown field');
+    expect(out).toContain('storage.state');
     expect(out).toContain('ktx.yaml');
   });
 
-  it('emits structured JSON when ktx.yaml fails Zod validation', async () => {
+  it('emits structured JSON when ktx.yaml has an invalid value', async () => {
     await writeFile(
       join(tempDir, 'ktx.yaml'),
-      ['storrage: {}', ''].join('\n'),
+      ['storage:', '  state: mariadb', ''].join('\n'),
       'utf-8',
     );
     const testIo = makeIo();
@@ -407,7 +401,7 @@ describe('runKtxDoctor', () => {
     };
     expect(parsed.error).toBe('invalid_config');
     expect(parsed.projectDir).toBe(tempDir);
-    expect(parsed.issues.some((issue) => issue.path === 'storrage')).toBe(true);
+    expect(parsed.issues.some((issue) => issue.path === 'storage.state')).toBe(true);
   });
 
   it('shows a Config row labelled "ktx.yaml schema valid" on the happy path', async () => {
@@ -488,6 +482,49 @@ describe('runKtxDoctor', () => {
     expect(out).toContain('Ready.');
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
+  });
+
+  it('exits 0 and shows a Config warn row when ktx.yaml carries stale unknown fields', async () => {
+    // The default `ktx status` path (command: 'project') must keep working on a
+    // ktx.yaml written by a different ktx version: unknown fields surface as an
+    // ignored-fields warning on the Config row, never as a failure.
+    process.env.ANTHROPIC_API_KEY = 'test-key'; // pragma: allowlist secret
+    await writeFile(
+      join(tempDir, 'ktx.yaml'),
+      [
+        'connections:',
+        '  warehouse:',
+        '    driver: sqlite',
+        '    path: ./warehouse.db',
+        'llm:',
+        '  provider:',
+        '    backend: anthropic',
+        '  models:',
+        '    default: claude-sonnet-4-5',
+        'storage:',
+        '  git:',
+        `    ${removedAutoCommitKey}: false`,
+        'memory: {}',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+    const testIo = makeIo();
+
+    await expect(
+      runKtxDoctor(
+        { command: 'project', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+        testIo.io,
+        {},
+      ),
+    ).resolves.toBe(0);
+
+    const out = testIo.stdout();
+    expect(out).toContain('Config');
+    expect(out).toContain('ktx.yaml schema valid · 2 ignored fields');
+    expect(out).toContain(`⚠ Unsupported storage.git.${removedAutoCommitKey}: unknown field (ignored)`);
+    expect(out).toContain('⚠ Unsupported memory: unknown field (ignored)');
+    delete process.env.ANTHROPIC_API_KEY;
   });
 
   it('reports Claude Code auth failures and ignored prompt-caching fields in project doctor output', async () => {
@@ -795,17 +832,10 @@ describe('runKtxDoctor', () => {
       expect(JSON.parse(testIo.stdout())).toEqual({ ok: true, projectDir: tempDir });
     });
 
-    it('prints schema issues and exits 1 when ktx.yaml fails Zod validation', async () => {
+    it('prints schema issues and exits 1 when ktx.yaml has an invalid value', async () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
-        [
-          'storrage:',
-          '  state: sqlite',
-          'ingest:',
-          '  llm:',
-          '    backend: anthropic',
-          '',
-        ].join('\n'),
+        ['storage:', '  state: mariadb', ''].join('\n'),
         'utf-8',
       );
       const testIo = makeIo();
@@ -819,14 +849,13 @@ describe('runKtxDoctor', () => {
       ).resolves.toBe(1);
 
       const out = testIo.stdout();
-      expect(out).toContain('Unsupported storrage: unknown field');
-      expect(out).toContain('Unsupported ingest.llm: unknown field');
+      expect(out).toContain('storage.state');
     });
 
     it('emits structured JSON issues when validation fails', async () => {
       await writeFile(
         join(tempDir, 'ktx.yaml'),
-        ['storrage: {}', ''].join('\n'),
+        ['storage:', '  state: mariadb', ''].join('\n'),
         'utf-8',
       );
       const testIo = makeIo();
@@ -841,7 +870,75 @@ describe('runKtxDoctor', () => {
 
       const parsed = JSON.parse(testIo.stdout()) as { error: string; issues: Array<{ path: string }> };
       expect(parsed.error).toBe('invalid_config');
-      expect(parsed.issues.some((issue) => issue.path === 'storrage')).toBe(true);
+      expect(parsed.issues.some((issue) => issue.path === 'storage.state')).toBe(true);
+    });
+
+    it('tolerates unknown fields, reporting them as warnings and exiting 0', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        ['storrage:', '  state: sqlite', 'ingest:', '  llm:', '    backend: anthropic', ''].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(0);
+
+      const out = testIo.stdout();
+      expect(out).toContain('storrage');
+      expect(out).toContain('ingest.llm');
+      expect(out).toContain('ignored');
+    });
+
+    it('emits structured JSON warnings for unknown fields and exits 0', async () => {
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        ['storrage: {}', ''].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'json', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(0);
+
+      const parsed = JSON.parse(testIo.stdout()) as { ok: boolean; warnings: Array<{ path: string; severity: string }> };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.warnings.some((warning) => warning.path === 'storrage' && warning.severity === 'warning')).toBe(true);
+    });
+
+    it('renders unknown fields as ignored even when a real error blocks', async () => {
+      // Mixed file: a bad value on a recognized field (blocks) plus a stale
+      // unknown key (ignored). Only the error counts as a schema issue; the
+      // warning keeps the ⚠ ignored-field treatment instead of a misleading ✗.
+      await writeFile(
+        join(tempDir, 'ktx.yaml'),
+        ['storage:', '  state: mariadb', 'memory: {}', ''].join('\n'),
+        'utf-8',
+      );
+      const testIo = makeIo();
+
+      await expect(
+        runKtxDoctor(
+          { command: 'validate', projectDir: tempDir, outputMode: 'plain', inputMode: 'disabled' },
+          testIo.io,
+          {},
+        ),
+      ).resolves.toBe(1);
+
+      const out = testIo.stdout();
+      expect(out).toContain('ktx.yaml has 1 schema issue · 1 ignored field');
+      expect(out).toContain('✗ storage.state');
+      expect(out).toContain('⚠ Unsupported memory: unknown field (ignored)');
     });
 
     it('prints the missing-project message and exits 1 when ktx.yaml is absent', async () => {

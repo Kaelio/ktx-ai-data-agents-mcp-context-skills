@@ -481,12 +481,21 @@ export function renderInvalidConfigMessage(
   const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
   const abbreviated = abbreviateHome(projectDir) ?? projectDir;
 
+  // Only error-severity issues block (this renderer runs when at least one
+  // exists); warnings riding along in the same file are ignored fields and
+  // keep the ⚠ treatment they get on the valid-config path.
+  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
+  const warningCount = issues.length - errorCount;
+
   const lines: string[] = [];
   lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
   lines.push('');
-  lines.push(`  ${status('fail', '✗')} ${bold('Config')}    ktx.yaml has ${issues.length} schema issue${issues.length === 1 ? '' : 's'}`);
+  lines.push(
+    `  ${status('fail', '✗')} ${bold('Config')}    ktx.yaml has ${errorCount} schema issue${errorCount === 1 ? '' : 's'}${warningCount > 0 ? ` · ${warningCount} ignored field${warningCount === 1 ? '' : 's'}` : ''}`,
+  );
   for (const issue of issues) {
-    lines.push(`      ${status('fail', '✗')} ${issue.message}`);
+    const glyph = issue.severity === 'error' ? status('fail', '✗') : status('warn', '⚠');
+    lines.push(`      ${glyph} ${issue.message}`);
     if (issue.fix) {
       lines.push(`        ${dim(`→ ${issue.fix}`)}`);
     }
@@ -502,6 +511,7 @@ export function renderValidConfigMessage(
   projectDir: string,
   outputMode: KtxDoctorOutputMode,
   io: KtxDoctorIo,
+  warnings: KtxConfigIssue[] = [],
 ): void {
   if (outputMode === 'json') {
     io.stdout.write(
@@ -509,6 +519,7 @@ export function renderValidConfigMessage(
         {
           ok: true,
           projectDir,
+          ...(warnings.length > 0 ? { warnings } : {}),
         },
         null,
         2,
@@ -526,7 +537,19 @@ export function renderValidConfigMessage(
   const lines: string[] = [];
   lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
   lines.push('');
-  lines.push(`  ${status('pass', '✓')} ${bold('Config')}    ${dim('ktx.yaml schema valid')}`);
+  if (warnings.length > 0) {
+    lines.push(
+      `  ${status('warn', '⚠')} ${bold('Config')}    ktx.yaml schema valid · ${warnings.length} ignored field${warnings.length === 1 ? '' : 's'}`,
+    );
+    for (const warning of warnings) {
+      lines.push(`      ${status('warn', '⚠')} ${warning.message}`);
+      if (warning.fix) {
+        lines.push(`        ${dim(`→ ${warning.fix}`)}`);
+      }
+    }
+  } else {
+    lines.push(`  ${status('pass', '✓')} ${bold('Config')}    ${dim('ktx.yaml schema valid')}`);
+  }
   lines.push('');
 
   io.stdout.write(lines.join('\n'));
@@ -589,14 +612,14 @@ export async function runKtxDoctor(
         renderMissingProjectMessage(args.projectDir, args.outputMode, io);
         return 1;
       }
-      const { validateKtxProjectConfig } = await import('./context/project/config.js');;
+      const { validateKtxProjectConfig } = await import('./context/project/config.js');
       const rawConfig = await readFile(configPath, 'utf-8');
       const validation = validateKtxProjectConfig(rawConfig);
       if (!validation.ok) {
         renderInvalidConfigMessage(args.projectDir, validation.issues, args.outputMode, io);
         return 1;
       }
-      renderValidConfigMessage(args.projectDir, args.outputMode, io);
+      renderValidConfigMessage(args.projectDir, args.outputMode, io, validation.issues);
       return 0;
     }
 
@@ -607,7 +630,7 @@ export async function runKtxDoctor(
         return 1;
       }
       const { loadKtxProject } = await import('./context/project/project.js');
-      const { validateKtxProjectConfig } = await import('./context/project/config.js');;
+      const { validateKtxProjectConfig } = await import('./context/project/config.js');
       const { buildProjectStatus, renderProjectStatus } = await import('./status-project.js');
       const rawConfig = await readFile(configPath, 'utf-8');
       const validation = validateKtxProjectConfig(rawConfig);

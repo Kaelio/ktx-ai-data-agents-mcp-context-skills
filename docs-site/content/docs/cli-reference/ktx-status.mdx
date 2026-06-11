@@ -94,6 +94,6 @@ stats, and are always shown (they do not require external communication).
 |-------|-------|----------|
 | No **ktx** project found | Current directory has no `ktx.yaml` and `KTX_PROJECT_DIR` is unset | `ktx status` runs setup checks; run from a **ktx** project or set `KTX_PROJECT_DIR` for project checks |
 | Project config check fails | The project directory is missing or has an invalid `ktx.yaml` | Run `ktx setup` to resume setup |
-| Schema validation fails | `ktx.yaml` does not match the current config schema | Run `ktx status --validate --json` for structured issue details, then edit `ktx.yaml` or rerun `ktx setup` |
+| Schema validation fails | A field **ktx** recognizes has an invalid value. Unrecognized keys are reported as non-blocking warnings (exit `0`), not failures | Run `ktx status --validate --json` for structured issue details, then edit `ktx.yaml` or rerun `ktx setup` |
 | Semantic search check warns | Embeddings are not configured or the provider probe failed | Run `ktx setup` or inspect the check's `fix` field in JSON output |
 | Query history check warns | A database has query history enabled but the warehouse prerequisites are missing | Fix the warehouse extension, grants, or history access, then rerun `ktx status` |

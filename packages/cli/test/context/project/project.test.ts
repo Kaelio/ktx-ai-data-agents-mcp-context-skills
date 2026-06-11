@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -61,6 +61,33 @@ describe('KTX local project runtime', () => {
     });
   });
 
+  it('loads a ktx.yaml carrying fields removed in a newer ktx without mutating it on disk', async () => {
+    const projectDir = join(tempDir, 'warehouse');
+    await initKtxProject({ projectDir });
+
+    // Simulate a project written by a different ktx: inject unknown fields into
+    // the existing storage.git block and as a top-level memory block.
+    const configPath = join(projectDir, 'ktx.yaml');
+    const original = await readFile(configPath, 'utf-8');
+    const withStaleKeys = `${original.replace(
+      'author: ktx <ktx@example.com>',
+      'auto_commit: true\n    author: ktx <ktx@example.com>',
+    )}memory:\n  auto_commit: true\n`;
+    await writeFile(configPath, withStaleKeys, 'utf-8');
+
+    const loaded = await loadKtxProject({ projectDir });
+
+    // Loading tolerates the unknown fields instead of throwing: they are stripped
+    // from the in-memory config so every command still runs.
+    expect(loaded.config).not.toHaveProperty('memory');
+    expect(loaded.config.storage.git).toEqual({ author: 'ktx <ktx@example.com>' });
+
+    // Loading is read-only: the file on disk is left exactly as the user wrote it,
+    // so a typo or a field belonging to a newer ktx is never silently deleted.
+    // `ktx doctor` surfaces the ignored fields; the next legitimate write cleans them.
+    await expect(readFile(configPath, 'utf-8')).resolves.toBe(withStaleKeys);
+  });
+
   it('initializes a dedicated git repo at the project dir even when nested inside an enclosing repo', async () => {
     // A ktx project dir living below an existing git working tree (e.g. an analytics
     // subfolder of an app repo). ktx must own its own repo rooted at the project dir,
@@ -94,5 +121,46 @@ describe('KTX local project runtime', () => {
     await expect(initKtxProject({ projectDir, force: true })).resolves.toMatchObject({
       configPath: join(projectDir, 'ktx.yaml'),
     });
+  });
+
+  it('refuses to initialize inside a foreign git repo and writes nothing into it', async () => {
+    // A user's own repo (has history, no root ktx.yaml). ktx keeps its context in
+    // a repo it owns, so `ktx init` here must reject — and must not write ktx.yaml
+    // into the repo first and then "discover" it is ktx-managed. Because ktx.yaml
+    // is now written before git init, this guard lives in initKtxProject itself,
+    // not in GitService (which would see the just-written ktx.yaml and adopt the repo).
+    const projectDir = join(tempDir, 'app-repo');
+    await mkdir(projectDir, { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: projectDir });
+    await writeFile(join(projectDir, 'README.md'), '# App\n', 'utf-8');
+    execFileSync('git', ['add', 'README.md'], { cwd: projectDir });
+    execFileSync(
+      'git',
+      ['-c', 'user.name=App', '-c', 'user.email=app@example.com', 'commit', '-q', '-m', 'baseline'],
+      { cwd: projectDir },
+    );
+
+    await expect(initKtxProject({ projectDir })).rejects.toThrow(
+      /already a git repository that ktx did not create/,
+    );
+
+    await expect(stat(join(projectDir, 'ktx.yaml'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const tracked = execFileSync('git', ['ls-files'], { cwd: projectDir, encoding: 'utf-8' });
+    expect(tracked).not.toContain('ktx.yaml');
+  });
+
+  it('recovers an init interrupted after ktx.yaml was written but before git finished', async () => {
+    // initKtxProject writes ktx.yaml before initializing git, so the only residue a
+    // crash can leave is a valid ktx.yaml with no `.git` yet. That state must be
+    // recoverable: the next run re-initializes the repo instead of rejecting the
+    // directory as foreign (the trap that writing ktx.yaml last would create).
+    const projectDir = join(tempDir, 'half-init');
+    await initKtxProject({ projectDir });
+    await rm(join(projectDir, '.git'), { recursive: true, force: true });
+
+    const loaded = await loadKtxProject({ projectDir });
+
+    await expect(stat(join(projectDir, '.git'))).resolves.toBeDefined();
+    expect(await loaded.git.revParseHead()).toMatch(/^[0-9a-f]{40}$/);
   });
 });
