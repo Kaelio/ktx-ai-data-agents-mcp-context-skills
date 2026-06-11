@@ -120,10 +120,8 @@ memory:
   });
 
   it('tolerates llm.models roles this ktx version does not define', () => {
-    // Role keys come from an enum-keyed record, so zod reports them as
-    // invalid_key rather than unrecognized_keys. A role added by a newer ktx
-    // (or removed by this one) is the same upgrade situation as an unknown
-    // object field: ignore the entry, keep the recognized ones.
+    // Enum-keyed record entries surface as zod `invalid_key`, not
+    // `unrecognized_keys` — a distinct path from unknown object fields.
     const config = parseKtxProjectConfig(`
 llm:
   models:

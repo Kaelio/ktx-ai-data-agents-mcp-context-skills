@@ -44,32 +44,16 @@ function isNodeErrnoException(error: unknown): error is NodeJS.ErrnoException {
 }
 
 /**
- * Classify whether ktx may own a git repository rooted exactly at `dir`.
+ * Classify whether ktx may own a git repository rooted exactly at `dir`. A root
+ * `ktx.yaml` is the ownership signal; the working tree decides, not git history,
+ * because older ktx versions left `ktx.yaml` uncommitted (it holds secret refs).
  *
- * Ownership is derived from observed state, not from persisted markers: a ktx
- * project always has its `ktx.yaml` at the repo root (`initKtxProject` writes it
- * before the repo is even initialized), and a user's own repo never does. A
- * derived signal cannot go stale the way a stamp can — repos created by any past
- * or future ktx classify identically.
+ * - `unowned`: no repo here (including a missing or non-directory path) → ktx may `git init`.
+ * - `ktx-managed`: `<dir>/.git` is a directory and `ktx.yaml` sits at the root.
+ * - `foreign`: any other repo — no root `ktx.yaml`, or a `.git` *file* (a linked
+ *   worktree). ktx must never adopt or mutate it.
  *
- * - `unowned`: there is no git repository for ktx to avoid here → ktx may
- *   `git init`. Covers a fresh standalone directory, a fresh directory nested
- *   inside a parent repo, a path that does not exist yet, and a path that is not
- *   a directory at all (whether the path is a usable project directory is a
- *   separate concern for the caller to validate).
- * - `ktx-managed`: `<dir>/.git` is a directory and a `ktx.yaml` file sits at the
- *   repo root — ktx's defining artifact. The working tree decides, not the git
- *   history: older ktx versions left `ktx.yaml` uncommitted (it holds secret
- *   references).
- * - `foreign`: a repo ktx did not create — a `.git` directory without a root
- *   `ktx.yaml`, or a `.git` *file* (a linked worktree, never ktx's own repo
- *   regardless of what files live in it). ktx must never adopt or mutate it.
- *
- * Reads only `<dir>/.git` and `<dir>/ktx.yaml`; never walks up the directory
- * tree, so the classification of a project dir never depends on whether a parent
- * repo exists. Shared by `initKtxProject()` (the init-time guard, run before
- * ktx.yaml is written), `GitService.initialize()` (the invariant), and the setup
- * wizard (the pre-flight guidance), so they all decide ownership from one rule.
+ * Reads only `<dir>` itself; never walks up, so a parent repo cannot change the answer.
  */
 export async function classifyKtxRepoOwnership(dir: string): Promise<KtxRepoOwnership> {
   let dotGitIsDirectory: boolean;
@@ -175,9 +159,7 @@ export class GitService {
         await this.git.init();
         this.logger.log('Initialized ktx-managed git repository');
       }
-      // ownership === 'ktx-managed' → ktx's own repo, recognized by its root ktx.yaml; proceed
-      // with the normal re-run path. A repo created by any earlier ktx version classifies the
-      // same way, so no adoption step is needed.
+      // ownership === 'ktx-managed' → ktx's own repo; proceed with the normal re-run path.
 
       // Keep any auto-maintenance triggered by writes in-process. Detached maintenance can
       // keep object-pack directories alive briefly after awaited git commands complete,

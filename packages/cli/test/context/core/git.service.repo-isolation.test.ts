@@ -111,9 +111,8 @@ describe('GitService repository ownership', () => {
   });
 
   it('accepts a project created by an older ktx: repo history plus an untracked root ktx.yaml', async () => {
-    // Real older projects have ktx commit history and an uncommitted ktx.yaml
-    // at the root (it holds secret refs). The on-disk ktx.yaml IS the ownership
-    // signal — no marker or adoption step involved.
+    // Older projects have ktx commit history and an uncommitted root ktx.yaml
+    // (it holds secret refs); the on-disk file is still the ownership signal.
     const projectDir = join(tempDir, 'legacy');
     await mkdir(join(projectDir, '.ktx'), { recursive: true });
     git(projectDir, ['init']);
@@ -169,9 +168,6 @@ describe('classifyKtxRepoOwnership', () => {
   });
 
   it('reports ktx-managed for a repo with a root ktx.yaml (even untracked)', async () => {
-    // The project config at the repo root is ktx's defining artifact and the
-    // sole ownership signal. Older ktx leaves it uncommitted (it holds secret
-    // refs), so the working-tree file decides, not the git history.
     const dir = join(tempDir, 'owned');
     await mkdir(dir, { recursive: true });
     git(dir, ['init']);

@@ -481,9 +481,6 @@ export function renderInvalidConfigMessage(
   const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
   const abbreviated = abbreviateHome(projectDir) ?? projectDir;
 
-  // Only error-severity issues block (this renderer runs when at least one
-  // exists); warnings riding along in the same file are ignored fields and
-  // keep the ⚠ treatment they get on the valid-config path.
   const errorCount = issues.filter((issue) => issue.severity === 'error').length;
   const warningCount = issues.length - errorCount;
 

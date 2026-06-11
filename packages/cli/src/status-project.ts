@@ -721,8 +721,7 @@ function buildConfigStatus(issues: KtxConfigIssue[] | undefined): ConfigStatus {
   if (list.length === 0) {
     return { status: 'ok', detail: 'ktx.yaml schema valid', issues: [] };
   }
-  // Error-severity issues never reach here: the doctor exits on them before
-  // building the project status. What remains are ignored unknown fields.
+  // Error-severity issues never reach here — the doctor exits on them first.
   return {
     status: 'warn',
     detail: `ktx.yaml schema valid · ${list.length} ignored field${list.length === 1 ? '' : 's'}`,

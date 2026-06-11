@@ -302,12 +302,8 @@ export interface KtxConfigIssue {
   message: string;
   fix?: string;
   /**
-   * 'error' is a real misconfiguration that blocks the project (bad value on a
-   * recognized field). 'warning' is a tolerated condition that ktx recovers
-   * from on its own — currently only keys left over from a different ktx
-   * version (unknown object fields or record keys such as `llm.models` roles),
-   * which the loader ignores (it strips them from the in-memory config but
-   * leaves ktx.yaml on disk untouched).
+   * 'error' blocks the project (bad value on a recognized field); 'warning' is
+   * a condition the loader recovers from on its own (an ignored unknown key).
    */
   severity: 'error' | 'warning';
 }
@@ -340,14 +336,10 @@ interface UnknownKeyLocation {
 }
 
 /**
- * Unknown keys surface in two shapes in zod's issue stream: strict objects
- * report `unrecognized_keys` (path → container, `keys` → offenders), and
- * enum-keyed records (`llm.models` roles) report one `invalid_key` per
- * offender (path ends with the key). Both mean the same thing for a ktx.yaml
- * written by a different ktx version, so one extractor feeds both the warning
- * report and the in-memory strip — the two can never disagree. Zod does not
- * validate the value of an entry it already flagged via either shape, so
- * stripping the key removes exactly that issue and nothing else.
+ * Zod reports unknown keys in two shapes: strict objects emit
+ * `unrecognized_keys` (path → container, `keys` → offenders), enum-keyed
+ * records (`llm.models`) emit one `invalid_key` per offender (path ends with
+ * the key). Normalize both so the warning report and the strip always agree.
  */
 function unknownKeyLocations(issue: z.core.$ZodIssue): UnknownKeyLocation[] {
   if (issue.code === 'unrecognized_keys') {
@@ -409,18 +401,6 @@ export function buildDefaultKtxProjectConfig(): KtxProjectConfig {
   return ktxProjectConfigSchema.parse({});
 }
 
-/**
- * Remove keys the current schema does not recognize, deriving the set to drop
- * from the strict schema itself rather than a hand-maintained list of removed
- * fields. This makes loading forward-tolerant: a ktx.yaml written by a different
- * ktx version (e.g. with `storage.git.auto_commit`, a top-level `memory` block,
- * or an `llm.models` role this version does not define) still loads instead of
- * bricking every command. The strip is purely in-memory — the file on disk is
- * never rewritten here — so an unknown key is ignored, not destroyed (a typo or
- * a field from a newer ktx survives for the user to keep or fix). Malformed
- * values on recognized fields are left in place so they still surface as real
- * errors.
- */
 function stripUnrecognizedKeys(input: Record<string, unknown>): Record<string, unknown> {
   const result = ktxProjectConfigSchema.safeParse(input);
   if (result.success) {
@@ -449,13 +429,10 @@ function parseTolerant(input: Record<string, unknown>): KtxProjectConfig {
 }
 
 /**
- * Parse and validate a ktx.yaml document. Tolerant of keys this ktx version does
- * not recognize: a config written by a different ktx version still loads, with
- * unknown keys stripped from the returned config (see {@link stripUnrecognizedKeys}).
- * Malformed values on recognized fields still throw. This is a pure read — it
- * never writes back; {@link validateKtxProjectConfig} reports the ignored keys
- * for `ktx doctor`, and the next legitimate config write re-serializes the
- * cleaned form.
+ * Parse and validate a ktx.yaml document. Keys this ktx version does not
+ * recognize are stripped from the returned config — never from the file, which
+ * a load must not rewrite — so a config written by a different ktx version
+ * still loads. Malformed values on recognized fields still throw.
  */
 export function parseKtxProjectConfig(raw: string): KtxProjectConfig {
   const parsed = YAML.parse(raw) as unknown;
@@ -481,7 +458,6 @@ export function validateKtxProjectConfig(raw: string): KtxConfigValidation {
     return { ok: true, issues: [] };
   }
   const issues = collectIssues(result.error, parsed);
-  // Unrecognized keys are warnings ktx recovers from; only real errors block.
   const ok = !issues.some((issue) => issue.severity === 'error');
   return { ok, issues };
 }

@@ -112,31 +112,17 @@ export async function initKtxProject(options: InitKtxProjectOptions): Promise<In
     throw new Error(`Project already contains ktx.yaml: ${configPath}`);
   }
 
-  // Refuse to adopt a repo ktx did not create. This must run before ktx.yaml is
-  // written, because once that file exists the directory classifies as
-  // ktx-managed. GitService re-checks on init, but it can only catch a foreign
-  // repo while ktx.yaml is still absent — and `ktx init`/`admin --force` reach
-  // here without the setup wizard's own pre-flight, so this is their guard.
+  // Must run before ktx.yaml is written: once that file exists the directory
+  // classifies as ktx-managed, so a foreign repo would be silently adopted.
   if ((await classifyKtxRepoOwnership(projectDir)) === 'foreign') {
     throw new KtxForeignGitRepositoryError(projectDir);
   }
 
   const config = buildDefaultKtxProjectConfig();
 
-  // Write the scaffold tree first, ktx.yaml second, and only then initialize
-  // git. The root ktx.yaml is ktx's ownership signal, so this ordering makes an
-  // interrupted init unambiguous at every point: before the ktx.yaml write the
-  // directory has no `.git` and no ktx.yaml (a rerun starts clean), and from the
-  // ktx.yaml write onward — with or without `.git` — the directory classifies as
-  // ktx's own (unowned or ktx-managed), never as a foreign repo. ktx.yaml going
-  // last among the file writes also means its presence implies a complete
-  // scaffold. Recovery happens on the next `loadKtxProject`, not by re-running
-  // this function: `GitService.initialize()` re-creates a missing `.git` for an
-  // `unowned` dir and recognizes an existing one for a `ktx-managed` dir. That
-  // load path is what every command and the setup wizard's resume branch run, so
-  // re-running `initKtxProject` itself keeps refusing an existing ktx.yaml
-  // without `--force` (its contract). The ordering's only job is to rule out the
-  // unrecoverable residue: a bare `.git` with no ktx.yaml, misread as foreign.
+  // ktx.yaml (the ownership signal) is written before git init, so an
+  // interrupted init can never leave a bare `.git` without it — residue that
+  // would classify as a foreign repo and be unrecoverable.
   await fs.mkdir(join(projectDir, '.ktx/cache'), { recursive: true });
   for (const file of TRACKED_SCAFFOLD_FILES) {
     await writeProjectFile(projectDir, file.path, file.content);
@@ -165,12 +151,6 @@ export async function loadKtxProject(options: LoadKtxProjectOptions): Promise<Kt
   const logger = options.logger ?? noopLogger;
   const configPath = join(projectDir, 'ktx.yaml');
   const raw = await fs.readFile(configPath, 'utf-8');
-  // Tolerant, read-only parse. A ktx.yaml written by a different ktx version may carry
-  // keys this version does not recognize; they are stripped from the in-memory config so
-  // every command still runs. The file on disk is deliberately left untouched — loading
-  // must never silently rewrite the user's config, which would permanently delete a typo
-  // or a field belonging to a newer ktx. `ktx doctor` surfaces the ignored fields, and the
-  // next legitimate write (e.g. `ktx setup`) re-serializes the cleaned config.
   const config = parseKtxProjectConfig(raw);
   return createRuntime(projectDir, config, authorName, authorEmail, logger);
 }

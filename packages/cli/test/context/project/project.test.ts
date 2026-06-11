@@ -82,9 +82,7 @@ describe('KTX local project runtime', () => {
     expect(loaded.config).not.toHaveProperty('memory');
     expect(loaded.config.storage.git).toEqual({ author: 'ktx <ktx@example.com>' });
 
-    // Loading is read-only: the file on disk is left exactly as the user wrote it,
-    // so a typo or a field belonging to a newer ktx is never silently deleted.
-    // `ktx doctor` surfaces the ignored fields; the next legitimate write cleans them.
+    // The file on disk stays exactly as the user wrote it.
     await expect(readFile(configPath, 'utf-8')).resolves.toBe(withStaleKeys);
   });
 
@@ -124,11 +122,8 @@ describe('KTX local project runtime', () => {
   });
 
   it('refuses to initialize inside a foreign git repo and writes nothing into it', async () => {
-    // A user's own repo (has history, no root ktx.yaml). ktx keeps its context in
-    // a repo it owns, so `ktx init` here must reject — and must not write ktx.yaml
-    // into the repo first and then "discover" it is ktx-managed. Because ktx.yaml
-    // is now written before git init, this guard lives in initKtxProject itself,
-    // not in GitService (which would see the just-written ktx.yaml and adopt the repo).
+    // A user's own repo: has history, no root ktx.yaml. The guard must reject
+    // before writing ktx.yaml — that file would make the repo classify as ktx's.
     const projectDir = join(tempDir, 'app-repo');
     await mkdir(projectDir, { recursive: true });
     execFileSync('git', ['init', '-q'], { cwd: projectDir });
@@ -150,10 +145,8 @@ describe('KTX local project runtime', () => {
   });
 
   it('recovers an init interrupted after ktx.yaml was written but before git finished', async () => {
-    // initKtxProject writes ktx.yaml before initializing git, so the only residue a
-    // crash can leave is a valid ktx.yaml with no `.git` yet. That state must be
-    // recoverable: the next run re-initializes the repo instead of rejecting the
-    // directory as foreign (the trap that writing ktx.yaml last would create).
+    // ktx.yaml is written before git init, so the only crash residue is a valid
+    // ktx.yaml with no `.git` — the next load must re-init, not reject as foreign.
     const projectDir = join(tempDir, 'half-init');
     await initKtxProject({ projectDir });
     await rm(join(projectDir, '.git'), { recursive: true, force: true });
