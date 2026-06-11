@@ -53,7 +53,7 @@ describe('finalGateRepairPaths', () => {
 });
 
 describe('repairFinalGateFailure', () => {
-  it('lets the repair agent read gate errors and edit only allowed files', async () => {
+  it('lets the repair agent read gate errors, edit only allowed files, and verifies the gate', async () => {
     const { workdir, trace } = await makeHarness();
     const agentRunner = {
       runLoop: vi.fn(async (params: any) => {
@@ -70,7 +70,7 @@ describe('repairFinalGateFailure', () => {
             path: 'wiki/global/other.md',
             content: 'not allowed',
           }),
-        ).rejects.toThrow(/gate repair path not allowed/);
+        ).rejects.toThrow(/repair path not allowed/);
 
         await params.toolSet.write_repair_file.execute({
           path: 'wiki/global/account-segments.md',
@@ -79,6 +79,7 @@ describe('repairFinalGateFailure', () => {
         return { stopReason: 'natural' as const };
       }),
     };
+    const verify = vi.fn(async () => ({ ok: true as const }));
 
     const result = await repairFinalGateFailure({
       agentRunner,
@@ -88,6 +89,7 @@ describe('repairFinalGateFailure', () => {
       allowedPaths: ['wiki/global/account-segments.md'],
       trace,
       repairKind: 'final_artifact_gate',
+      verify,
       maxAttempts: 1,
       stepBudget: 8,
     });
@@ -97,6 +99,7 @@ describe('repairFinalGateFailure', () => {
       attempts: 1,
       changedPaths: ['wiki/global/account-segments.md'],
     });
+    expect(verify).toHaveBeenCalledWith(['wiki/global/account-segments.md']);
     await expect(readFile(join(workdir, 'wiki/global/account-segments.md'), 'utf-8')).resolves.toContain(
       'total_contract_arr',
     );
@@ -115,6 +118,7 @@ describe('repairFinalGateFailure', () => {
 
   it('returns failed when the repair agent edits no allowed file', async () => {
     const { workdir, trace } = await makeHarness();
+    const verify = vi.fn(async () => ({ ok: true as const }));
     const result = await repairFinalGateFailure({
       agentRunner: { runLoop: vi.fn(async () => ({ stopReason: 'natural' as const })) },
       workdir,
@@ -122,6 +126,7 @@ describe('repairFinalGateFailure', () => {
       allowedPaths: ['wiki/global/account-segments.md'],
       trace,
       repairKind: 'final_artifact_gate',
+      verify,
       maxAttempts: 1,
       stepBudget: 8,
     });
@@ -131,6 +136,52 @@ describe('repairFinalGateFailure', () => {
       attempts: 1,
       reason: 'gate repair completed without editing an allowed path',
     });
+    expect(verify).not.toHaveBeenCalled();
     await expect(readFile(trace.tracePath, 'utf-8')).resolves.toContain('gate_repair_failed');
+  });
+
+  it('does not report repaired when edits fail gate verification', async () => {
+    // Regression: the repair agent edited allowed files but left a dangling
+    // join in place. The old loop reported "repaired" because a file changed;
+    // success must come from the gate re-check instead.
+    const { workdir, trace } = await makeHarness();
+    const agentRunner = {
+      runLoop: vi.fn(async (params: any) => {
+        await params.toolSet.write_repair_file.execute({
+          path: 'wiki/global/account-segments.md',
+          content: 'an edit that does not fix the gate\n',
+        });
+        return { stopReason: 'natural' as const };
+      }),
+    };
+    const verify = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: 'final artifact gates failed:\nsemantic-layer validation failed for warehouse:accounts',
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    const result = await repairFinalGateFailure({
+      agentRunner,
+      workdir,
+      gateError: 'final artifact gates failed:\nsemantic-layer validation failed for warehouse:accounts',
+      allowedPaths: ['wiki/global/account-segments.md'],
+      trace,
+      repairKind: 'patch_semantic_gate',
+      verify,
+      maxAttempts: 2,
+      stepBudget: 8,
+    });
+
+    expect(result).toEqual({
+      status: 'repaired',
+      attempts: 2,
+      changedPaths: ['wiki/global/account-segments.md'],
+    });
+    expect(verify).toHaveBeenCalledTimes(2);
+    const secondPrompt = agentRunner.runLoop.mock.calls[1][0].userPrompt as string;
+    expect(secondPrompt).toContain('semantic-layer validation failed for warehouse:accounts');
+    expect(secondPrompt).toContain('Previous attempt did not pass the gate');
   });
 });

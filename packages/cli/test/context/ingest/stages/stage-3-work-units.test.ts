@@ -85,12 +85,13 @@ describe('Stage 3 — executeWorkUnit', () => {
       addTouchedSlSource(deps.captureSession.touchedSlSources, 'c1', 'src_good');
       return Promise.resolve({ stopReason: 'natural' });
     });
-    deps.validateTouchedSources = vi
-      .fn()
-      .mockResolvedValue({ validSources: ['c1:src_good'], invalidSources: ['c1:src_bad'] });
+    deps.validateTouchedSources = vi.fn().mockResolvedValue({
+      validSources: ['c1:src_good'],
+      invalidSources: [{ source: 'c1:src_bad', errors: ['join target "accounts" does not exist'] }],
+    });
     const outcome = await executeWorkUnit(deps, makeWu());
     expect(outcome.status).toBe('failed');
-    expect(outcome.reason).toMatch(/src_bad/);
+    expect(outcome.reason).toMatch(/src_bad \(join target "accounts" does not exist\)/);
     expect(outcome.actions).toEqual([]);
     expect(outcome.touchedSlSources).toEqual([]);
     expect(deps.resetHardTo).toHaveBeenCalledWith('pre');

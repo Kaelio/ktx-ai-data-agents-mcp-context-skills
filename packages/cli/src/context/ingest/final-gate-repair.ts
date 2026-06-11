@@ -1,15 +1,12 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../context/llm/runtime-port.js';
+import type { ConstrainedRepairResult, RepairVerification } from './constrained-repair.js';
+import { runConstrainedRepairLoop } from './constrained-repair.js';
 import type { IngestTraceWriter } from './ingest-trace.js';
-import { traceTimed } from './ingest-trace.js';
 
 type FinalGateRepairKind = 'patch_semantic_gate' | 'final_artifact_gate';
 
-export type FinalGateRepairResult =
-  | { status: 'repaired'; attempts: number; changedPaths: string[] }
-  | { status: 'failed'; attempts: number; reason: string };
+export type FinalGateRepairResult = ConstrainedRepairResult;
 
 export interface RepairFinalGateFailureInput {
   agentRunner: AgentRunnerPort;
@@ -18,46 +15,15 @@ export interface RepairFinalGateFailureInput {
   allowedPaths: string[];
   trace: IngestTraceWriter;
   repairKind: FinalGateRepairKind;
+  /**
+   * Re-runs the failed gate against the current worktree. The repair counts
+   * as successful only when this passes — editing files is not the success
+   * signal.
+   */
+  verify(changedPaths: string[]): Promise<RepairVerification>;
   maxAttempts?: number;
   stepBudget?: number;
   abortSignal?: AbortSignal;
-}
-
-const readRepairFileSchema = z.object({
-  path: z.string().min(1),
-});
-
-const writeRepairFileSchema = z.object({
-  path: z.string().min(1),
-  content: z.string(),
-});
-
-function normalizeRepoPath(path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '');
-  const parts = normalized.split('/').filter((part) => part.length > 0);
-  if (parts.length === 0 || parts.some((part) => part === '.' || part === '..')) {
-    throw new Error(`gate repair path must be a repository-relative path: ${path}`);
-  }
-  return parts.join('/');
-}
-
-function assertAllowedPath(path: string, allowedPaths: ReadonlySet<string>): string {
-  const normalized = normalizeRepoPath(path);
-  if (!allowedPaths.has(normalized)) {
-    throw new Error(`gate repair path not allowed: ${normalized}`);
-  }
-  return normalized;
-}
-
-async function readOptionalFile(path: string): Promise<{ exists: boolean; content: string }> {
-  try {
-    return { exists: true, content: await readFile(path, 'utf-8') };
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      return { exists: false, content: '' };
-    }
-    throw error;
-  }
 }
 
 function buildGateRepairSystemPrompt(): string {
@@ -82,7 +48,11 @@ function buildGateRepairUserPrompt(input: {
   repairKind: FinalGateRepairKind;
   attempt: number;
   maxAttempts: number;
+  previousFailure: string | null;
 }): string {
+  const previousFailureBlock = input.previousFailure
+    ? `\nPrevious attempt did not pass the gate:\n${input.previousFailure}\n`
+    : '';
   return `Repair isolated-diff artifact gates.
 
 Repair kind: ${input.repairKind}
@@ -93,55 +63,21 @@ ${input.allowedPaths.map((path) => `- ${path}`).join('\n')}
 
 Gate error:
 ${input.gateError}
-
+${previousFailureBlock}
 Use read_gate_error first. Then inspect only the allowed files, write the
 minimal repaired content, and stop.`;
 }
 
-function buildToolSet(input: {
-  workdir: string;
-  gateError: string;
-  allowedPaths: ReadonlySet<string>;
-  editedPaths: Set<string>;
-}): KtxRuntimeToolSet {
+function buildReadGateErrorTool(gateError: string): KtxRuntimeToolSet {
   return {
     read_gate_error: {
       name: 'read_gate_error',
       description: 'Read the artifact gate failure that must be repaired.',
       inputSchema: z.object({}),
       execute: async () => ({
-        markdown: input.gateError,
-        structured: { gateError: input.gateError },
+        markdown: gateError,
+        structured: { gateError },
       }),
-    },
-    read_repair_file: {
-      name: 'read_repair_file',
-      description: 'Read one allowed file from the integration worktree.',
-      inputSchema: readRepairFileSchema,
-      execute: async ({ path }: z.infer<typeof readRepairFileSchema>) => {
-        const normalized = assertAllowedPath(path, input.allowedPaths);
-        const file = await readOptionalFile(join(input.workdir, normalized));
-        return {
-          markdown: file.exists ? file.content : `(missing file: ${normalized})`,
-          structured: { path: normalized, exists: file.exists },
-        };
-      },
-    },
-    write_repair_file: {
-      name: 'write_repair_file',
-      description: 'Replace one allowed integration worktree file with repaired text content.',
-      inputSchema: writeRepairFileSchema,
-      execute: async ({ path, content }: z.infer<typeof writeRepairFileSchema>) => {
-        const normalized = assertAllowedPath(path, input.allowedPaths);
-        const fullPath = join(input.workdir, normalized);
-        await mkdir(dirname(fullPath), { recursive: true });
-        await writeFile(fullPath, content, 'utf-8');
-        input.editedPaths.add(normalized);
-        return {
-          markdown: `Wrote ${normalized}`,
-          structured: { path: normalized, bytes: Buffer.byteLength(content) },
-        };
-      },
     },
   };
 }
@@ -163,71 +99,38 @@ export function finalGateRepairPaths(input: {
 export async function repairFinalGateFailure(
   input: RepairFinalGateFailureInput,
 ): Promise<FinalGateRepairResult> {
-  const allowedPaths = new Set(input.allowedPaths.map(normalizeRepoPath));
-  const maxAttempts = input.maxAttempts ?? 1;
-  const stepBudget = input.stepBudget ?? 16;
-  let lastFailure = 'gate repair did not run';
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const editedPaths = new Set<string>();
-    const sortedAllowedPaths = [...allowedPaths].sort();
-    const traceData = {
+  return runConstrainedRepairLoop({
+    agentRunner: input.agentRunner,
+    workdir: input.workdir,
+    allowedPaths: input.allowedPaths,
+    trace: input.trace,
+    tracePhase: 'gate_repair',
+    traceEventName: 'gate_repair',
+    traceData: {
       repairKind: input.repairKind,
-      attempt,
-      maxAttempts,
-      allowedPaths: sortedAllowedPaths,
       gateError: input.gateError,
-    };
-    const result = await traceTimed(input.trace, 'gate_repair', 'gate_repair', traceData, async () =>
-      input.agentRunner.runLoop({
-        modelRole: 'repair',
-        systemPrompt: buildGateRepairSystemPrompt(),
-        userPrompt: buildGateRepairUserPrompt({
-          gateError: input.gateError,
-          allowedPaths: sortedAllowedPaths,
-          repairKind: input.repairKind,
-          attempt,
-          maxAttempts,
-        }),
-        toolSet: buildToolSet({
-          workdir: input.workdir,
-          gateError: input.gateError,
-          allowedPaths,
-          editedPaths,
-        }),
-        stepBudget,
-        telemetryTags: {
-          operationName: 'ingest-isolated-diff-gate-repair',
-          source: input.trace.context.sourceKey,
-          jobId: input.trace.context.jobId,
-          repairKind: input.repairKind,
-        },
-        abortSignal: input.abortSignal,
+    },
+    systemPrompt: buildGateRepairSystemPrompt(),
+    buildUserPrompt: ({ attempt, maxAttempts, previousFailure }) =>
+      buildGateRepairUserPrompt({
+        gateError: input.gateError,
+        allowedPaths: [...input.allowedPaths].sort(),
+        repairKind: input.repairKind,
+        attempt,
+        maxAttempts,
+        previousFailure,
       }),
-    );
-
-    if (result.stopReason === 'error') {
-      lastFailure = result.error?.message ?? 'gate repair agent loop errored';
-      await input.trace.event('error', 'gate_repair', 'gate_repair_failed', traceData, result.error);
-      continue;
-    }
-
-    const changedPaths = [...editedPaths].sort();
-    if (changedPaths.length === 0) {
-      lastFailure = 'gate repair completed without editing an allowed path';
-      await input.trace.event('error', 'gate_repair', 'gate_repair_failed', {
-        ...traceData,
-        reason: lastFailure,
-      });
-      continue;
-    }
-
-    await input.trace.event('debug', 'gate_repair', 'gate_repair_repaired', {
-      ...traceData,
-      changedPaths,
-    });
-    return { status: 'repaired', attempts: attempt, changedPaths };
-  }
-
-  return { status: 'failed', attempts: maxAttempts, reason: lastFailure };
+    buildExtraTools: () => buildReadGateErrorTool(input.gateError),
+    verify: input.verify,
+    noChangeFailureReason: 'gate repair completed without editing an allowed path',
+    telemetryTags: {
+      operationName: 'ingest-isolated-diff-gate-repair',
+      source: input.trace.context.sourceKey,
+      jobId: input.trace.context.jobId,
+      repairKind: input.repairKind,
+    },
+    maxAttempts: input.maxAttempts,
+    stepBudget: input.stepBudget ?? 16,
+    abortSignal: input.abortSignal,
+  });
 }

@@ -1191,16 +1191,10 @@ describe('validateWithProposedSource', () => {
   });
 
   it('rejects join keys that are absent from matched physical sources', async () => {
-    const schemaPath = 'semantic-layer/postgres-warehouse/_schema/orbit_analytics.yaml';
+    const schemaPath = 'semantic-layer/dbt-main/_schema/orbit_analytics.yaml';
     configService.listFiles.mockImplementation((dir: string) => {
-      if (dir === 'semantic-layer/dbt-main') {
-        return Promise.resolve({ files: [] });
-      }
-      if (dir === 'semantic-layer') {
+      if (dir === 'semantic-layer/dbt-main' || dir === 'semantic-layer/dbt-main/_schema' || dir === 'semantic-layer') {
         return Promise.resolve({ files: [schemaPath] });
-      }
-      if (dir === 'semantic-layer/dbt-main/_schema' || dir === 'semantic-layer/postgres-warehouse/_schema') {
-        return Promise.resolve({ files: dir.endsWith('postgres-warehouse/_schema') ? [schemaPath] : [] });
       }
       return Promise.resolve({ files: [] });
     });
@@ -1232,6 +1226,103 @@ describe('validateWithProposedSource', () => {
 
     expect(result.errors.join('\n')).toMatch(/local column "account_name"/);
     expect(result.errors.join('\n')).toMatch(/target column "account_uuid"/);
+  });
+
+  it('rejects joins whose target resolves to no source and no manifest entry anywhere', async () => {
+    // Regression: a Metabase work unit wrote `joins: [{to: accounts}]` while
+    // no `accounts` source or manifest table existed in the project. The
+    // write tool must reject the source so the agent can fix its own join.
+    configService.listFiles.mockResolvedValue({ files: [] });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('conn-1', {
+      name: 'mart_account_segments',
+      table: 'orbit_analytics.mart_account_segments',
+      grain: ['account_id'],
+      columns: [{ name: 'account_id', type: 'string' }],
+      joins: [
+        { to: 'accounts', on: 'mart_account_segments.account_id = accounts.account_id', relationship: 'many_to_one' },
+      ],
+      measures: [],
+    });
+
+    expect(result.errors.join('\n')).toMatch(/mart_account_segments: join target "accounts" does not exist/);
+    expect(pythonPort.validateSources).not.toHaveBeenCalled();
+  });
+
+  it('rejects join targets that differ from the source name only by case', async () => {
+    // The Python engine resolves joins[].to by exact name
+    // (engine._collect_orphan_join_target_errors), so a case-insensitive
+    // acceptance here would let the source pass gates and fail every query.
+    const schemaPath = 'semantic-layer/conn-1/_schema/core.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/conn-1' || dir === 'semantic-layer/conn-1/_schema' || dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockResolvedValue({
+      content: ['tables:', '  SIGNED_UP:', '    table: analytics.SIGNED_UP', '    columns:', '      - { name: account_id, type: string }'].join(
+        '\n',
+      ),
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('conn-1', {
+      name: 'orders',
+      table: 'analytics.orders',
+      grain: ['account_id'],
+      columns: [{ name: 'account_id', type: 'string' }],
+      joins: [{ to: 'signed_up', on: 'orders.account_id = signed_up.account_id', relationship: 'many_to_one' }],
+      measures: [],
+    });
+
+    expect(result.errors.join('\n')).toMatch(
+      /orders: join target "signed_up" does not exist; join targets are case-sensitive — the source is named "SIGNED_UP"/,
+    );
+    expect(pythonPort.validateSources).not.toHaveBeenCalled();
+  });
+
+  it('rejects join targets written as table refs even when a manifest table matches', async () => {
+    // `joins[].to` must be the source NAME ("accounts"), not the physical
+    // table ref ("orbit_analytics.accounts") — the engine keys sources by name.
+    const schemaPath = 'semantic-layer/conn-1/_schema/core.yaml';
+    configService.listFiles.mockImplementation((dir: string) => {
+      if (dir === 'semantic-layer/conn-1' || dir === 'semantic-layer/conn-1/_schema' || dir === 'semantic-layer') {
+        return Promise.resolve({ files: [schemaPath] });
+      }
+      return Promise.resolve({ files: [] });
+    });
+    configService.readFile.mockResolvedValue({
+      content: ['tables:', '  accounts:', '    table: orbit_analytics.accounts', '    columns:', '      - { name: account_id, type: string }'].join(
+        '\n',
+      ),
+    });
+    pythonPort.validateSources.mockResolvedValue({
+      data: { errors: [], warnings: [] },
+    });
+
+    const result = await service.validateWithProposedSource('conn-1', {
+      name: 'orders',
+      table: 'orbit_analytics.orders',
+      grain: ['account_id'],
+      columns: [{ name: 'account_id', type: 'string' }],
+      joins: [
+        {
+          to: 'orbit_analytics.accounts',
+          on: 'orders.account_id = orbit_analytics.accounts.account_id',
+          relationship: 'many_to_one',
+        },
+      ],
+      measures: [],
+    });
+
+    expect(result.errors.join('\n')).toMatch(/orders: join target "orbit_analytics.accounts" does not exist/);
+    expect(pythonPort.validateSources).not.toHaveBeenCalled();
   });
 });
 

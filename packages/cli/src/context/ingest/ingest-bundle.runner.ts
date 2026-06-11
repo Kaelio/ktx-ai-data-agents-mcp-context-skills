@@ -1817,7 +1817,8 @@ export class IngestBundleRunner {
                 touchedPaths: context.touchedPaths,
                 trace: runTrace,
                 reason: context.reason,
-                maxAttempts: 1,
+                verify: context.verify,
+                maxAttempts: 2,
                 stepBudget: 12,
                 abortSignal: ctx?.abortSignal,
               });
@@ -1839,7 +1840,8 @@ export class IngestBundleRunner {
                 allowedPaths: context.touchedPaths,
                 trace: runTrace,
                 repairKind: 'patch_semantic_gate',
-                maxAttempts: 1,
+                verify: context.verify,
+                maxAttempts: 2,
                 stepBudget: 16,
                 abortSignal: ctx?.abortSignal,
               });
@@ -2546,40 +2548,41 @@ export class IngestBundleRunner {
       activePhase = 'final_gates';
       activeFailureDetails = finalArtifactGateTraceData;
       emitStageProgress('final_gates', 89, 'Running final artifact gates');
+      const runFinalArtifactGates = async () => {
+        await validateFinalIngestArtifacts({
+          connectionIds: repairConnectionIds,
+          changedWikiPageKeys: finalChangedWikiPageKeys,
+          touchedSlSources: finalTouchedSlSources,
+          wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
+          semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+          validateTouchedSources: (touched) =>
+            validateWuTouchedSources(
+              {
+                semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+                connections: this.deps.connections,
+                configService: sessionWorktree.config,
+                gitService: sessionWorktree.git,
+                slSourcesRepository: this.deps.slSourcesRepository,
+                probeRowCount: this.deps.settings.probeRowCount,
+                slValidator: this.deps.slValidator,
+              },
+              touched,
+            ),
+          tableExists: (connectionId, tableRef) =>
+            this.tableRefExistsInSemanticLayer(
+              this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
+              [connectionId],
+              tableRef,
+            ),
+        });
+      };
       try {
         await traceTimed(
           runTrace,
           'final_gates',
           'final_artifact_gates',
           finalArtifactGateTraceData,
-          async () => {
-            await validateFinalIngestArtifacts({
-              connectionIds: repairConnectionIds,
-              changedWikiPageKeys: finalChangedWikiPageKeys,
-              touchedSlSources: finalTouchedSlSources,
-              wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
-              semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-              validateTouchedSources: (touched) =>
-                validateWuTouchedSources(
-                  {
-                    semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                    connections: this.deps.connections,
-                    configService: sessionWorktree.config,
-                    gitService: sessionWorktree.git,
-                    slSourcesRepository: this.deps.slSourcesRepository,
-                    probeRowCount: this.deps.settings.probeRowCount,
-                    slValidator: this.deps.slValidator,
-                  },
-                  touched,
-                ),
-              tableExists: (connectionId, tableRef) =>
-                this.tableRefExistsInSemanticLayer(
-                  this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                  [connectionId],
-                  tableRef,
-                ),
-            });
-          },
+          runFinalArtifactGates,
         );
       } catch (error) {
         const gateError = this.errorMessage(error);
@@ -2595,7 +2598,15 @@ export class IngestBundleRunner {
           allowedPaths: repairPaths,
           trace: runTrace,
           repairKind: 'final_artifact_gate',
-          maxAttempts: 1,
+          verify: async () => {
+            try {
+              await runFinalArtifactGates();
+              return { ok: true };
+            } catch (verifyError) {
+              return { ok: false, reason: this.errorMessage(verifyError) };
+            }
+          },
+          maxAttempts: 2,
           stepBudget: 16,
           abortSignal: ctx?.abortSignal,
         });
@@ -2611,44 +2622,9 @@ export class IngestBundleRunner {
           throw new Error(`${gateError}\ngate repair failed: ${gateRepair.reason}`);
         }
 
+        // The repair loop re-ran the gates via `verify` before reporting
+        // success, so a repaired status here means the tree already passed.
         isolatedDiffSummary.gateRepairs += 1;
-        await traceTimed(
-          runTrace,
-          'final_gates',
-          'final_artifact_gates_after_gate_repair',
-          {
-            ...finalArtifactGateTraceData,
-            repairedPaths: gateRepair.changedPaths,
-          },
-          async () => {
-            await validateFinalIngestArtifacts({
-              connectionIds: repairConnectionIds,
-              changedWikiPageKeys: finalChangedWikiPageKeys,
-              touchedSlSources: finalTouchedSlSources,
-              wikiService: this.deps.wikiService.forWorktree(sessionWorktree.workdir),
-              semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-              validateTouchedSources: (touched) =>
-                validateWuTouchedSources(
-                  {
-                    semanticLayerService: this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                    connections: this.deps.connections,
-                    configService: sessionWorktree.config,
-                    gitService: sessionWorktree.git,
-                    slSourcesRepository: this.deps.slSourcesRepository,
-                    probeRowCount: this.deps.settings.probeRowCount,
-                    slValidator: this.deps.slValidator,
-                  },
-                  touched,
-                ),
-              tableExists: (connectionId, tableRef) =>
-                this.tableRefExistsInSemanticLayer(
-                  this.deps.semanticLayerService.forWorktree(sessionWorktree.workdir),
-                  [connectionId],
-                  tableRef,
-                ),
-            });
-          },
-        );
 
         const repairCommit = await sessionWorktree.git.commitFiles(
           gateRepair.changedPaths,

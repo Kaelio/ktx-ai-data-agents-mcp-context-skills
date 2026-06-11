@@ -108,57 +108,39 @@ describe('artifact gates', () => {
     ).rejects.toThrow(/unknown sl_refs entity mart_account_segments\.total_contract_arr_cents/);
   });
 
-  it('validates direct declared-join neighbors of touched semantic-layer sources', async () => {
+  it('passes touched sources to the shared validation path and surfaces its reasons', async () => {
+    // Join-neighbor expansion lives inside validateTouchedSources (the same
+    // path work units use); the gate hands over the raw touched set and must
+    // carry the per-source reasons into the failure it throws.
     const semanticLayerService = {
-      loadAllSources: vi.fn().mockResolvedValue({
-        sources: [
-          {
-            name: 'orders',
-            grain: ['order_id'],
-            columns: [
-              { name: 'order_id', type: 'string' },
-              { name: 'account_id', type: 'string' },
-            ],
-            joins: [{ to: 'accounts', on: 'orders.account_id = accounts.account_id', relationship: 'many_to_one' }],
-            measures: [{ name: 'order_count', expr: 'count(*)' }],
-          },
-          {
-            name: 'accounts',
-            grain: ['account_id'],
-            columns: [{ name: 'account_id', type: 'string' }],
-            joins: [],
-            measures: [{ name: 'account_count', expr: 'count(*)' }],
-          },
-          {
-            name: 'segments',
-            grain: ['segment_id'],
-            columns: [
-              { name: 'segment_id', type: 'string' },
-              { name: 'account_id', type: 'string' },
-            ],
-            joins: [{ to: 'accounts', on: 'segments.account_id = accounts.account_id', relationship: 'many_to_one' }],
-            measures: [],
-          },
-        ],
-        loadErrors: [],
-      }),
+      loadAllSources: vi.fn().mockResolvedValue({ sources: [], loadErrors: [] }),
     };
-    const validateTouchedSources = vi.fn().mockResolvedValue({ invalidSources: [], validSources: [] });
-
-    await validateFinalIngestArtifacts({
-      connectionIds: ['warehouse'],
-      changedWikiPageKeys: [],
-      touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'accounts' }],
-      wikiService: { readPage: vi.fn() } as never,
-      semanticLayerService: semanticLayerService as never,
-      validateTouchedSources,
-      tableExists: async () => true,
+    const validateTouchedSources = vi.fn().mockResolvedValue({
+      validSources: [],
+      invalidSources: [
+        {
+          source: 'warehouse:mart_account_segments',
+          errors: ['join target "accounts" does not exist'],
+        },
+      ],
     });
 
+    await expect(
+      validateFinalIngestArtifacts({
+        connectionIds: ['warehouse'],
+        changedWikiPageKeys: [],
+        touchedSlSources: [{ connectionId: 'warehouse', sourceName: 'mart_account_segments' }],
+        wikiService: { readPage: vi.fn() } as never,
+        semanticLayerService: semanticLayerService as never,
+        validateTouchedSources,
+        tableExists: async () => true,
+      }),
+    ).rejects.toThrow(
+      /semantic-layer validation failed for warehouse:mart_account_segments: join target "accounts" does not exist/,
+    );
+
     expect(validateTouchedSources).toHaveBeenCalledWith([
-      { connectionId: 'warehouse', sourceName: 'accounts' },
-      { connectionId: 'warehouse', sourceName: 'orders' },
-      { connectionId: 'warehouse', sourceName: 'segments' },
+      { connectionId: 'warehouse', sourceName: 'mart_account_segments' },
     ]);
   });
 

@@ -1,35 +1,32 @@
 import { readFile } from 'node:fs/promises';
 import type { GitService } from '../../../context/core/git.service.js';
+import type { RepairVerification } from '../constrained-repair.js';
 import type { FinalGateRepairResult } from '../final-gate-repair.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';
 import { traceTimed } from '../ingest-trace.js';
 import { assertPatchAllowedForWorkUnit, parsePatchTouchedPaths } from './git-patch.js';
 import type { TextualConflictResolutionResult } from './textual-conflict-resolver.js';
 
-type PatchIntegrationTextualResolution =
-  | { status: 'repaired'; attempts: number; changedPaths: string[] }
-  | { status: 'failed'; attempts: number; reason: string };
-
 export type PatchIntegrationResult =
   | {
       status: 'accepted';
       commitSha: string;
       touchedPaths: string[];
-      textualResolution?: PatchIntegrationTextualResolution;
+      textualResolution?: TextualConflictResolutionResult;
       gateRepair?: FinalGateRepairResult;
     }
   | {
       status: 'textual_conflict';
       reason: string;
       touchedPaths: string[];
-      textualResolution?: PatchIntegrationTextualResolution;
+      textualResolution?: TextualConflictResolutionResult;
       gateRepair?: FinalGateRepairResult;
     }
   | {
       status: 'semantic_conflict';
       reason: string;
       touchedPaths: string[];
-      textualResolution?: PatchIntegrationTextualResolution;
+      textualResolution?: TextualConflictResolutionResult;
       gateRepair?: FinalGateRepairResult;
     };
 
@@ -47,12 +44,14 @@ export interface IntegrateWorkUnitPatchInput {
     patchPath: string;
     touchedPaths: string[];
     reason: string;
+    verify(changedPaths: string[]): Promise<RepairVerification>;
   }): Promise<TextualConflictResolutionResult>;
   repairGateFailure?(input: {
     unitKey: string;
     patchPath: string;
     touchedPaths: string[];
     reason: string;
+    verify(changedPaths: string[]): Promise<RepairVerification>;
   }): Promise<FinalGateRepairResult>;
 }
 
@@ -94,6 +93,19 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
     };
   }
 
+  // Repair and resolution success is decided by this check, not by whether
+  // the repair agent edited files: the gates re-run over the union of the
+  // patch's paths and everything the agent changed.
+  const verifyAppliedTree = async (changedPaths: string[]): Promise<RepairVerification> => {
+    const paths = [...new Set([...touchedPaths, ...changedPaths])].sort();
+    try {
+      await input.validateAppliedTree(paths);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, reason: errorMessage(error) };
+    }
+  };
+
   try {
     await traceTimed(
       input.trace,
@@ -130,6 +142,7 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
       patchPath: input.patchPath,
       touchedPaths,
       reason,
+      verify: verifyAppliedTree,
     });
 
     if (textualResolution.status === 'failed') {
@@ -144,115 +157,20 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
       };
     }
 
-    try {
-      await traceTimed(
-        input.trace,
-        'integration',
-        'semantic_gate_after_textual_resolution',
-        { unitKey: input.unitKey, touchedPaths: textualResolution.changedPaths },
-        async () => {
-          await input.validateAppliedTree(textualResolution.changedPaths);
-        },
-      );
-    } catch (semanticError) {
-      const reason = errorMessage(semanticError);
-      await input.trace.event('error', 'integration', 'patch_semantic_conflict_after_textual_resolution', {
+    if (textualResolution.changedPaths.length === 0) {
+      // The resolver declared the patch redundant and the gates verified the
+      // current tree: the integration worktree already represents this work
+      // unit's content (e.g. a duplicate page created by another work unit).
+      await input.trace.event('debug', 'integration', 'patch_subsumed_after_textual_resolution', {
         unitKey: input.unitKey,
         patchPath: input.patchPath,
-        touchedPaths: textualResolution.changedPaths,
-        reason,
+        touchedPaths,
+        attempts: textualResolution.attempts,
       });
-
-      // A textual conflict and a semantic-gate failure can co-occur: the resolver
-      // reconciles the text but can leave wiki sl_refs pointing at measures the
-      // merged source no longer defines. Recover via the same gate repair the
-      // clean-apply branch uses, instead of hard-failing the whole job.
-      if (input.repairGateFailure) {
-        const gateRepair = await input.repairGateFailure({
-          unitKey: input.unitKey,
-          patchPath: input.patchPath,
-          touchedPaths: textualResolution.changedPaths,
-          reason,
-        });
-
-        if (gateRepair.status !== 'failed') {
-          // The resolver wrote its merge to the worktree (unstaged); the repair
-          // edited a subset on top. Commit the union so neither is dropped.
-          const resolvedAndRepairedPaths = [
-            ...new Set([...textualResolution.changedPaths, ...gateRepair.changedPaths]),
-          ].sort();
-          try {
-            await traceTimed(
-              input.trace,
-              'integration',
-              'semantic_gate_after_gate_repair',
-              { unitKey: input.unitKey, touchedPaths: gateRepair.changedPaths },
-              async () => {
-                await input.validateAppliedTree(gateRepair.changedPaths);
-              },
-            );
-
-            const commit = await input.integrationGit.commitFiles(
-              resolvedAndRepairedPaths,
-              `ingest: resolve WorkUnit ${input.unitKey} conflict`,
-              input.author.name,
-              input.author.email,
-            );
-            if (commit.created) {
-              await input.trace.event('debug', 'integration', 'patch_accepted_after_textual_resolution', {
-                unitKey: input.unitKey,
-                commitSha: commit.commitHash,
-                touchedPaths: resolvedAndRepairedPaths,
-                attempts: textualResolution.attempts,
-                gateRepairAttempts: gateRepair.attempts,
-              });
-              return {
-                status: 'accepted',
-                commitSha: commit.commitHash,
-                touchedPaths: resolvedAndRepairedPaths,
-                textualResolution,
-                gateRepair,
-              };
-            }
-          } catch (repairValidationError) {
-            if (preApplyHead) {
-              await input.integrationGit.resetHardTo(preApplyHead);
-            }
-            await input.trace.event('error', 'integration', 'patch_semantic_conflict_after_textual_resolution', {
-              unitKey: input.unitKey,
-              patchPath: input.patchPath,
-              touchedPaths: gateRepair.changedPaths,
-              reason: errorMessage(repairValidationError),
-            });
-            return {
-              status: 'semantic_conflict',
-              reason: errorMessage(repairValidationError),
-              touchedPaths: gateRepair.changedPaths,
-              textualResolution,
-              gateRepair,
-            };
-          }
-        }
-
-        if (preApplyHead) {
-          await input.integrationGit.resetHardTo(preApplyHead);
-        }
-        return {
-          status: 'semantic_conflict',
-          reason: gateRepair.status === 'failed' ? gateRepair.reason : reason,
-          touchedPaths: textualResolution.changedPaths,
-          textualResolution,
-          gateRepair,
-        };
-      }
-
-      if (preApplyHead) {
-        await input.integrationGit.resetHardTo(preApplyHead);
-      }
       return {
-        status: 'semantic_conflict',
-        reason,
-        touchedPaths: textualResolution.changedPaths,
+        status: 'accepted',
+        commitSha: preApplyHead ?? '',
+        touchedPaths: [],
         textualResolution,
       };
     }
@@ -264,19 +182,18 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
       input.author.email,
     );
     if (!commit.created) {
-      if (preApplyHead) {
-        await input.integrationGit.resetHardTo(preApplyHead);
-      }
-      const noChangeReason = 'textual resolver produced no committable changes';
-      await input.trace.event('error', 'integration', 'textual_conflict_resolver_noop', {
+      // The resolver's writes left the tree byte-identical to the accepted
+      // state, and the gates verified it — the patch is represented already.
+      await input.trace.event('debug', 'integration', 'patch_subsumed_after_textual_resolution', {
         unitKey: input.unitKey,
         patchPath: input.patchPath,
         touchedPaths: textualResolution.changedPaths,
+        attempts: textualResolution.attempts,
       });
       return {
-        status: 'textual_conflict',
-        reason: noChangeReason,
-        touchedPaths: textualResolution.changedPaths,
+        status: 'accepted',
+        commitSha: preApplyHead ?? '',
+        touchedPaths: [],
         textualResolution,
       };
     }
@@ -314,6 +231,7 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
         patchPath: input.patchPath,
         touchedPaths,
         reason,
+        verify: verifyAppliedTree,
       });
 
       if (gateRepair.status === 'failed') {
@@ -324,28 +242,6 @@ export async function integrateWorkUnitPatch(input: IntegrateWorkUnitPatchInput)
           status: 'semantic_conflict',
           reason: gateRepair.reason,
           touchedPaths,
-          gateRepair,
-        };
-      }
-
-      try {
-        await traceTimed(
-          input.trace,
-          'integration',
-          'semantic_gate_after_gate_repair',
-          { unitKey: input.unitKey, touchedPaths: gateRepair.changedPaths },
-          async () => {
-            await input.validateAppliedTree(gateRepair.changedPaths);
-          },
-        );
-      } catch (repairValidationError) {
-        if (preApplyHead) {
-          await input.integrationGit.resetHardTo(preApplyHead);
-        }
-        return {
-          status: 'semantic_conflict',
-          reason: errorMessage(repairValidationError),
-          touchedPaths: gateRepair.changedPaths,
           gateRepair,
         };
       }
