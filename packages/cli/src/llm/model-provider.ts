@@ -166,7 +166,7 @@ class DefaultKtxLlmProvider implements KtxLlmProvider {
 
     if (config.backend === 'vertex') {
       if (!config.vertex?.location) {
-        throw new Error('vertex.location is required when KTX LLM backend is vertex');
+        throw new Error('vertex.location is required when ktx LLM backend is vertex');
       }
       const vertex = (deps.createVertexAnthropic ?? createVertexAnthropic)({
         ...(config.vertex.project ? { project: config.vertex.project } : {}),

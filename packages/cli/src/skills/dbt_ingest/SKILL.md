@@ -1,16 +1,16 @@
 ---
 name: dbt_ingest
-description: Map dbt `schema.yml` / `properties.yml` models and sources into KTX semantic-layer overlays and column notes. Covers `sources:` vs `models:`, column `data_tests` (not_null, unique, accepted_values, relationships), and how bundle-time writes complement manifest backfill from git sync. Load when the WorkUnit's `skillNames` includes `dbt_ingest` or when raw files are dbt YAML under `models/` / `sources/`.
+description: Map dbt `schema.yml` / `properties.yml` models and sources into ktx semantic-layer overlays and column notes. Covers `sources:` vs `models:`, column `data_tests` (not_null, unique, accepted_values, relationships), and how bundle-time writes complement manifest backfill from git sync. Load when the WorkUnit's `skillNames` includes `dbt_ingest` or when raw files are dbt YAML under `models/` / `sources/`.
 callers: [memory_agent]
 ---
 
-# dbt → KTX (bundle ingest)
+# dbt → ktx (bundle ingest)
 
 Use this skill for **uploaded** dbt projects (`dbt_project.yml` at stage root, `models/**`, `sources/**`, `schema.yml`). There is **no** `fetch()` in v1 - scheduled `dbt parse` / `manifest.json` pulls are out of scope; host-provided dbt sync may still backfill structured test metadata into `_schema` on the next sync.
 
 ## Mapping (models / sources → SL)
 
-| dbt | KTX | Notes |
+| dbt | ktx | Notes |
 |-----|--------|--------|
 | `models:` entry with `columns:` | **Overlay** on the manifest table with the same name (after `discover_data` / `entity_details`) | One SL source per physical table; model name may differ from DB name - resolve with `read_raw_file` + warehouse context. |
 | `sources:` → `tables:` | Same as models; use `identifier` when present instead of logical `name`. | Schema + name must match how the connection sees tables. |

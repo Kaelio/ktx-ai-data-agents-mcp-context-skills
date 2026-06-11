@@ -1,6 +1,6 @@
 ---
 name: sl_capture
-description: How to capture new reusable patterns into KTX's semantic layer - when a measure, segment, or join belongs in the catalog and how to write it generically so it stays small and useful over time. Loaded by the post-turn memory-agent only. The research agent does not write to the SL.
+description: How to capture new reusable patterns into ktx's semantic layer - when a measure, segment, or join belongs in the catalog and how to write it generically so it stays small and useful over time. Loaded by the post-turn memory-agent only. The research agent does not write to the SL.
 callers: [memory_agent]
 ---
 

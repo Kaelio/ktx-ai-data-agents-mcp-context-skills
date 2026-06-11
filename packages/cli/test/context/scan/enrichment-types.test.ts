@@ -11,7 +11,7 @@ import type {
   KtxStructuralSyncPlan,
 } from '../../../src/context/scan/enrichment-types.js';
 
-describe('KTX scan enrichment contracts', () => {
+describe('ktx scan enrichment contracts', () => {
   it('models an enriched schema with reusable table, column, and relationship metadata', () => {
     const schema: KtxEnrichedSchema = {
       connectionId: 'warehouse',

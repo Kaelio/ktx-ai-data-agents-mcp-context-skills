@@ -70,10 +70,10 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
     }
 
     if (input.sourceName) {
-      const sl = await this.deps.slDiscoverTool.call(
+      const sl = (await this.deps.slDiscoverTool.call(
         { sourceName: input.sourceName, connectionId: input.connectionId },
         context,
-      );
+      )) as ToolOutput;
       return { markdown: sl.markdown, structured: { wiki: null, sl: sl.structured, raw: null } };
     }
 
@@ -85,17 +85,17 @@ export class DiscoverDataTool extends BaseTool<typeof discoverDataInputSchema> {
     let raw: DiscoverDataStructured['raw'] = null;
 
     if (query) {
-      const wikiResult = await this.deps.wikiSearchTool.call({ query, limit }, context);
+      const wikiResult = (await this.deps.wikiSearchTool.call({ query, limit }, context)) as ToolOutput;
       if (totalFound(wikiResult.structured) > 0) {
         parts.push('## Wiki Pages', '> use `wiki_read(blockKey)` for full content', wikiResult.markdown, '');
         wiki = wikiResult.structured;
       }
     }
 
-    const slResult = await this.deps.slDiscoverTool.call(
+    const slResult = (await this.deps.slDiscoverTool.call(
       { query: query || undefined, connectionId: input.connectionId },
       context,
-    );
+    )) as ToolOutput;
     if (totalSources(slResult.structured) > 0) {
       parts.push(
         '## Semantic Layer Sources',

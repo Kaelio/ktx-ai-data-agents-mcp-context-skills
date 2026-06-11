@@ -69,7 +69,7 @@ describe('discoverLookerConnections', () => {
 });
 
 describe('looker dialect and target validation helpers', () => {
-  it('maps Looker dialect names to KTX connection types', () => {
+  it('maps Looker dialect names to ktx connection types', () => {
     expect(lookerDialectToConnectionType('bigquery_standard_sql')).toBe('BIGQUERY');
     expect(lookerDialectToConnectionType('postgres')).toBe('POSTGRESQL');
     expect(lookerDialectToConnectionType('mssql')).toBeNull();
@@ -224,7 +224,7 @@ describe('computeLookerMappingDrift and validateLookerMappings', () => {
     ).toEqual({
       ok: false,
       errors: [
-        { key: 'b2b_sandbox_bq', reason: 'KTX connection missing does not exist' },
+        { key: 'b2b_sandbox_bq', reason: 'ktx connection missing does not exist' },
         {
           key: 'pg_runtime',
           reason: 'Connection type LOOKER cannot be used as a Looker warehouse mapping target',
@@ -259,7 +259,7 @@ describe('collectExploreParseItems and projectParsedIdentifier', () => {
     });
   });
 
-  it('projects successful and failed parser rows into KTX parsed target tables', () => {
+  it('projects successful and failed parser rows into ktx parsed target tables', () => {
     expect(
       projectParsedIdentifier({
         ok: true,

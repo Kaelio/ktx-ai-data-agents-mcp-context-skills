@@ -1,7 +1,7 @@
 [project]
 name = "ktx-daemon"
 version = "0.11.0"
-description = "Portable compute package for KTX semantic-layer operations"
+description = "Portable compute package for ktx semantic-layer operations"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"

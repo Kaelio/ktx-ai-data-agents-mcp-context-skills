@@ -3,7 +3,7 @@ const semverPattern =
 
 export function assertCliVersion(value: unknown, source: string): string {
   if (typeof value !== 'string' || !semverPattern.test(value)) {
-    throw new Error(`Invalid KTX CLI version in ${source}`);
+    throw new Error(`Invalid ktx CLI version in ${source}`);
   }
   return value;
 }

@@ -102,7 +102,7 @@ const lookerConnectionSchema = z
       .min(1)
       .optional()
       .describe('Reference to Looker OAuth client secret (e.g. env:LOOKER_CLIENT_SECRET).'),
-    mappings: lookerMappingsSchema.optional().describe('Looker connection-name to KTX warehouse mappings.'),
+    mappings: lookerMappingsSchema.optional().describe('Looker connection-name to ktx warehouse mappings.'),
   })
   .describe('Looker context-source connection.');
 

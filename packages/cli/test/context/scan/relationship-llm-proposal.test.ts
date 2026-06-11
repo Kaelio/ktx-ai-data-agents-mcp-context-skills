@@ -146,12 +146,12 @@ describe('relationship LLM proposals', () => {
     expect(runtime.generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
         role: 'candidateExtraction',
-        system: expect.stringContaining('You are helping KTX review possible SQL relationships'),
+        system: expect.stringContaining('You are helping ktx review possible SQL relationships'),
         prompt: expect.stringContaining('"tables"'),
       }),
     );
     const call = vi.mocked(runtime.generateObject).mock.calls[0]?.[0];
-    expect(call?.prompt).not.toContain('You are helping KTX review possible SQL relationships');
+    expect(call?.prompt).not.toContain('You are helping ktx review possible SQL relationships');
   });
 
   it('skips when no runtime is configured', async () => {
@@ -207,7 +207,7 @@ describe('relationship LLM proposals', () => {
     expect(failed).toMatchObject({ candidates: [], llmCalls: 1, summary: 'failed' });
     expect(failed.warnings[0]).toMatchObject({
       code: 'relationship_llm_proposal_failed',
-      message: 'KTX relationship LLM proposal failed: model unavailable',
+      message: 'ktx relationship LLM proposal failed: model unavailable',
       recoverable: true,
     });
   });

@@ -261,7 +261,7 @@ const buildRunner = (deps: ReturnType<typeof makeDeps> = makeDeps(), overrides: 
     lockingService: deps.lockingService as any,
     storage: {
       homeDir: '/tmp/ktx-test',
-      systemGitAuthor: { name: 'KTX Test', email: 'system@ktx.local' },
+      systemGitAuthor: { name: 'ktx Test', email: 'system@ktx.local' },
       resolveUploadDir: (uploadId) => `/tmp/ktx-test/ingest-uploads/${uploadId}`,
       resolvePullDir: (jobId) => `/tmp/ktx-test/ingest-pulls/${jobId}`,
       resolveTranscriptDir: (jobId) => `/tmp/ktx-test/run/wu-transcripts/${jobId}`,
@@ -1518,7 +1518,7 @@ describe('IngestBundleRunner — Stages 1 → 7', () => {
       ...(buildRunner(deps) as any).deps,
       storage: {
         homeDir: tempRoot,
-        systemGitAuthor: { name: 'KTX Test', email: 'system@ktx.local' },
+        systemGitAuthor: { name: 'ktx Test', email: 'system@ktx.local' },
         resolveUploadDir: (uploadId: string) => join(tempRoot, 'ingest-uploads', uploadId),
         resolvePullDir: (jobId: string) => join(tempRoot, 'ingest-pulls', jobId),
         resolveTranscriptDir: (jobId: string) => join(tempRoot, 'run', 'wu-transcripts', jobId),

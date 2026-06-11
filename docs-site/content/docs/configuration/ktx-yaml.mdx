@@ -46,7 +46,7 @@ read, how to think, and where to put the results.
       </p>
       <ul className="mt-3 space-y-2 text-sm leading-6 text-fd-foreground">
         <li><code className="text-[13px] font-semibold">llm</code> - provider, models, prompt cache</li>
-        <li><code className="text-[13px] font-semibold">ingest</code> - adapters, embeddings, work units</li>
+        <li><code className="text-[13px] font-semibold">ingest</code> - connectors, embeddings, work units</li>
         <li><code className="text-[13px] font-semibold">scan</code> - enrichment, relationships</li>
         <li><code className="text-[13px] font-semibold">agent</code> - research-agent feature flags</li>
       </ul>
@@ -440,7 +440,7 @@ provider-specific model identifiers.
 ## `ingest`
 
 `ingest` controls how **ktx** builds context from your stack. It lists the
-adapters to run, the embedding provider used when adapters embed documents,
+connectors to run, the embedding provider used when connectors embed documents,
 and the concurrency and failure policy for work units.
 
 ```yaml
@@ -471,12 +471,12 @@ ingest:
       jitter: true
 ```
 
-### Adapters
+### Connectors
 
-`adapters` is a list of adapter IDs that should run. Each ID matches a
+`adapters` is a list of connector IDs that should run. Each ID matches a
 connector that **ktx** ships locally:
 
-| Adapter ID | What it ingests |
+| Connector ID | What it ingests |
 |------------|-----------------|
 | `live-database` | Live warehouse introspection (schemas, tables, columns, samples). |
 | `historic-sql` | Query history from Postgres `pg_stat_statements`, BigQuery `INFORMATION_SCHEMA.JOBS`, or Snowflake query history. |
@@ -486,7 +486,7 @@ connector that **ktx** ships locally:
 | `looker` | Looker dashboards and looks via the API. |
 | `metabase` | Metabase cards, dashboards, and database mappings. |
 | `notion` | Notion pages and databases for wiki context. |
-| `fake` | Test/demo adapter. Useful in fixtures. |
+| `fake` | Test/demo connector. Useful in fixtures. |
 
 ### Embeddings
 

@@ -6,7 +6,7 @@ import {
   formatSetupNextStepLines,
 } from '../src/next-steps.js';
 
-describe('KTX demo next steps', () => {
+describe('ktx demo next steps', () => {
   it('uses supported context-build commands before agent usage', () => {
     expect(KTX_CONTEXT_BUILD_COMMANDS).toEqual([
       {
@@ -48,8 +48,8 @@ describe('KTX demo next steps', () => {
   it('explains what the next-step commands are for', () => {
     const rendered = formatNextStepLines().join('\n');
 
-    expect(rendered).toContain('KTX context is ready for agents.');
-    expect(rendered).toContain('KTX project directory');
+    expect(rendered).toContain('ktx context is ready for agents.');
+    expect(rendered).toContain('ktx project directory');
     expect(rendered).toContain('ask a data question');
     expect(rendered).toContain('Verify with:');
     expect(rendered).not.toContain('this directory');
@@ -82,7 +82,7 @@ describe('KTX demo next steps', () => {
       agentIntegrationReady: true,
     }).join('\n');
 
-    expect(rendered).toContain('KTX context is ready for agents.');
+    expect(rendered).toContain('ktx context is ready for agents.');
     expect(rendered).toContain('ktx status --json');
     expect(rendered).not.toContain('ktx agent');
     expect(rendered).not.toContain('ktx serve --mcp stdio --user-id local');

@@ -88,13 +88,18 @@ const defaultLogger: LookerClientLogger = {
 
 class InlineLookerSettings extends NodeSettings {
   constructor(private readonly params: LookerConnectionParams) {
-    super('', {
+    // @looker/sdk-rtl boundary: NodeSettings consumes a string-valued config
+    // section (read back via the readConfig override below), but its constructor
+    // is typed to accept a fully-realized IApiSettings. The string record is the
+    // shape the library actually reads, so narrow to IApiSection first.
+    const settings: IApiSection = {
       base_url: normalizeBaseUrl(params.base_url),
       client_id: params.client_id,
       client_secret: params.client_secret, // pragma: allowlist secret
       verify_ssl: 'true',
       timeout: '120',
-    } as unknown as IApiSettings);
+    };
+    super('', settings as IApiSection & IApiSettings);
   }
 
   override readConfig(_section?: string): IApiSection {

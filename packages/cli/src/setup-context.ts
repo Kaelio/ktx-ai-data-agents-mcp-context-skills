@@ -345,7 +345,7 @@ async function prepareBuildTargets(args: KtxSetupContextStepArgs, io: KtxCliIo):
     if (args.allowEmpty === true) {
       return { kind: 'result', result: { status: 'skipped', projectDir: args.projectDir } };
     }
-    io.stderr.write('No databases or context sources are configured for a KTX context build.\n');
+    io.stderr.write('No databases or context sources are configured for a ktx context build.\n');
     return { kind: 'result', result: { status: 'failed', projectDir: args.projectDir } };
   }
   const preflightPlan = buildPublicIngestPlan(project, { projectDir: project.projectDir, all: true });
@@ -367,12 +367,12 @@ function writeConnectionGateFailureLines(
   projectDir: string,
   failures: ConnectionGateFailure[],
 ): void {
-  io.stderr.write('KTX cannot build context: a required connection failed its live test.\n\n');
+  io.stderr.write('ktx cannot build context: a required connection failed its live test.\n\n');
   io.stderr.write('Failed connections:\n');
   for (const failure of failures) {
     io.stderr.write(`  ${failure.connectionId} (${failure.driver})\n`);
   }
-  io.stderr.write('\nEach connection must be reachable before KTX builds context.\n');
+  io.stderr.write('\nEach connection must be reachable before ktx builds context.\n');
   io.stderr.write(
     `Run \`ktx connection test <id> --project-dir ${resolve(projectDir)}\` to see the error, fix the connection, then retry.\n`,
   );
@@ -570,7 +570,7 @@ async function markContextComplete(projectDir: string): Promise<void> {
 }
 
 function writeMissingCapabilities(missing: string[], io: KtxCliIo): void {
-  io.stderr.write('KTX cannot build agent-ready context yet.\n\n');
+  io.stderr.write('ktx cannot build agent-ready context yet.\n\n');
   io.stderr.write('Missing:\n');
   for (const item of missing) {
     io.stderr.write(`  ${item}\n`);
@@ -589,7 +589,7 @@ function writeSuccess(
   targets: KtxSetupContextTargets,
   io: KtxCliIo,
 ): void {
-  io.stdout.write('\nKTX context is ready for agents.\n\n');
+  io.stdout.write('\nktx context is ready for agents.\n\n');
   io.stdout.write('Databases:\n');
   if (targets.primarySourceConnectionIds.length === 0) {
     io.stdout.write('  none\n');
@@ -612,7 +612,7 @@ function writeSuccess(
 }
 
 function writeExistingContextSuccess(readiness: KtxSetupContextReadiness, io: KtxCliIo): void {
-  io.stdout.write('\nKTX context is ready for agents.\n\n');
+  io.stdout.write('\nktx context is ready for agents.\n\n');
   io.stdout.write('Existing context artifacts were found from setup ingest.\n\n');
   io.stdout.write('Verification:\n');
   io.stdout.write(`  Agent context: ${readiness.agentContextReady ? 'ready' : 'not ready'}\n`);
@@ -622,8 +622,8 @@ function writeExistingContextSuccess(readiness: KtxSetupContextReadiness, io: Kt
 async function promptForBuild(prompts: KtxSetupContextPromptAdapter): Promise<'build' | 'skip' | 'back'> {
   return (await prompts.select({
     message:
-      'Build KTX context for agents?\n\n' +
-      'KTX is fully configured and ready to build context. This may take a few minutes to a few hours.',
+      'Build ktx context for agents?\n\n' +
+      'ktx is fully configured and ready to build context. This may take a few minutes to a few hours.',
     options: [
       { value: 'build', label: 'Build context now (recommended)' },
       { value: 'skip', label: 'Leave context unbuilt and exit setup' },
@@ -716,7 +716,7 @@ async function runBuild(
       failureReason: readiness.details.join(' '),
       ...(lastSourceProgress ? { sourceProgress: lastSourceProgress } : {}),
     });
-    io.stderr.write('KTX context build did not pass agent-readiness verification.\n');
+    io.stderr.write('ktx context build did not pass agent-readiness verification.\n');
     for (const detail of readiness.details) {
       io.stderr.write(`  ${detail}\n`);
     }

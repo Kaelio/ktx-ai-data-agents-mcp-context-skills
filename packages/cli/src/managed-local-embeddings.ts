@@ -74,7 +74,7 @@ export async function ensureManagedLocalEmbeddingsDaemon(
   });
 
   const verb = daemon.status === 'started' ? 'Started' : 'Using';
-  writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} KTX daemon: ${daemon.baseUrl}`);
+  writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} ktx daemon: ${daemon.baseUrl}`);
 
   return {
     baseUrl: daemon.baseUrl,

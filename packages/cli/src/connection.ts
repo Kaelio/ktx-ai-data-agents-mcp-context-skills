@@ -134,7 +134,7 @@ async function createDefaultLookerClient(
   connectionId: string,
 ): Promise<LookerTestPort> {
   const factory = new DefaultLookerConnectionClientFactory(createLocalLookerCredentialResolver(project));
-  return (await factory.createClient(connectionId)) as unknown as LookerTestPort;
+  return factory.createLookerClient(connectionId);
 }
 
 async function testLookerConnection(

@@ -25,7 +25,7 @@ describe('scanFileContent', () => {
       [],
     );
     assert.deepEqual(
-      scanFileContent('packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md', 'Write output for KTX.'),
+      scanFileContent('packages/cli/src/prompts/memory_agent_bundle_ingest_work_unit.md', 'Write output for ktx.'),
       [],
     );
   });
@@ -83,7 +83,7 @@ describe('scanFileContent', () => {
     );
   });
 
-  it('rejects old KTX LLM port declarations in context', () => {
+  it('rejects old ktx LLM port declarations in context', () => {
     const violations = [
       ...scanFileContent('packages/cli/src/context/agent/agent-runner.service.ts', 'export interface LlmProviderPort {}'),
       ...scanFileContent('packages/cli/src/context/scan/types.ts', 'export interface KtxScanLlmPort {}'),

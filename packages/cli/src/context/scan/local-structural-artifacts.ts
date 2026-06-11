@@ -55,7 +55,7 @@ function parseWarning(rawWarning: unknown, path: string): KtxScanWarning {
     typeof rawWarning.message !== 'string' ||
     typeof rawWarning.recoverable !== 'boolean'
   ) {
-    throw new Error(`Invalid KTX schema warning artifact: ${path}`);
+    throw new Error(`Invalid ktx schema warning artifact: ${path}`);
   }
   return {
     code: rawWarning.code as KtxScanWarning['code'],
@@ -73,7 +73,7 @@ async function readWarnings(input: ReadLocalScanStructuralSnapshotInput): Promis
     const warningRaw = await input.project.fileStore.readFile(path);
     const parsed = JSON.parse(warningRaw.content) as unknown;
     if (!isRecord(parsed) || !Array.isArray(parsed.warnings)) {
-      throw new Error(`Invalid KTX schema warnings artifact: ${path}`);
+      throw new Error(`Invalid ktx schema warnings artifact: ${path}`);
     }
     return parsed.warnings.map((warning) => parseWarning(warning, path));
   } catch (error) {
@@ -102,7 +102,7 @@ function parseColumn(rawColumn: unknown, path: string): KtxSchemaColumn {
       rawColumn.dimensionType !== 'number' &&
       rawColumn.dimensionType !== 'boolean')
   ) {
-    throw new Error(`Invalid KTX schema column artifact: ${path}`);
+    throw new Error(`Invalid ktx schema column artifact: ${path}`);
   }
   return {
     name: rawColumn.name,
@@ -122,7 +122,7 @@ function parseForeignKey(rawForeignKey: unknown, path: string): KtxSchemaForeign
     typeof rawForeignKey.toTable !== 'string' ||
     typeof rawForeignKey.toColumn !== 'string'
   ) {
-    throw new Error(`Invalid KTX schema foreign key artifact: ${path}`);
+    throw new Error(`Invalid ktx schema foreign key artifact: ${path}`);
   }
   return {
     fromColumn: rawForeignKey.fromColumn,
@@ -137,7 +137,7 @@ function parseForeignKey(rawForeignKey: unknown, path: string): KtxSchemaForeign
 function parseTable(raw: string, path: string): KtxSchemaTable {
   const parsed = JSON.parse(raw) as unknown;
   if (!isRecord(parsed) || typeof parsed.name !== 'string' || !Array.isArray(parsed.columns)) {
-    throw new Error(`Invalid KTX schema table artifact: ${path}`);
+    throw new Error(`Invalid ktx schema table artifact: ${path}`);
   }
   return {
     catalog: optionalStringOrNull(parsed.catalog) ?? null,

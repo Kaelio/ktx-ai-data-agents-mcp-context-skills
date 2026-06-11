@@ -1,4 +1,4 @@
-# KTX release runbook
+# ktx release runbook
 
 This runbook covers the maintainer workflow for publishing `@kaelio/ktx` to
 npm through GitHub Actions. The workflow uses semantic-release to choose the
@@ -36,7 +36,7 @@ Before you publish, confirm these requirements:
   publish the first stable version as `0.1.0`.
 
 semantic-release doesn't support choosing an arbitrary first `0.x` stable
-release. If KTX has no stable tag yet and you need the first stable release to
+release. If **ktx** has no stable tag yet and you need the first stable release to
 be `0.1.0`, create and push the baseline tag once before running the live
 stable workflow:
 
@@ -46,7 +46,7 @@ git tag v0.0.0 "${root_commit}"
 git push origin v0.0.0
 ```
 
-KTX follows the same versioning schema as the main Kaelio release workflow:
+**ktx** follows the same versioning schema as the main Kaelio release workflow:
 breaking-change and `major` commit markers create a minor release, not an
 automatic major release. A major version requires an intentional manual release
 path.

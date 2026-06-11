@@ -123,7 +123,7 @@ export async function initKtxProject(options: InitKtxProjectOptions): Promise<In
 
   const commit = await runtime.git.commitFiles(
     ['ktx.yaml', ...TRACKED_SCAFFOLD_FILES.map((file) => file.path)],
-    `Initialize KTX project: ${projectName}`,
+    `Initialize ktx project: ${projectName}`,
     authorName,
     authorEmail,
   );

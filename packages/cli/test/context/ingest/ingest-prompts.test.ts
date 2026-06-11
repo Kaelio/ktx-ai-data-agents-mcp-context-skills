@@ -18,14 +18,14 @@ describe('ingest prompt assets', () => {
     expect(prompt).toContain('Do not create a duplicate contested artifact');
   });
 
-  it('uses product-neutral KTX runtime wording', async () => {
+  it('uses product-neutral ktx runtime wording', async () => {
     const prompt = await readFile(
       new URL('../../../src/prompts/memory_agent_bundle_ingest_work_unit.md', import.meta.url),
       'utf-8',
     );
 
-    expect(prompt).toContain('KTX semantic-layer sources and/or knowledge wiki pages');
-    expect(prompt).toContain('maps cleanly to KTX');
+    expect(prompt).toContain('ktx semantic-layer sources and/or knowledge wiki pages');
+    expect(prompt).toContain('maps cleanly to ktx');
     expect(prompt).not.toMatch(forbiddenProductPattern());
   });
 

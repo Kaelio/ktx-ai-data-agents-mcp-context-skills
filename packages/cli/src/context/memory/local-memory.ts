@@ -52,7 +52,7 @@ import type {
 
 const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));
-const LOCAL_AUTHOR = { name: 'KTX Local', email: 'local@ktx.local' };
+const LOCAL_AUTHOR = { name: 'ktx Local', email: 'local@ktx.local' };
 const LOCAL_SHAPE_WARNING = 'Local memory ingest validates semantic-layer YAML shape only.';
 
 export interface CreateLocalProjectMemoryIngestOptions {

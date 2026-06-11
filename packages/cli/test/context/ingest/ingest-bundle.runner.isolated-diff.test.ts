@@ -213,7 +213,7 @@ function makeDeps(
     lockingService: { withLock: vi.fn(async (_key, fn) => fn()) },
     storage: {
       homeDir: join(runtime.configDir, '.ktx'),
-      systemGitAuthor: { name: 'KTX Test', email: 'system@ktx.local' },
+      systemGitAuthor: { name: 'ktx Test', email: 'system@ktx.local' },
       resolveUploadDir: (id) => join(runtime.homeDir, 'upload', id),
       resolvePullDir: (id) => join(runtime.homeDir, 'pull', id),
       resolveTranscriptDir: (id) => join(runtime.configDir, '.ktx/ingest-transcripts', id),
@@ -308,7 +308,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['wiki/global/custom-isolated.md'],
           'custom wiki',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -395,7 +395,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['wiki/global/legacy-isolated.md'],
           'legacy isolated wiki',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -486,7 +486,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['semantic-layer/warehouse/good.yaml'],
             'test: add good source',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         }
@@ -504,7 +504,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['semantic-layer/warehouse/bad.yaml'],
             'test: add bad source',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         }
@@ -606,7 +606,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             [`wiki/global/${sourceKey}-isolated.md`],
             `${sourceKey} wiki`,
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
           return { stopReason: 'natural' };
@@ -682,7 +682,7 @@ describe('IngestBundleRunner isolated diff path', () => {
             '---\nsummary: Account segments\nusage_mode: auto\nsl_refs:\n  - mart_account_segments\n---\n\nARR is `mart_account_segments.total_contract_arr_cents`.\n',
           );
           currentSession.actions.push({ target: 'wiki', type: 'created', key: 'account-segments', detail: 'Account segments' });
-          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'wu wiki', 'KTX Test', 'system@ktx.local');
+          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'wu wiki', 'ktx Test', 'system@ktx.local');
         }
         if (params.telemetryTags.unitKey === 'card-source') {
           await writeFile(
@@ -697,7 +697,7 @@ describe('IngestBundleRunner isolated diff path', () => {
             detail: 'Dollar measure',
             targetConnectionId: 'warehouse',
           });
-          await currentSession.gitService.commitFiles(['semantic-layer/warehouse/mart_account_segments.yaml'], 'wu source', 'KTX Test', 'system@ktx.local');
+          await currentSession.gitService.commitFiles(['semantic-layer/warehouse/mart_account_segments.yaml'], 'wu source', 'ktx Test', 'system@ktx.local');
         }
         return { stopReason: 'natural' };
       }) as never;
@@ -740,7 +740,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       await runtime.git.commitFiles(
         ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
         'seed existing wiki body ref',
-        'KTX Test',
+        'ktx Test',
         'system@ktx.local',
       );
       const preRunHead = await runtime.git.revParseHead();
@@ -773,7 +773,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['semantic-layer/warehouse/mart_account_segments.yaml'],
           'wu source rename',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -903,7 +903,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await mkdir(join(root, 'wiki/global'), { recursive: true });
         await writeFile(join(root, `wiki/global/${unitKey}.md`), `---\nsummary: ${unitKey}\nusage_mode: auto\n---\n\n${unitKey}\n`);
         currentSession.actions.push({ target: 'wiki', type: 'created', key: unitKey, detail: unitKey });
-        await currentSession.gitService.commitFiles([`wiki/global/${unitKey}.md`], `wu ${unitKey}`, 'KTX Test', 'system@ktx.local');
+        await currentSession.gitService.commitFiles([`wiki/global/${unitKey}.md`], `wu ${unitKey}`, 'ktx Test', 'system@ktx.local');
         return { stopReason: 'natural' };
       }) as never;
       const runner = new IngestBundleRunner(deps);
@@ -950,7 +950,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         );
         addTouchedSlSource(currentSession.touchedSlSources, 'warehouse', 'orders');
         currentSession.actions.push({ target: 'sl', type: 'updated', key: 'orders', detail: suffix, targetConnectionId: 'warehouse' });
-        await currentSession.gitService.commitFiles(['semantic-layer/warehouse/orders.yaml'], `wu ${suffix}`, 'KTX Test', 'system@ktx.local');
+        await currentSession.gitService.commitFiles(['semantic-layer/warehouse/orders.yaml'], `wu ${suffix}`, 'ktx Test', 'system@ktx.local');
         return { stopReason: 'natural' };
       }) as never;
       const runner = new IngestBundleRunner(deps);
@@ -1006,7 +1006,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           '---\nsummary: Projected orders\nusage_mode: auto\nsl_refs:\n  - mart_account_segments\n---\n\nARR `mart_account_segments.total_contract_arr`.\n',
         );
         currentSession.actions.push({ target: 'wiki', type: 'created', key: 'projected-orders', detail: 'Projected orders' });
-        await currentSession.gitService.commitFiles(['wiki/global/projected-orders.md'], 'wu projected wiki', 'KTX Test', 'system@ktx.local');
+        await currentSession.gitService.commitFiles(['wiki/global/projected-orders.md'], 'wu projected wiki', 'ktx Test', 'system@ktx.local');
         return { stopReason: 'natural' };
       }) as never;
       const runner = new IngestBundleRunner(deps);
@@ -1042,7 +1042,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await mkdir(join(root, 'wiki/global'), { recursive: true });
         await writeFile(join(root, 'wiki/global/notion-page.md'), '---\nsummary: Notion page\nusage_mode: auto\nsl_refs:\n  - missing_source\n---\n\nBody\n');
         currentSession.actions.push({ target: 'wiki', type: 'created', key: 'notion-page', detail: 'Notion page' });
-        await currentSession.gitService.commitFiles(['wiki/global/notion-page.md'], 'wu notion', 'KTX Test', 'system@ktx.local');
+        await currentSession.gitService.commitFiles(['wiki/global/notion-page.md'], 'wu notion', 'ktx Test', 'system@ktx.local');
         return { stopReason: 'natural' };
       }) as never;
       const runner = new IngestBundleRunner(deps);
@@ -1088,7 +1088,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['semantic-layer/warehouse/mart_account_segments.yaml'],
             'wu source',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         } else {
@@ -1104,7 +1104,7 @@ describe('IngestBundleRunner isolated diff path', () => {
             detail: 'Stale reconcile wiki page',
             rawPaths: ['cards/source.json'],
           });
-          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'reconcile wiki', 'KTX Test', 'system@ktx.local');
+          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'reconcile wiki', 'ktx Test', 'system@ktx.local');
         }
         return { stopReason: 'natural' };
       }) as never;
@@ -1167,7 +1167,7 @@ describe('IngestBundleRunner isolated diff path', () => {
             detail: 'Account segments',
             rawPaths: ['cards/wiki.json'],
           });
-          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'wu wiki', 'KTX Test', 'system@ktx.local');
+          await currentSession.gitService.commitFiles(['wiki/global/account-segments.md'], 'wu wiki', 'ktx Test', 'system@ktx.local');
         }
         if (params.telemetryTags.unitKey === 'card-source') {
           await mkdir(join(root, 'semantic-layer/warehouse'), { recursive: true });
@@ -1187,7 +1187,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['semantic-layer/warehouse/mart_account_segments.yaml'],
             'wu source',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         }
@@ -1302,7 +1302,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
           'valid artifacts with invalid provenance',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -1444,7 +1444,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           'name: orders\ngrain: [id]\ncolumns: [{name: id, type: string}]\njoins: []\nmeasures: []\n',
         );
         currentSession.actions.push({ target: 'sl', type: 'created', key: 'orders', detail: 'forbidden', targetConnectionId: 'warehouse' });
-        await currentSession.gitService.commitFiles(['semantic-layer/warehouse/orders.yaml'], 'forbidden sl', 'KTX Test', 'system@ktx.local');
+        await currentSession.gitService.commitFiles(['semantic-layer/warehouse/orders.yaml'], 'forbidden sl', 'ktx Test', 'system@ktx.local');
         return { stopReason: 'natural' };
       }) as never;
       const runner = new IngestBundleRunner(deps);
@@ -1469,7 +1469,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         join(runtime.configDir, 'wiki/global/source-page.md'),
         '---\nsummary: Source page\nusage_mode: auto\n---\n\nSource page\n',
       );
-      await runtime.git.commitFiles(['wiki/global/source-page.md'], 'seed source page', 'KTX Test', 'system@ktx.local');
+      await runtime.git.commitFiles(['wiki/global/source-page.md'], 'seed source page', 'ktx Test', 'system@ktx.local');
       const preRunHead = await runtime.git.revParseHead();
       const { deps, adapter } = makeDeps(runtime);
       adapter.chunk.mockResolvedValue({
@@ -1501,7 +1501,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['wiki/global/account-segments.md'],
             'wu page ref',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         }
@@ -1517,7 +1517,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['wiki/global/source-page.md'],
             'wu delete source page',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         }
@@ -1582,7 +1582,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       await runtime.git.commitFiles(
         ['wiki/global/source-page.md', 'wiki/global/account-segments.md'],
         'seed inbound wiki refs',
-        'KTX Test',
+        'ktx Test',
         'system@ktx.local',
       );
       const preRunHead = await runtime.git.revParseHead();
@@ -1613,7 +1613,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['wiki/global/source-page.md'],
           'wu delete target page',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -1751,7 +1751,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['semantic-layer/finance/orders.yaml'],
           'wu unauthorized target',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -1822,7 +1822,7 @@ describe('IngestBundleRunner isolated diff path', () => {
             detail: 'Valid page',
             rawPaths: ['pages/source.json'],
           });
-          await currentSession.gitService.commitFiles(['wiki/global/valid-page.md'], 'wu valid page', 'KTX Test', 'system@ktx.local');
+          await currentSession.gitService.commitFiles(['wiki/global/valid-page.md'], 'wu valid page', 'ktx Test', 'system@ktx.local');
         } else {
           await mkdir(join(root, 'semantic-layer/finance'), { recursive: true });
           await writeFile(
@@ -1841,7 +1841,7 @@ describe('IngestBundleRunner isolated diff path', () => {
           await currentSession.gitService.commitFiles(
             ['semantic-layer/finance/reconcile_orders.yaml'],
             'reconcile unauthorized target',
-            'KTX Test',
+            'ktx Test',
             'system@ktx.local',
           );
         }
@@ -1959,7 +1959,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['semantic-layer/warehouse/mart_account_segments.yaml'],
           `wu ${params.telemetryTags.unitKey}`,
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' };
@@ -2025,7 +2025,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       await runtime.git.commitFiles(
         ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
         'seed stale wiki body ref',
-        'KTX Test',
+        'ktx Test',
         'system@ktx.local',
       );
 
@@ -2073,7 +2073,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['semantic-layer/warehouse/mart_account_segments.yaml'],
           'wu source rename',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' as const };
@@ -2128,7 +2128,7 @@ describe('IngestBundleRunner isolated diff path', () => {
       await runtime.git.commitFiles(
         ['semantic-layer/warehouse/mart_account_segments.yaml', 'wiki/global/account-segments.md'],
         'seed stale wiki body ref',
-        'KTX Test',
+        'ktx Test',
         'system@ktx.local',
       );
       const preRunHead = await runtime.git.revParseHead();
@@ -2168,7 +2168,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['semantic-layer/warehouse/mart_account_segments.yaml'],
           'wu source rename',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' as const };
@@ -2302,7 +2302,7 @@ describe('IngestBundleRunner isolated diff path', () => {
         await currentSession.gitService.commitFiles(
           ['wiki/global/orders.md'],
           'wu orders',
-          'KTX Test',
+          'ktx Test',
           'system@ktx.local',
         );
         return { stopReason: 'natural' as const };

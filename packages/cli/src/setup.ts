@@ -318,16 +318,16 @@ async function runKtxSetupEntryMenu(
   const options = status.project.ready
     ? [
         { value: 'setup', label: 'Resume or change an existing setup' },
-        { value: 'new-project', label: 'Create a new KTX project' },
-        { value: 'agents', label: 'Connect a coding agent to KTX' },
+        { value: 'new-project', label: 'Create a new ktx project' },
+        { value: 'agents', label: 'Connect a coding agent to ktx' },
         { value: 'status', label: 'Check setup status' },
-        { value: 'demo', label: 'Explore a pre-built KTX project' },
+        { value: 'demo', label: 'Explore a pre-built ktx project' },
         { value: 'exit', label: 'Exit' },
       ]
     : [
-        { value: 'setup', label: 'Set up KTX for my data' },
+        { value: 'setup', label: 'Set up ktx for my data' },
         { value: 'status', label: 'Check setup status' },
-        { value: 'demo', label: 'Explore a pre-built KTX project' },
+        { value: 'demo', label: 'Explore a pre-built ktx project' },
         { value: 'exit', label: 'Exit' },
       ];
   const action = (await prompts.select({
@@ -523,17 +523,17 @@ function formatContextBuilt(status: KtxSetupContextStatusSummary): string {
 export function formatKtxSetupStatus(status: KtxSetupStatus): string {
   if (!status.project.ready) {
     return [
-      `No KTX project found at ${status.project.path}.`,
+      `No ktx project found at ${status.project.path}.`,
       '',
       'Check another project: ktx --project-dir <folder> status',
       'Or from that folder: ktx status',
-      'Create a new KTX project here: ktx setup',
+      'Create a new ktx project here: ktx setup',
       '',
     ].join('\n');
   }
 
   const lines = [
-    `KTX project: ${status.project.path}`,
+    `ktx project: ${status.project.path}`,
     `Project ready: ${formatReady(status.project.ready)}`,
     `LLM ready: ${formatReady(status.llm.ready)}${status.llm.model ? ` (${status.llm.model})` : ''}`,
     `Embeddings ready: ${formatReady(status.embeddings.ready)}${
@@ -548,7 +548,7 @@ export function formatKtxSetupStatus(status: KtxSetupStatus): string {
           }`,
         ]
       : []),
-    `KTX context built: ${formatContextBuilt(status.context)}`,
+    `ktx context built: ${formatContextBuilt(status.context)}`,
     `Agent integration ready: ${formatReady(status.agents.some((agent) => agent.ready))}${
       status.agents.length > 0 ? ` (${status.agents.map((agent) => `${agent.target}:${agent.scope}`).join(', ')})` : ''
     }`,
@@ -585,7 +585,7 @@ export function formatKtxSetupCompletionSummary(
     );
   }
   lines.push('', agentNextActions ? 'After that, try' : 'Try it');
-  lines.push('  Ask your agent: "Use KTX to show me the available tables."');
+  lines.push('  Ask your agent: "Use ktx to show me the available tables."');
   return lines.join('\n');
 }
 
@@ -622,7 +622,7 @@ function setupRuntimeInstallPolicy(args: Extract<KtxSetupArgs, { command: 'run' 
 
 async function commitSetupConfigChanges(projectDir: string): Promise<void> {
   const project = await loadKtxProject({ projectDir });
-  await project.git.commitFile('ktx.yaml', 'setup: update KTX project config', 'ktx setup', 'setup@ktx.local');
+  await project.git.commitFile('ktx.yaml', 'setup: update ktx project config', 'ktx setup', 'setup@ktx.local');
 }
 
 export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
@@ -638,7 +638,7 @@ export async function runKtxSetup(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSet
 
 async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetupDeps = {}): Promise<number> {
   const setupUi = deps.setupUi ?? createKtxSetupUiAdapter();
-  setupUi.intro('KTX setup', io);
+  setupUi.intro('ktx setup', io);
   setupUi.note(KTX_DOCS_URL, '📚 Docs', io);
   let entryAction: KtxSetupEntryAction | undefined;
   let projectResult: Awaited<ReturnType<typeof runKtxSetupProjectStep>>;
@@ -989,7 +989,7 @@ async function runKtxSetupInner(args: KtxSetupArgs, io: KtxCliIo, deps: KtxSetup
     if (shouldPrintConciseReadySummary(status)) {
       setupUi.note(
         formatKtxSetupCompletionSummary(status, { agentNextActions }),
-        agentNextActions ? 'Finish KTX agent setup' : 'KTX project ready',
+        agentNextActions ? 'Finish ktx agent setup' : 'ktx project ready',
         io,
         {
           format: (line) => line,

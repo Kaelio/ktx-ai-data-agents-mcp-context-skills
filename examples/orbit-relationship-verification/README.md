@@ -1,11 +1,11 @@
 # Orbit-style relationship discovery verification
 
-This KTX project backs the default `relationships:verify-orbit` command. It uses
+This **ktx** project backs the default `relationships:verify-orbit` command. It uses
 the checked-in Orbit-style SQLite fixture from the relationship discovery
 benchmark corpus, with no declared primary keys or foreign keys in the database
 schema.
 
-Run from the KTX workspace root:
+Run from the **ktx** workspace root:
 
 ```bash
 pnpm run relationships:verify-orbit

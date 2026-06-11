@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveKtxConfigReference, resolveKtxHomePath } from '../../../src/context/core/config-reference.js';
 
-describe('KTX config references', () => {
+describe('ktx config references', () => {
   it('resolves env references without returning empty values', () => {
     expect(resolveKtxConfigReference('env:AI_GATEWAY_API_KEY', { AI_GATEWAY_API_KEY: ' gateway-key ' })).toBe(
       'gateway-key',

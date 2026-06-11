@@ -596,7 +596,7 @@ describe('local ingest', () => {
     });
   });
 
-  it('includes upload-capable KTX adapters in default local ingest adapters', () => {
+  it('includes upload-capable ktx adapters in default local ingest adapters', () => {
     expect(createDefaultLocalIngestAdapters(project).map((adapter) => adapter.source)).toEqual(
       expect.arrayContaining(['dbt', 'metricflow', 'notion']),
     );

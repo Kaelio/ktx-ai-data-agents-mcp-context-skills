@@ -37,7 +37,7 @@ export function registerConnectionCommands(program: Command, context: KtxCliComm
   connection
     .command('test')
     .description('Test one or all configured connections (default: all)')
-    .argument('[connectionId]', 'KTX connection id to test (omit to test all)')
+    .argument('[connectionId]', 'ktx connection id to test (omit to test all)')
     .option('--all', 'Test every configured connection and print a summary list')
     .action(async (connectionId: string | undefined, options: { all?: boolean }, command) => {
       if (options.all === true && connectionId !== undefined) {

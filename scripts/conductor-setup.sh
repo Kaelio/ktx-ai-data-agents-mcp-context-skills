@@ -1,5 +1,5 @@
 #!/bin/bash
-# conductor-setup.sh - Runs once when Conductor creates a KTX workspace.
+# conductor-setup.sh - Runs once when Conductor creates a ktx workspace.
 #
 # Prepares the standalone pnpm + uv workspace and builds the local CLI.
 
@@ -114,7 +114,7 @@ link_agent_overlays() {
   fi
 }
 
-echo "=== Conductor KTX workspace setup ==="
+echo "=== Conductor ktx workspace setup ==="
 
 link_agent_overlays
 
@@ -126,21 +126,21 @@ fi
 KTX_UV_BIN="$(resolve_uv_for_project "pyproject.toml")"
 export PATH="$(dirname "$KTX_UV_BIN"):$PATH"
 
-echo "Installing KTX Python dependencies..."
+echo "Installing ktx Python dependencies..."
 uv sync --all-packages --all-groups
 
-echo "Installing KTX JS dependencies..."
+echo "Installing ktx JS dependencies..."
 pnpm install --frozen-lockfile --prefer-offline
 
 echo "Rebuilding native JS dependencies..."
 pnpm run native:rebuild
 
-echo "Building KTX runtime artifacts..."
+echo "Building ktx runtime artifacts..."
 # Builds every internal package (llm/context/connectors/cli) before producing
 # the wheel + npm tarball, so a separate `pnpm run build` would be redundant.
 pnpm run artifacts:build
 
-echo "Running KTX setup doctor..."
+echo "Running ktx setup doctor..."
 # Run from a temp dir so `ktx status` doesn't walk up into a parent ktx.yaml
 # (e.g. ~/ktx.yaml) and report on an unrelated project.
 KTX_CLI_BIN="$PWD/packages/cli/dist/bin.js"

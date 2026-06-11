@@ -139,7 +139,7 @@ export async function startKtxMcpDaemon(options: {
       };
     }
     throw new Error(
-      `KTX MCP daemon is already running at http://${existing.host}:${existing.port}/mcp ` +
+      `ktx MCP daemon is already running at http://${existing.host}:${existing.port}/mcp ` +
         'with a different configuration. Run `ktx mcp stop` first, then start again.',
     );
   }
@@ -175,7 +175,7 @@ export async function startKtxMcpDaemon(options: {
       }),
     });
     if (!child.pid) {
-      throw new Error('Failed to start KTX MCP daemon: child process pid was not available.');
+      throw new Error('Failed to start ktx MCP daemon: child process pid was not available.');
     }
     child.unref();
     const state: KtxMcpDaemonState = {
@@ -219,7 +219,7 @@ export async function readKtxMcpDaemonStatus(options: {
   }
   return {
     kind: 'running',
-    detail: `KTX MCP daemon running at http://${state.host}:${state.port}/mcp`,
+    detail: `ktx MCP daemon running at http://${state.host}:${state.port}/mcp`,
     state,
     url: `http://${state.host}:${state.port}/mcp`,
   };

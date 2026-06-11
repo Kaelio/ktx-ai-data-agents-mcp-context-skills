@@ -124,7 +124,7 @@ export interface ManagedPythonRuntimeDoctorCheck {
 
 /** @internal */
 export const MISSING_UV_RUNTIME_INSTALL_MESSAGE =
-  'uv is required to install the KTX Python runtime. KTX does not download uv automatically. Install uv, make sure it is on PATH, and retry: ktx admin runtime install --yes';
+  'uv is required to install the ktx Python runtime. ktx does not download uv automatically. Install uv, make sure it is on PATH, and retry: ktx admin runtime install --yes';
 
 function defaultAssetDir(): string {
   return fileURLToPath(new URL('../assets/python/', import.meta.url));
@@ -250,7 +250,7 @@ export async function verifyRuntimeAsset(input: { assetDir: string }): Promise<M
         [
           `Missing bundled Python runtime manifest: ${manifestPath}`,
           'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',
-          'Then retry the runtime-backed KTX command.',
+          'Then retry the runtime-backed ktx command.',
         ].join('\n'),
       );
     }

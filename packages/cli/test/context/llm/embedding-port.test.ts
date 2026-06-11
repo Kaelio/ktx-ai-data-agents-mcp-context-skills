@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { KtxIngestEmbeddingPortAdapter, KtxScanEmbeddingPortAdapter } from '../../../src/context/llm/embedding-port.js';
 
-describe('KTX embedding port adapters', () => {
+describe('ktx embedding port adapters', () => {
   it('adapts LLM modules embeddings to ingest embedding port shape', async () => {
     const provider = {
       dimensions: 3,

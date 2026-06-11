@@ -2,20 +2,20 @@
 
 ## Reporting a vulnerability
 
-If you believe you've found a security vulnerability in KTX, please report it
+If you believe you've found a security vulnerability in **ktx**, please report it
 **privately** through GitHub Security Advisories:
 
 [Report a vulnerability](https://github.com/Kaelio/ktx/security/advisories/new)
 
 If you cannot use GitHub Security Advisories, email `support@kaelio.com`
-instead. Please do **not** open a public issue, post in the KTX Slack, or
+instead. Please do **not** open a public issue, post in the **ktx** Slack, or
 share details elsewhere until we have published a fix.
 
 When reporting, please include:
 
 - A description of the issue and its impact
 - Steps to reproduce
-- The KTX version affected
+- The **ktx** version affected
 
 ## What to expect
 

@@ -482,7 +482,7 @@ export function renderInvalidConfigMessage(
   const abbreviated = abbreviateHome(projectDir) ?? projectDir;
 
   const lines: string[] = [];
-  lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
+  lines.push(`${bold('ktx status')} ${dim('·')} ${abbreviated}`);
   lines.push('');
   lines.push(`  ${status('fail', '✗')} ${bold('Config')}    ktx.yaml has ${issues.length} schema issue${issues.length === 1 ? '' : 's'}`);
   for (const issue of issues) {
@@ -524,7 +524,7 @@ export function renderValidConfigMessage(
   const abbreviated = abbreviateHome(projectDir) ?? projectDir;
 
   const lines: string[] = [];
-  lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
+  lines.push(`${bold('ktx status')} ${dim('·')} ${abbreviated}`);
   lines.push('');
   lines.push(`  ${status('pass', '✓')} ${bold('Config')}    ${dim('ktx.yaml schema valid')}`);
   lines.push('');
@@ -559,9 +559,9 @@ export function renderMissingProjectMessage(
   const envProjectDir = process.env.KTX_PROJECT_DIR;
 
   const lines: string[] = [];
-  lines.push(`${bold('KTX status')} ${dim('·')} ${abbreviated}`);
+  lines.push(`${bold('ktx status')} ${dim('·')} ${abbreviated}`);
   lines.push('');
-  lines.push(`  No KTX project here yet. ${dim('(ktx.yaml not found)')}`);
+  lines.push(`  No ktx project here yet. ${dim('(ktx.yaml not found)')}`);
   lines.push('');
   lines.push(`  Run  ${bold('ktx setup')}  to create one.`);
   if (envProjectDir !== undefined) {
@@ -643,7 +643,7 @@ export async function runKtxDoctor(
     }
 
     const setupChecks = await runSetupChecks();
-    const report: DoctorReport = { title: 'KTX status', checks: setupChecks };
+    const report: DoctorReport = { title: 'ktx status', checks: setupChecks };
     const renderOptions: RenderOptions = {
       verbose: args.verbose ?? false,
       useColor: shouldUseColorOutput(io.stdout),

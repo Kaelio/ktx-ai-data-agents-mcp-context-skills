@@ -1,4 +1,4 @@
-"""Portable in-process code execution helpers for KTX daemon.
+"""Portable in-process code execution helpers for ktx daemon.
 
 This module preserves the host application's current Python execution behavior.
 It runs code with Python ``exec`` in the current process and does not provide

@@ -1,6 +1,6 @@
 # local-warehouse fixture
 
-This directory is a contributor fixture for KTX CLI smoke tests. It uses the
+This directory is a contributor fixture for **ktx** CLI smoke tests. It uses the
 internal fake ingest adapter so tests can run without a live database or
 external service.
 

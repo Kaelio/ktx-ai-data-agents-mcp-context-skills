@@ -239,7 +239,7 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
     const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), input.abortSignal, () => generateText(request));
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (typeof result.text !== 'string') {
-      throw new Error('KTX LLM text generation returned no text');
+      throw new Error('ktx LLM text generation returned no text');
     }
     return result.text;
   }
@@ -271,12 +271,12 @@ export class AiSdkKtxLlmRuntime implements KtxLlmRuntimePort {
             }),
           }
         : {}),
-      output: Output.object({ schema: input.schema as unknown as FlexibleSchema<TOutput> }),
+      output: Output.object({ schema: input.schema as FlexibleSchema<TOutput> }),
     };
     const result = await this.generateTextWithRateLimitRetry(modelProviderName(model), input.abortSignal, () => generateText(request));
     input.onMetrics?.({ totalMs: Date.now() - startedAt, usage: toLlmTokenUsage(result.totalUsage ?? result.usage) });
     if (result.output == null) {
-      throw new Error('KTX LLM object generation returned no output');
+      throw new Error('ktx LLM object generation returned no output');
     }
     return result.output as TOutput;
   }

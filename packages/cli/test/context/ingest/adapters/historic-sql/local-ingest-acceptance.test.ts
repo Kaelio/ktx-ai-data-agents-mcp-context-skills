@@ -165,7 +165,7 @@ async function writeHistoricSqlProject(project: KtxLocalProject): Promise<KtxLoc
       '  state: sqlite',
       '  search: sqlite-fts5',
       '  git:',
-      '    author: KTX Test <system@ktx.local>',
+      '    author: ktx Test <system@ktx.local>',
       '',
     ].join('\n'),
     'utf-8',
@@ -193,7 +193,7 @@ async function writeHistoricSqlProject(project: KtxLocalProject): Promise<KtxLoc
         },
       },
     }),
-    'KTX Test',
+    'ktx Test',
     'system@ktx.local',
     'Seed schema shard',
   );

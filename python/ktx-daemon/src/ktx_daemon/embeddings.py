@@ -1,4 +1,4 @@
-"""Portable embedding compute helpers for KTX daemon."""
+"""Portable embedding compute helpers for ktx daemon."""
 
 from __future__ import annotations
 

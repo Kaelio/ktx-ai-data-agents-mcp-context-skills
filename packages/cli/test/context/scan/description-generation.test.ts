@@ -90,7 +90,7 @@ function createConnector(): KtxScanConnector {
   };
 }
 
-describe('KTX description prompt builders', () => {
+describe('ktx description prompt builders', () => {
   it('builds column prompts with sample values, source descriptions, and nested BigQuery guidance', () => {
     const { system, user } = buildKtxColumnDescriptionPrompt({
       columnName: 'payload',

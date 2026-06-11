@@ -154,7 +154,7 @@ function scanReportPath(connectionId: string, syncId: string): string {
 
 function assertSupportedMode(mode: KtxScanMode): void {
   if (mode !== 'structural' && mode !== 'relationships' && mode !== 'enriched') {
-    throw new Error(`Unsupported KTX scan mode: ${mode}`);
+    throw new Error(`Unsupported ktx scan mode: ${mode}`);
   }
 }
 
@@ -544,7 +544,7 @@ export async function runLocalScan(options: RunLocalScanOptions): Promise<LocalS
       }
       report.warnings.push({
         code: 'enrichment_failed',
-        message: `KTX scan enrichment failed after structural scan completed: ${message}`,
+        message: `ktx scan enrichment failed after structural scan completed: ${message}`,
         recoverable: true,
         metadata: { mode, detectRelationships: options.detectRelationships ?? false },
       });

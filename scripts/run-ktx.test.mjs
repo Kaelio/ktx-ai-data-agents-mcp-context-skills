@@ -153,7 +153,7 @@ test('runWorkspaceKtx builds the workspace CLI before running it when dist is mi
     ],
   );
   assert.deepEqual(logs, [
-    ['stderr', 'KTX CLI build output is missing. Building it now with `pnpm run build`...\n'],
+    ['stderr', 'ktx CLI build output is missing. Building it now with `pnpm run build`...\n'],
     ['stdout', 'build ok\n'],
     ['stdout', 'Replay complete\n'],
   ]);
@@ -216,7 +216,7 @@ test('runWorkspaceKtx rebuilds before running when workspace sources are newer t
     ],
   );
   assert.deepEqual(logs, [
-    ['stderr', 'KTX CLI build output is stale. Rebuilding it now with `pnpm run build`...\n'],
+    ['stderr', 'ktx CLI build output is stale. Rebuilding it now with `pnpm run build`...\n'],
     ['stdout', 'build ok\n'],
     ['stdout', '{"status":"ready"}\n'],
   ]);
@@ -256,7 +256,7 @@ test('runWorkspaceKtx skips rebuild when only bin.js is older than sources but s
     },
     execFile: async (command, args, options) => {
       calls.push({ command, args, cwd: options.cwd });
-      return { stdout: 'KTX status\n', stderr: '' };
+      return { stdout: 'ktx status\n', stderr: '' };
     },
     writeFile: async (path, contents) => {
       writes.push({ path, contents });
@@ -271,7 +271,7 @@ test('runWorkspaceKtx skips rebuild when only bin.js is older than sources but s
     [[process.execPath, ['/workspace/ktx/packages/cli/dist/bin.js', 'status']]],
   );
   assert.deepEqual(writes, []);
-  assert.deepEqual(logs, [['stdout', 'KTX status\n']]);
+  assert.deepEqual(logs, [['stdout', 'ktx status\n']]);
 });
 
 test('runWorkspaceKtx rebuilds when stamp is missing even if bin.js exists', async () => {
@@ -308,7 +308,7 @@ test('runWorkspaceKtx rebuilds when stamp is missing even if bin.js exists', asy
       if (command === 'pnpm') {
         return { stdout: 'build ok\n', stderr: '' };
       }
-      return { stdout: 'KTX status\n', stderr: '' };
+      return { stdout: 'ktx status\n', stderr: '' };
     },
     writeFile: async (path, contents) => {
       writes.push({ path, contents });
@@ -327,7 +327,7 @@ test('runWorkspaceKtx rebuilds when stamp is missing even if bin.js exists', asy
   );
   assert.deepEqual(logs[0], [
     'stderr',
-    'KTX CLI build output is stale. Rebuilding it now with `pnpm run build`...\n',
+    'ktx CLI build output is stale. Rebuilding it now with `pnpm run build`...\n',
   ]);
   assert.deepEqual(writes, [
     { path: '/workspace/ktx/packages/cli/dist/.ktx-build-stamp', contents: '' },

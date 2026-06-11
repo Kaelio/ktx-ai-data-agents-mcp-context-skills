@@ -197,7 +197,7 @@ function formatBlocked(result) {
 
 export function formatOrbitVerificationMarkdown(result) {
   const lines = [
-    '# KTX Relationship Discovery Orbit Verification',
+    '# ktx Relationship Discovery Orbit Verification',
     '',
     `Date: ${result.date}`,
     '',
@@ -323,7 +323,7 @@ export async function runOrbitVerification(options = {}) {
         projectDir,
         scanCommand,
         scanExitCode: scan.exitCode,
-        blocker: 'KTX scan completed without printing a Run id',
+        blocker: 'ktx scan completed without printing a Run id',
         scanStdout: scan.stdout,
         scanStderr: scan.stderr,
       };
@@ -337,7 +337,7 @@ export async function runOrbitVerification(options = {}) {
           projectDir,
           scanCommand,
           scanExitCode: scan.exitCode,
-          blocker: 'KTX scan completed without printing a report artifact path',
+          blocker: 'ktx scan completed without printing a report artifact path',
           scanStdout: scan.stdout,
           scanStderr: scan.stderr,
         };

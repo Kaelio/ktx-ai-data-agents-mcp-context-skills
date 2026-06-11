@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runKtxEmbeddingHealthCheck } from '../../src/llm/embedding-health.js';
 
-describe('KTX embedding health check', () => {
+describe('ktx embedding health check', () => {
   it('runs a one-shot OpenAI embedding check through the configured provider', async () => {
     const createOpenAIClient = vi.fn(() => ({
       embeddings: {

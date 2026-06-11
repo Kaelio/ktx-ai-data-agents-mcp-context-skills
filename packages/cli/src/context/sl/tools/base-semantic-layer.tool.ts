@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import type { z } from 'zod';
 import type { GitAuthorResolverPort } from '../../../context/tools/authors.js';
 import type { ToolContext, ToolOutput } from '../../../context/tools/base-tool.js';
 import { BaseTool } from '../../../context/tools/base-tool.js';
@@ -27,7 +27,9 @@ export interface BaseSemanticLayerToolDeps {
 
 // ── Abstract base class ──
 
-export abstract class BaseSemanticLayerTool<TInput extends ZodType = ZodType> extends BaseTool<TInput> {
+export abstract class BaseSemanticLayerTool<
+  TInput extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>,
+> extends BaseTool<TInput> {
   protected readonly semanticLayerService: SemanticLayerService;
   protected readonly slSearchService: SlSearchService;
   protected readonly authorResolver: GitAuthorResolverPort;

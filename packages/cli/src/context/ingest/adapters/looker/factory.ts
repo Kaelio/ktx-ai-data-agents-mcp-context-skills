@@ -19,6 +19,16 @@ export class DefaultLookerConnectionClientFactory implements LookerConnectionCli
   ) {}
 
   async createClient(lookerConnectionId: string): Promise<LookerRuntimeClient> {
+    return this.createLookerClient(lookerConnectionId);
+  }
+
+  /**
+   * Like {@link createClient} but preserves the concrete {@link LookerClient}
+   * type, so callers that need methods outside the `LookerRuntimeClient`
+   * contract (e.g. `listLookerConnections`, `testConnection`) keep them without
+   * a cast.
+   */
+  async createLookerClient(lookerConnectionId: string): Promise<LookerClient> {
     const credentials = await this.resolver.resolve(lookerConnectionId);
     return new LookerClient(credentials, this.deps);
   }

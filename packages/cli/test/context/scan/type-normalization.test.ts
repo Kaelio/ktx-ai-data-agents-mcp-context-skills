@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { inferKtxDimensionType, ktxColumnTypeMappingFromNative, normalizeKtxNativeType } from '../../../src/context/scan/type-normalization.js';
 
-describe('KTX scan type normalization', () => {
+describe('ktx scan type normalization', () => {
   it('normalizes native database type strings', () => {
     expect(normalizeKtxNativeType(' NUMERIC(12, 2) ')).toBe('numeric');
     expect(normalizeKtxNativeType('TIMESTAMP WITH TIME ZONE')).toBe('timestamp with time zone');

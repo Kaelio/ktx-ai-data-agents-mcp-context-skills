@@ -73,14 +73,14 @@ describe('setup prompt adapter', () => {
 
     await expect(
       adapter.select({
-        message: 'Which embedding option should KTX use?\n\nKTX uses embeddings for search.',
+        message: 'Which embedding option should ktx use?\n\nktx uses embeddings for search.',
         options,
       }),
     ).resolves.toBe('openai');
 
     expect(mocks.withSetupInterruptConfirmation).toHaveBeenCalledTimes(1);
     expect(mocks.select).toHaveBeenCalledWith({
-      message: 'Which embedding option should KTX use?\n\nKTX uses embeddings for search.\n',
+      message: 'Which embedding option should ktx use?\n\nktx uses embeddings for search.\n',
       options,
     });
   });
@@ -229,10 +229,10 @@ describe('setup prompt adapter', () => {
     };
 
     const ui = createKtxSetupUiAdapter();
-    ui.intro('KTX setup', io);
+    ui.intro('ktx setup', io);
     ui.note('  $ ktx status', 'What you can do next', io);
 
-    expect(chunks.join('')).toBe('KTX setup\n\nWhat you can do next:\n  $ ktx status\n');
+    expect(chunks.join('')).toBe('ktx setup\n\nWhat you can do next:\n  $ ktx status\n');
     expect(mocks.intro).not.toHaveBeenCalled();
     expect(mocks.note).not.toHaveBeenCalled();
   });
@@ -251,13 +251,13 @@ describe('setup prompt adapter', () => {
     };
 
     const ui = createKtxSetupUiAdapter();
-    ui.intro('KTX setup', io);
+    ui.intro('ktx setup', io);
     ui.note('  $ ktx status', 'What you can do next', io);
 
     const bannerWrite = output.write.mock.calls.map((call) => String(call[0])).join('');
     expect(bannerWrite).toContain('██');
     expect(bannerWrite).toContain('context layer for data agents');
-    expect(mocks.intro).toHaveBeenCalledWith('KTX setup', { output });
+    expect(mocks.intro).toHaveBeenCalledWith('ktx setup', { output });
     expect(mocks.note).toHaveBeenCalledWith('  $ ktx status', 'What you can do next', { output });
   });
 });

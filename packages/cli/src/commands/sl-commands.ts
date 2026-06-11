@@ -44,7 +44,7 @@ export function registerSlCommands(program: Command, context: KtxCliCommandConte
     .description('List, search, validate, or query local semantic-layer sources')
     .usage('[options] [query...]')
     .argument('[query...]', 'Search query; omit to list all sources')
-    .option('--connection-id <id>', 'KTX connection id')
+    .option('--connection-id <id>', 'ktx connection id')
     .option('--limit <number>', 'Maximum search results (search mode only)', parsePositiveIntegerOption)
     .addOption(
       new Option('--output <mode>', 'Output mode: pretty (default in TTY), plain (TSV), or json').choices([

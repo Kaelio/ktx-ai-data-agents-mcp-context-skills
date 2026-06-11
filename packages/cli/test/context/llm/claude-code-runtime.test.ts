@@ -362,7 +362,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
   });
 
-  it('registers only exact KTX MCP tool ids and denies non-KTX tools', async () => {
+  it('registers only exact ktx MCP tool ids and denies non-ktx tools', async () => {
     const query = vi.fn((_input: any) =>
       stream([
         initMessage({ tools: ['mcp__ktx__load_skill'], mcp_servers: [{ name: 'ktx', status: 'connected' }] }),
@@ -487,7 +487,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     );
   });
 
-  it('allows host-discovered context during agent loops while requiring exact KTX MCP tools and servers', async () => {
+  it('allows host-discovered context during agent loops while requiring exact ktx MCP tools and servers', async () => {
     const query = vi.fn((_input: any) =>
       stream([
         initMessage({
@@ -553,7 +553,7 @@ describe('ClaudeCodeKtxLlmRuntime', () => {
     });
   });
 
-  it('still rejects unexpected tools, missing KTX tools, plugins, and non-KTX MCP servers from init messages', async () => {
+  it('still rejects unexpected tools, missing ktx tools, plugins, and non-ktx MCP servers from init messages', async () => {
     const query = vi.fn((_input: any) =>
       stream([
         initMessage({

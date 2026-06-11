@@ -71,7 +71,7 @@ describe('runKtxSetupRuntimeStep', () => {
   it('fails fast when required runtime features cannot be installed in no-input mode', async () => {
     const io = makeIo();
     const ensureRuntime = vi.fn(async () => {
-      throw new Error('KTX Python runtime is required for this command. Run: ktx admin runtime install --yes');
+      throw new Error('ktx Python runtime is required for this command. Run: ktx admin runtime install --yes');
     });
 
     await expect(
@@ -97,7 +97,7 @@ describe('runKtxSetupRuntimeStep', () => {
     expect(io.stderr()).toContain('ktx admin runtime install --yes');
   });
 
-  it('starts the KTX daemon for configured sentence-transformers embeddings', async () => {
+  it('starts the ktx daemon for configured sentence-transformers embeddings', async () => {
     const io = makeIo();
     const ensureLocalEmbeddings = vi.fn(async () => ({
       baseUrl: 'http://127.0.0.1:61234',

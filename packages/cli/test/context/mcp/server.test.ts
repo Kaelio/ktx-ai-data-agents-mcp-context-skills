@@ -987,7 +987,7 @@ describe('createKtxMcpServer', () => {
     expect(ingest.ingest).toHaveBeenCalledWith({
       userId: 'mcp-user',
       chatId: expect.stringMatching(/^mcp-/),
-      userMessage: 'Ingest external knowledge into KTX memory.',
+      userMessage: 'Ingest external knowledge into ktx memory.',
       assistantMessage: content,
       connectionId: '00000000-0000-4000-8000-000000000001',
       sourceType: 'external_ingest',
@@ -996,7 +996,7 @@ describe('createKtxMcpServer', () => {
     const cliEquivalentInput: MemoryAgentInput = {
       userId: 'mcp-user',
       chatId: 'cli-text-ingest-test-1',
-      userMessage: 'Ingest external text artifact "orders lookml" into KTX memory.',
+      userMessage: 'Ingest external text artifact "orders lookml" into ktx memory.',
       assistantMessage: content,
       connectionId: '00000000-0000-4000-8000-000000000001',
       sourceType: 'external_ingest',
@@ -1101,7 +1101,7 @@ describe('createKtxMcpServer', () => {
       expect(ingestSpy).toHaveBeenCalledWith({
         userId: 'local',
         chatId: expect.stringMatching(/^mcp-/),
-        userMessage: 'Ingest external knowledge into KTX memory.',
+        userMessage: 'Ingest external knowledge into ktx memory.',
         assistantMessage: 'Revenue means paid order value.',
         connectionId: 'warehouse',
         sourceType: 'external_ingest',
@@ -1127,7 +1127,7 @@ describe('createKtxMcpServer', () => {
     }
   });
 
-  it('registers KTX context MCP tools when context ports are supplied', async () => {
+  it('registers ktx context MCP tools when context ports are supplied', async () => {
     const fake = makeFakeServer();
     const contextTools: KtxMcpContextPorts = {
       connections: {
@@ -1298,7 +1298,7 @@ describe('createKtxMcpServer', () => {
     expect(jsonToolResult({ ok: true }).structuredContent).toEqual({ ok: true });
 
     if (false) {
-      // @ts-expect-error bare arrays are not valid MCP structuredContent objects in KTX
+      // @ts-expect-error bare arrays are not valid MCP structuredContent objects in ktx
       jsonToolResult([]);
     }
   });

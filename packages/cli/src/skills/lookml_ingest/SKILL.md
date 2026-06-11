@@ -1,16 +1,16 @@
 ---
 name: lookml_ingest
-description: Map a LookML view/model/explore into KTX semantic layer sources. Covers the LookML to KTX primitive table, provenance tagging, and three worked examples (overlay, standalone from derived_table, standalone with sql_always_where). Load when the turn contains `.lkml` content.
+description: Map a LookML view/model/explore into ktx semantic layer sources. Covers the LookML to ktx primitive table, provenance tagging, and three worked examples (overlay, standalone from derived_table, standalone with sql_always_where). Load when the turn contains `.lkml` content.
 callers: [memory_agent]
 ---
 
-# LookML to KTX Semantic Layer
+# LookML to ktx Semantic Layer
 
 LookML views map to SL sources, `measure:` to measures, `explore: { join: }` to the join graph. This skill lays out the mapping and the three capture shapes.
 
 ## Mapping table
 
-| LookML | KTX form | Notes |
+| LookML | ktx form | Notes |
 |---|---|---|
 | `view: X { sql_table_name: …; measure:/dimension:/join: }` | **Overlay** named `X` with `measures`, computed-only `columns`, `column_overrides`, `joins`, `segments` | Manifest-backed; inherit grain/columns |
 | `view: X { derived_table: { sql: … } }` | **Standalone** with top-level `sql:`, explicit `grain:` + `columns:` | No manifest entry exists |
@@ -23,7 +23,7 @@ Type map: `date`/`datetime`/`timestamp` → `time`; `yesno` → `boolean`; `numb
 
 ## Decision rules
 
-LookML writes target the run connection directly. Unlike Looker runtime ingestion, the LookML adapter is configured on the warehouse KTX connection, so do not look for `targetWarehouseConnectionId` and do not route through a mapping array.
+LookML writes target the run connection directly. Unlike Looker runtime ingestion, the LookML adapter is configured on the warehouse ktx connection, so do not look for `targetWarehouseConnectionId` and do not route through a mapping array.
 
 Before any SL write, inspect the WorkUnit notes.
 
@@ -94,7 +94,7 @@ SL source, `tables:` frontmatter, `sl_refs`, or `emit_unmapped_fallback`:
    schema or dataset, and table from the WorkUnit evidence.
 3. Use only those names in `sql:`, `columns:`, and `grain:`. Map each `dimension_group` to ONE `{ name: <physical_col>, type: time, role: time }` entry - never one per timeframe.
 
-| LookML input | KTX `columns:` entry |
+| LookML input | ktx `columns:` entry |
 |---|---|
 | `dimension_group: month { type: time; timeframes: [month]; sql: ${TABLE}.month_date ;; }` | `{ name: month_date, type: time, role: time }` |
 | `dimension_group: date { type: time; timeframes: [raw, date, week, month]; sql: ${TABLE}.date ;; }` | `{ name: date, type: time, role: time }` - single entry, NOT `date_raw`/`date_date`/`date_week` |
@@ -132,7 +132,7 @@ explore: fct_labs {
 }
 ```
 
-KTX overlay at `<connId>/fct_labs.yaml`:
+ktx overlay at `<connId>/fct_labs.yaml`:
 
 ```yaml
 name: fct_labs

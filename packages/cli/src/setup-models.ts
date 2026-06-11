@@ -102,12 +102,12 @@ export interface KtxSetupModelDeps {
 }
 
 const ANTHROPIC_CREDENTIAL_PROMPT_CONTEXT =
-  'KTX uses the key to verify Anthropic model access now and to run ingest agents that turn schemas, SQL, ' +
+  'ktx uses the key to verify Anthropic model access now and to run ingest agents that turn schemas, SQL, ' +
   'BI metadata, and docs into semantic-layer sources and wiki context. ktx.yaml stores an env: or file: ' +
   'reference, not the raw key.';
 
 const VERTEX_PROJECT_PROMPT_CONTEXT =
-  'KTX stores the selected Google Cloud project ID in ktx.yaml and uses Application Default Credentials for ' +
+  'ktx stores the selected Google Cloud project ID in ktx.yaml and uses Application Default Credentials for ' +
   'access. Project visibility depends on the signed-in Google account and organization permissions.';
 const DEFAULT_VERTEX_LOCATION = 'us-east5';
 
@@ -415,7 +415,7 @@ async function chooseCredentialRef(
   }
   while (true) {
     const choice = await prompts.select({
-      message: `How should KTX find your Anthropic API key?\n\n${ANTHROPIC_CREDENTIAL_PROMPT_CONTEXT}`,
+      message: `How should ktx find your Anthropic API key?\n\n${ANTHROPIC_CREDENTIAL_PROMPT_CONTEXT}`,
       options: [
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
         { value: 'env', label: 'Use ANTHROPIC_API_KEY from the environment' },
@@ -427,7 +427,7 @@ async function chooseCredentialRef(
     }
     if (choice === 'paste') {
       io.stdout.write(
-        '│  KTX will save the key in .ktx/secrets/anthropic-api-key with local file permissions, then write a file: reference in ktx.yaml.\n',
+        '│  ktx will save the key in .ktx/secrets/anthropic-api-key with local file permissions, then write a file: reference in ktx.yaml.\n',
       );
       const value = await prompts.password({ message: withTextInputNavigation('Anthropic API key') });
       if (value === undefined) {
@@ -488,7 +488,7 @@ async function chooseBackend(
     );
   }
   const choice = await prompts.select({
-    message: 'Which LLM provider should KTX use?',
+    message: 'Which LLM provider should ktx use?',
     options: [
       ...KTX_SETUP_LLM_BACKENDS.map((backend) => ({ value: backend, label: KTX_SETUP_LLM_BACKEND_LABELS[backend] })),
       { value: 'back', label: 'Back' },
@@ -599,7 +599,7 @@ async function chooseInteractiveVertexProject(
     }
 
     const choice = await prompts.autocomplete({
-      message: `Which Google Cloud project should KTX use for Vertex AI?\n\n${[
+      message: `Which Google Cloud project should ktx use for Vertex AI?\n\n${[
         VERTEX_PROJECT_PROMPT_CONTEXT,
         listFailureMessage,
       ]

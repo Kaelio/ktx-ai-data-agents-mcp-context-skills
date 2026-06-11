@@ -288,7 +288,7 @@ describe('setup context build state', () => {
       reportIds: ['report-docs-1'],
       artifactPaths: ['raw-sources/warehouse/live-database/sync-1/scan-report.json'],
     });
-    expect(io.stdout()).toContain('KTX context is ready for agents.');
+    expect(io.stdout()).toContain('ktx context is ready for agents.');
     expect(io.stdout()).toContain('Databases:');
     expect(io.stdout()).not.toContain(['Primary sources', ':'].join(''));
   });
@@ -398,7 +398,7 @@ describe('setup context build state', () => {
       completedAt: '2026-05-09T10:00:00.000Z',
       contextSourceConnectionIds: ['docs'],
     });
-    expect(io.stdout()).toContain('KTX context is ready for agents.');
+    expect(io.stdout()).toContain('ktx context is ready for agents.');
     expect(io.stdout()).not.toContain(['Primary sources', ':'].join(''));
   });
 
@@ -523,7 +523,7 @@ describe('setup context build state', () => {
       ),
     ).resolves.toEqual({ status: 'failed', projectDir: tempDir });
 
-    expect(io.stderr()).toContain('No databases or context sources are configured for a KTX context build.');
+    expect(io.stderr()).toContain('No databases or context sources are configured for a ktx context build.');
   });
 
   it('starts a fresh foreground build when stale state is found', async () => {

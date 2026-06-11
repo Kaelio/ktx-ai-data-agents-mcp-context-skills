@@ -42,7 +42,7 @@ describe('Conductor workspace scripts', () => {
     assert.doesNotMatch(workspaceScript, /link_agent_skills_for_claude/);
   });
 
-  it('runs the KTX daemon on the documented fixed local port', async () => {
+  it('runs the ktx daemon on the documented fixed local port', async () => {
     const runScript = await readText('scripts/conductor-run.sh');
 
     assert.match(runScript, /pnpm run build/);

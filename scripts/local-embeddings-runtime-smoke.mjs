@@ -312,7 +312,7 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
       timeoutMs: commands[2].timeoutMs,
     });
     requireSuccess(commands[2].label, install);
-    requireOutput(commands[2].label, install, /Installed KTX Python runtime/);
+    requireOutput(commands[2].label, install, /Installed ktx Python runtime/);
     requireOutput(commands[2].label, install, /features: core, local-embeddings/);
 
     const readyStatus = parseJsonStdout(
@@ -342,11 +342,11 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     const embeddingResponse = await postJson(
       baseUrl,
       '/embeddings/compute',
-      { text: 'KTX local embeddings release smoke' },
+      { text: 'ktx local embeddings release smoke' },
       900_000,
     );
     validateEmbeddingResponse(embeddingResponse, 384);
-    process.stdout.write('KTX daemon computed a 384-dimensional embedding\n');
+    process.stdout.write('ktx daemon computed a 384-dimensional embedding\n');
 
     const setup = await run(commands[5].command, commands[5].args, {
       cwd: installDir,
@@ -363,7 +363,7 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     if (/base_url:/.test(config)) {
       throw new Error(`ktx.yaml should omit base_url for managed local embeddings:\n${config}`);
     }
-    process.stdout.write('KTX setup persisted managed local embeddings (no base_url)\n');
+    process.stdout.write('ktx setup persisted managed local embeddings (no base_url)\n');
 
     const stop = await run(commands[6].command, commands[6].args, {
       cwd: installDir,
@@ -372,9 +372,9 @@ export async function runLocalEmbeddingsRuntimeSmoke(options = {}) {
     });
     requireSuccess(commands[6].label, stop);
     daemonStarted = false;
-    requireOutput(commands[6].label, stop, /Stopped KTX daemon/);
+    requireOutput(commands[6].label, stop, /Stopped ktx daemon/);
 
-    process.stdout.write('KTX local embeddings runtime smoke verified\n');
+    process.stdout.write('ktx local embeddings runtime smoke verified\n');
   } finally {
     if (daemonStarted) {
       await run('pnpm', ['exec', 'ktx', 'admin', 'runtime', 'stop'], {
@@ -395,7 +395,7 @@ async function main() {
   const args = process.argv.slice(2);
   const optIn = localEmbeddingsSmokeOptIn(process.env, args);
   if (!optIn.run) {
-    process.stdout.write(`Skipping KTX local embeddings runtime smoke. ${optIn.message}\n`);
+    process.stdout.write(`Skipping ktx local embeddings runtime smoke. ${optIn.message}\n`);
     if (args.includes('--require-opt-in')) {
       process.exitCode = 1;
     }

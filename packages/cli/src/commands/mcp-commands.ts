@@ -27,11 +27,11 @@ function binPath(): string {
 
 function formatMcpStartResultMessage(input: { status: 'started' | 'already-running'; url: string }): string {
   return [
-    input.status === 'started' ? `KTX MCP daemon started: ${input.url}` : `KTX MCP daemon already running: ${input.url}`,
+    input.status === 'started' ? `ktx MCP daemon started: ${input.url}` : `ktx MCP daemon already running: ${input.url}`,
     '',
-    'KTX is ready for configured agents.',
-    'Open your agent for this KTX project and ask a data question, for example:',
-    '  "Use KTX to show me the available tables and metrics."',
+    'ktx is ready for configured agents.',
+    'Open your agent for this ktx project and ask a data question, for example:',
+    '  "Use ktx to show me the available tables and metrics."',
     '',
   ].join('\n');
 }
@@ -50,14 +50,14 @@ async function printMcpStatus(context: KtxCliCommandContext, projectDir: string)
 export function registerMcpCommands(program: Command, context: KtxCliCommandContext): void {
   const mcp = program
     .command('mcp')
-    .description('Manage the KTX MCP HTTP server (bare command: show status)')
+    .description('Manage the ktx MCP HTTP server (bare command: show status)')
     .action(async (_options, command) => {
       await printMcpStatus(context, resolveCommandProjectDir(command));
     });
 
   mcp
     .command('stdio')
-    .description('Run the KTX MCP server over stdio')
+    .description('Run the ktx MCP server over stdio')
     .action(async (_options, command) => {
       await (context.deps.mcp?.runStdioServer ?? runKtxMcpStdioServer)({
         projectDir: resolveCommandProjectDir(command),
@@ -68,7 +68,7 @@ export function registerMcpCommands(program: Command, context: KtxCliCommandCont
 
   mcp
     .command('start')
-    .description('Start the KTX MCP HTTP server')
+    .description('Start the ktx MCP HTTP server')
     .option('--host <host>', 'Host to bind', '127.0.0.1')
     .option('--port <n>', 'Port to bind', parsePositiveIntegerOption, 7878)
     .option('--token <token>', 'Bearer token required for non-loopback binding')
@@ -96,7 +96,7 @@ export function registerMcpCommands(program: Command, context: KtxCliCommandCont
           allowedOrigins: options.allowedOrigin,
           io: context.io,
         });
-        context.io.stdout.write(`KTX MCP server listening at http://${options.host}:${options.port}/mcp\n`);
+        context.io.stdout.write(`ktx MCP server listening at http://${options.host}:${options.port}/mcp\n`);
         return;
       }
       const result = await (context.deps.mcp?.startDaemon ?? startKtxMcpDaemon)({
@@ -114,24 +114,24 @@ export function registerMcpCommands(program: Command, context: KtxCliCommandCont
 
   mcp
     .command('stop')
-    .description('Stop the KTX MCP daemon')
+    .description('Stop the ktx MCP daemon')
     .action(async (_options, command) => {
       const result = await (context.deps.mcp?.stopDaemon ?? stopKtxMcpDaemon)({
         projectDir: resolveCommandProjectDir(command),
       });
-      context.io.stdout.write(result.status === 'stopped' ? 'KTX MCP daemon stopped.\n' : 'KTX MCP daemon is not running.\n');
+      context.io.stdout.write(result.status === 'stopped' ? 'ktx MCP daemon stopped.\n' : 'ktx MCP daemon is not running.\n');
     });
 
   mcp
     .command('status')
-    .description('Show KTX MCP daemon status')
+    .description('Show ktx MCP daemon status')
     .action(async (_options, command) => {
       await printMcpStatus(context, resolveCommandProjectDir(command));
     });
 
   mcp
     .command('logs')
-    .description('Print the KTX MCP daemon log')
+    .description('Print the ktx MCP daemon log')
     .option('--follow', 'Follow log output', false)
     .action(async (options, command) => {
       const logPath = mcpDaemonLayout(resolveCommandProjectDir(command)).logPath;

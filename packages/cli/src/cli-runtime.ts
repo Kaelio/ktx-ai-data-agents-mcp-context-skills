@@ -61,7 +61,7 @@ export function packageInfoFromJson(packageJson: unknown): KtxCliPackageInfo {
     typeof packageJson.name !== 'string' ||
     typeof packageJson.version !== 'string'
   ) {
-    throw new Error('Invalid KTX CLI package metadata');
+    throw new Error('Invalid ktx CLI package metadata');
   }
 
   return {
@@ -77,7 +77,7 @@ async function runInit(args: { projectDir: string; force: boolean }, io: KtxCliI
     force: args.force,
   });
 
-  io.stdout.write(`Initialized KTX project at ${result.projectDir}\n`);
+  io.stdout.write(`Initialized ktx project at ${result.projectDir}\n`);
   io.stdout.write(`Config: ${result.configPath}\n`);
   io.stdout.write(`Commit: ${result.commitHash ?? 'none'}\n`);
   return 0;

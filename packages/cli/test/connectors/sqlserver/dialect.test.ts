@@ -13,7 +13,7 @@ describe('KtxSqlServerDialect', () => {
     expect(dialect.formatTableName({ catalog: null, db: null, name: 'events' })).toBe('[events]');
   });
 
-  it('maps SQL Server types to KTX dimension types', () => {
+  it('maps SQL Server types to ktx dimension types', () => {
     expect(dialect.mapToDimensionType('datetime2')).toBe('time');
     expect(dialect.mapToDimensionType('decimal(18, 2)')).toBe('number');
     expect(dialect.mapToDimensionType('bigint')).toBe('number');

@@ -298,7 +298,7 @@ export async function runKtxTextIngest(
         const ingestInput: MemoryAgentInput = {
           userId: args.userId,
           chatId: `cli-text-ingest-${batchId}-${index + 1}`,
-          userMessage: `Ingest external text artifact ${artifactReference(item.label)} into KTX memory.`,
+          userMessage: `Ingest external text artifact ${artifactReference(item.label)} into ktx memory.`,
           assistantMessage: item.content.trim(),
           ...(args.connectionId ? { connectionId: args.connectionId } : {}),
           sourceType: 'external_ingest',

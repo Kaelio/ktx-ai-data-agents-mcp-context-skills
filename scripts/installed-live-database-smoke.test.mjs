@@ -49,7 +49,7 @@ describe('installed live-database artifact smoke helpers', () => {
     );
   });
 
-  it('writes a public database ingest KTX project config with SQLite local state', () => {
+  it('writes a public database ingest ktx project config with SQLite local state', () => {
     assert.equal(
       buildKtxYaml('postgresql://ktx:postgres@127.0.0.1:15432/warehouse'), // pragma: allowlist secret
       [

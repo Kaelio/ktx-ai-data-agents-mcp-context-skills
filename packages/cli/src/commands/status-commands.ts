@@ -15,7 +15,7 @@ function inputMode(options: { input?: boolean }): { inputMode?: 'disabled' } {
 export function registerStatusCommands(program: Command, context: KtxCliCommandContext): void {
   program
     .command('status')
-    .description('Check current KTX setup and project readiness')
+    .description('Check current ktx setup and project readiness')
     .option('--json', 'Print JSON output', false)
     .option('-v, --verbose', 'Show every check, including passing ones', false)
     .option('--validate', 'Only validate the ktx.yaml schema; skip readiness checks', false)
