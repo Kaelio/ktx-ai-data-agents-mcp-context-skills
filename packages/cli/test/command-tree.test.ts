@@ -47,7 +47,7 @@ describe('walkCommandTree', () => {
 
   it('captures required, optional, and variadic arguments', () => {
     const command = new Command('scan')
-      .argument('<connectionId>', 'KTX connection id')
+      .argument('<connectionId>', 'ktx connection id')
       .argument('[schemas...]', 'Schemas');
 
     expect(walkCommandTree(command).arguments).toEqual(['<connectionId>', '[schemas...]']);
@@ -56,7 +56,7 @@ describe('walkCommandTree', () => {
   it('walks registered commands without applying hidden-command policy', () => {
     const root = new Command('ktx');
     root.command('scan', { hidden: true }).description('Run a standalone connection scan');
-    const ingest = root.command('ingest').description('Build or inspect KTX context');
+    const ingest = root.command('ingest').description('Build or inspect ktx context');
     ingest.command('run', { hidden: true }).description('Run local ingest by adapter');
     ingest.command('watch', { hidden: true }).description('Open a stored visual report');
     ingest.command('status').description('Print status');

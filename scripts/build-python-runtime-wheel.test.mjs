@@ -70,7 +70,7 @@ describe('runtimeWheelPyproject', () => {
 });
 
 describe('createRuntimeWheelBuildTree', () => {
-  it('copies KTX-owned Python packages into the build tree', async () => {
+  it('copies ktx-owned Python packages into the build tree', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-runtime-wheel-test-'));
     try {
       await writeRuntimeSourceFixture(root);
@@ -90,7 +90,7 @@ describe('createRuntimeWheelBuildTree', () => {
       assert.match(pyproject, /name = "kaelio-ktx"/);
       assert.match(pyproject, /local-embeddings = \[/);
       const readme = await readFile(join(layout.buildRoot, 'README.md'), 'utf8');
-      assert.match(readme, /Bundled Python runtime wheel for KTX/);
+      assert.match(readme, /Bundled Python runtime wheel for ktx/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

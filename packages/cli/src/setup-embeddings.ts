@@ -80,7 +80,7 @@ const DEFAULTS: Record<
 
 const LOCAL_EMBEDDING_BACKEND: KtxSetupEmbeddingBackend = 'sentence-transformers';
 const EMBEDDING_OPTION_PROMPT_CONTEXT =
-  'KTX uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
+  'ktx uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
   'and relationship evidence.';
 const LOCAL_EMBEDDING_HEALTH_TIMEOUT_MS = 120_000;
 const LOCAL_EMBEDDING_STDERR_TAIL_LINES = 40;
@@ -220,7 +220,7 @@ async function chooseCredentialRef(
   const defaultEnv = DEFAULTS[backend].envName ?? 'EMBEDDING_API_KEY';
   const prompts = deps.prompts ?? createPromptAdapter();
   const choice = await prompts.select({
-    message: `How should KTX find your ${embeddingBackendDisplayName(backend)} embedding API key?`,
+    message: `How should ktx find your ${embeddingBackendDisplayName(backend)} embedding API key?`,
     options: [
       { value: 'paste', label: 'Paste a key and save it as a local secret file' },
       { value: 'env', label: `Use ${defaultEnv} from the environment` },
@@ -233,7 +233,7 @@ async function chooseCredentialRef(
   if (choice === 'paste') {
     io.stdout.write(
       `│  ${[
-        `KTX will save the key in .ktx/secrets/${backend}-api-key with local file permissions,`,
+        `ktx will save the key in .ktx/secrets/${backend}-api-key with local file permissions,`,
         'then write a file: reference in ktx.yaml.',
       ].join(' ')}\n`,
     );
@@ -272,7 +272,7 @@ async function chooseEmbeddingBackend(
     return LOCAL_EMBEDDING_BACKEND;
   }
   const choice = await (deps.prompts ?? createPromptAdapter()).select({
-    message: `Which embedding option should KTX use?\n\n${EMBEDDING_OPTION_PROMPT_CONTEXT}`,
+    message: `Which embedding option should ktx use?\n\n${EMBEDDING_OPTION_PROMPT_CONTEXT}`,
     options: [
       { value: 'sentence-transformers', label: 'Local sentence-transformers embeddings' },
       { value: 'openai', label: 'OpenAI embeddings', hint: 'recommended' },
@@ -303,13 +303,13 @@ async function readLocalEmbeddingDaemonStderrTail(stderrLog: string | undefined)
 function localEmbeddingSetupMessage(message: string, stderrTail: string[] = []): string {
   const lines = [
     `Local embedding health check failed: ${message}`,
-    'Local embeddings use the KTX-managed Python runtime.',
+    'Local embeddings use the ktx-managed Python runtime.',
     'Prepare the runtime with: ktx admin runtime start --feature local-embeddings',
     'Use --yes with setup to install and start the runtime without prompting.',
     'The first run may download Python packages and the all-MiniLM-L6-v2 model.',
   ];
   if (stderrTail.length > 0) {
-    lines.push('Recent KTX daemon stderr:', ...stderrTail);
+    lines.push('Recent ktx daemon stderr:', ...stderrTail);
   }
   return lines.join('\n');
 }
@@ -318,7 +318,7 @@ async function promptAfterLocalEmbeddingFailure(
   deps: KtxSetupEmbeddingsDeps,
 ): Promise<'retry' | Extract<KtxSetupEmbeddingBackend, 'openai'> | 'back'> {
   const choice = await (deps.prompts ?? createPromptAdapter()).select({
-    message: 'Local embeddings are not reachable. Start the local KTX daemon, then retry.',
+    message: 'Local embeddings are not reachable. Start the local ktx daemon, then retry.',
     options: [
       { value: 'retry', label: 'Retry' },
       { value: 'openai', label: 'Use OpenAI embeddings' },

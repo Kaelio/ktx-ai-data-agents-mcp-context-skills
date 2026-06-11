@@ -45,7 +45,7 @@ function commandLines(commands: ReadonlyArray<{ command: string; description: st
 
 export function formatNextStepLines(indent = '  '): string[] {
   return [
-    `${indent}KTX context is ready for agents. Open your coding agent from the KTX project directory and ask a data question.`,
+    `${indent}ktx context is ready for agents. Open your coding agent from the ktx project directory and ask a data question.`,
     `${indent}Verify with:`,
     ...commandLines(KTX_NEXT_STEP_DIRECT_COMMANDS, indent),
   ];
@@ -77,7 +77,7 @@ export function formatSetupNextStepLines(state: KtxSetupNextStepState, indent = 
 
   if (!state.agentIntegrationReady) {
     return [
-      `${indent}KTX context is built. Install agent rules when you want your coding agent to use it.`,
+      `${indent}ktx context is built. Install agent rules when you want your coding agent to use it.`,
       `${indent}$ ${'ktx setup --agents'.padEnd(KTX_NEXT_STEP_COMMAND_WIDTH)}  Install CLI-based agent rules`,
       `${indent}$ ${'ktx status'.padEnd(KTX_NEXT_STEP_COMMAND_WIDTH)}  Check setup and context readiness`,
     ];

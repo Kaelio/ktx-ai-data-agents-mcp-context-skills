@@ -38,15 +38,16 @@ LookML uses top-level `repoUrl`, and MetricFlow uses nested
 
 ## dbt
 
-Ingests schema definitions, model descriptions, column metadata, and test coverage from a dbt project.
+Ingests schema definitions, model descriptions, column metadata, and column test definitions from a dbt project.
 
 ### What it provides
 
 - Model and source definitions from `schema.yml` files
-- Column descriptions and types
-- Test coverage signals
-- Semantic model references (if using dbt semantic layer)
-- Data lineage between models
+- Column names, descriptions, and data types
+- Column tests, mapped to semantic facts — `not_null` / `unique` become column constraints, `accepted_values` becomes enum value lists, and `relationships` becomes join / foreign-key edges
+- Model and source tags, and source freshness settings
+
+MetricFlow `semantic_models:` and `metrics:` are ingested through the separate [MetricFlow](#metricflow) source, not the dbt driver.
 
 ### Connection config
 
@@ -87,9 +88,9 @@ connections:
 
 ### What gets ingested
 
-- YAML semantic sources generated from dbt schema files
-- One work unit per semantic source (for projects with >25 YAML files) or all at once for smaller projects
-- Column descriptions, tests, and relationships are preserved
+- **Semantic-layer overlays** (`semantic-layer/*.yaml`): descriptions, constraints, enum values, and joins from the dbt YAML are written onto the semantic source for the matching warehouse table. Overlays land on the warehouse connection that owns the table, which is usually a different connection than the dbt source itself.
+- **Wiki pages** (`wiki/`): for definitions or relationships that don't map to a confirmed physical table.
+- **Work units** for parallel processing: one per schema file under `models/` when the project has more than 25 YAML files, otherwise a single combined unit.
 
 ---
 
@@ -101,7 +102,7 @@ Ingests MetricFlow semantic models and metric definitions. Useful when your team
 
 - Semantic model definitions (entities, dimensions, measures)
 - Cross-model metric definitions
-- Dimension and entity relationships between models
+- Entity relationships between models, inferred from matching foreign and primary entities
 
 ### Connection config
 
@@ -133,7 +134,7 @@ For a local path:
 
 ### What gets ingested
 
-- Semantic models with their entities, dimensions, and measures
+- Semantic models with their entities, dimensions, measures, and the join edges inferred from entity relationships
 - Metric definitions with their expressions and filters
 - Work units organized by connected component (metrics + related semantic models grouped together)
 
@@ -178,10 +179,10 @@ For a local path:
 
 ### What gets ingested
 
-- View and model definitions organized by connected component
-- LookML field types mapped to semantic layer column types
-- Join definitions and relationship cardinalities
-- SQL table references for warehouse mapping validation
+- One work unit per model, plus a unit for orphan views and one per dashboard
+- Semantic-layer sources per view — overlays for thin `sql_table_name` wrappers, standalone sources for `derived_table` views
+- Measures, joins (with their Looker `relationship:`), and field types mapped to column types (`yesno` → boolean, date/timestamp → time)
+- Wiki pages for relationships and descriptions, with warehouse identifiers verified before writing
 
 ### Warehouse mapping
 
@@ -192,19 +193,19 @@ Optionally validate that LookML references match your expected Looker connection
       expectedLookerConnectionName: postgres_connection
 ```
 
-This validates that LookML model `connection:` declarations match expectations, flagging mismatches during ingestion.
+This compares each model's `connection:` declaration against the expected name. Mismatched models are flagged, and semantic-layer writes are disabled for them during that ingest while wiki extraction still proceeds.
 
 ---
 
 ## Metabase
 
-Ingests dashboards, questions, and their underlying SQL queries from a Metabase instance. Maps Metabase databases to your **ktx** warehouse connections.
+Ingests collections, questions, models, and metrics — with their underlying SQL — from a Metabase instance. Maps Metabase databases to your **ktx** warehouse connections.
 
 ### What it provides
 
-- Dashboard metadata and organization
-- Question/query definitions (native SQL and structured queries)
-- Table and column usage patterns from queries
+- Collections and their hierarchy, used to organize ingested context
+- Questions, models, and metrics — resolved SQL for both native and structured (MBQL) queries
+- Each card's output schema: column types and primary/foreign-key hints
 - Database-to-warehouse relationship mapping
 
 ### Connection config
@@ -233,9 +234,9 @@ Generate an API key in Metabase: **Admin > Settings > Authentication > API Keys*
 
 ### What gets ingested
 
-- Semantic sources generated from SQL queries in questions
-- Wiki pages for dashboards (purpose, key metrics, relationships)
-- Work units per dashboard and per question
+- Semantic-layer sources generated from each card's resolved SQL and column metadata, written to the mapped warehouse connection
+- Fallback wiki notes only when a referenced table can't be mapped or an identifier can't be verified
+- One work unit per Metabase collection; re-syncs reprocess only collections with changed cards
 
 ### Warehouse mapping
 
@@ -289,10 +290,10 @@ Generate API credentials in Looker: **Admin > Users > Edit > API Keys**.
 
 ### What gets ingested
 
-- Semantic sources from explore field definitions
-- Wiki pages for dashboards (purpose, audience, key metrics)
-- Triage signals for automated content classification
-- Work units per explore and per dashboard
+- Semantic-layer sources from explore fields, written to the mapped warehouse connection (mapped explores only)
+- Wiki pages capturing reusable metric, segment, and domain knowledge from dashboards and Looks
+- Usage and recency signals that drive a triage gate, focusing processing on high-value content
+- Work units per explore, per dashboard, and per Look
 
 ### Warehouse mapping
 
@@ -314,10 +315,10 @@ Ingests pages and databases from a Notion workspace as wiki pages. Useful for ca
 
 ### What it provides
 
-- Wiki pages synthesized from Notion content
-- Page hierarchy and relationships
-- Database schemas (when Notion databases describe primary sources)
-- Semantic clustering for organized ingestion
+- Notion pages crawled from selected roots or all accessible content
+- Page bodies and blocks normalized to Markdown
+- Page hierarchy and cross-page links (child pages, mentions, relations)
+- Notion databases and their data-source rows as individual pages
 
 ### Connection config
 
@@ -356,6 +357,7 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 | `crawl_mode` | `all_accessible` or `selected_roots` | - |
 | `root_page_ids` | Page IDs to crawl from (for `selected_roots`) | `[]` |
 | `root_database_ids` | Database IDs to include | `[]` |
+| `root_data_source_ids` | Data-source IDs to include (for `selected_roots`) | `[]` |
 | `max_pages_per_run` | Pages processed per sync | `1000` |
 | `max_knowledge_creates_per_run` | New pages created per sync | `25` |
 | `max_knowledge_updates_per_run` | Pages updated per sync | `20` |
@@ -363,13 +365,13 @@ Create an integration at [notion.so/my-integrations](https://www.notion.so/my-in
 ### What gets ingested
 
 - Wiki pages synthesized from Notion content (not raw copies)
-- Domain context extracted and organized by topic
-- Triage signals for classifying page relevance
-- Work units clustered by semantic similarity for efficient processing
+- Semantic-layer sources when a page defines a reusable dataset or metric mapped to a confirmed non-Notion target; otherwise the fact stays wiki-only
+- Page-relevance triage that skips transient content (task lists, status updates, date-titled snapshots)
+- Work units clustered by embedding similarity for efficient synthesis
 
 ### Notes
 
-- Notion is knowledge-only - it does not produce semantic layer sources
+- Notion is wiki-first: it writes durable wiki pages by default and only emits semantic-layer sources for content mapped to a confirmed non-Notion target; unmapped facts stay wiki-only
 - Rate limits apply; large workspaces may require multiple ingestion runs
 - Incremental sync cursors are stored in `.ktx/db.sqlite`; don't add
   `last_successful_cursor` to `ktx.yaml`

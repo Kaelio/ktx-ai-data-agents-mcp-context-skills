@@ -56,12 +56,12 @@ const toolAnnotations = {
 
 const toolDescriptions = {
   connection_list:
-    'List configured read-only data connections available to this KTX project. Use this before connection-scoped tools when the project may have multiple warehouses.',
+    'List configured read-only data connections available to this ktx project. Use this before connection-scoped tools when the project may have multiple warehouses.',
   discover_data:
-    'Search across KTX wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: "monthly orders by customer", connectionId: "warehouse", kinds: ["sl_source", "table"] }).',
+    'Search across ktx wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: "monthly orders by customer", connectionId: "warehouse", kinds: ["sl_source", "table"] }).',
   wiki_search:
-    'Search KTX wiki pages for reusable business context. Example: wiki_search({ query: "revenue recognition", limit: 5 }).',
-  wiki_read: 'Read a KTX wiki page by key returned from wiki_search. Example: wiki_read({ key: "global/revenue" }).',
+    'Search ktx wiki pages for reusable business context. Example: wiki_search({ query: "revenue recognition", limit: 5 }).',
+  wiki_read: 'Read a ktx wiki page by key returned from wiki_search. Example: wiki_read({ key: "global/revenue" }).',
   entity_details:
     'Read table and column metadata from the latest live-database scan snapshot. Example: entity_details({ connectionId: "warehouse", entities: [{ table: { catalog: null, db: "public", name: "orders" }, columns: ["id"] }] }).',
   dictionary_search:
@@ -71,9 +71,9 @@ const toolDescriptions = {
   sl_query:
     'Execute a semantic-layer query and return headers, rows, and total row count, plus correctness notes (e.g. compile-only or fan-out) when relevant. The generated SQL and full query plan are omitted by default; request them with include: ["sql"] and/or include: ["plan"]. Example: sl_query({ connectionId: "warehouse", measures: ["orders.order_count"], dimensions: [{ field: "orders.created_at", granularity: "month" }], include: ["sql"] }).',
   sql_execution:
-    'Execute one parser-validated read-only SQL query against a configured KTX connection. Example: sql_execution({ connectionId: "warehouse", sql: "select count(*) from public.orders", maxRows: 100 }).',
+    'Execute one parser-validated read-only SQL query against a configured ktx connection. Example: sql_execution({ connectionId: "warehouse", sql: "select count(*) from public.orders", maxRows: 100 }).',
   memory_ingest:
-    'Ingest free-form markdown knowledge into durable KTX memory. Use this for business rules, metric definitions, schema gotchas, recurring findings, or explicit user requests to remember something. Example: memory_ingest({ connectionId: "warehouse", content: "ARR is reported in cents in this warehouse." }).',
+    'Ingest free-form markdown knowledge into durable ktx memory. Use this for business rules, metric definitions, schema gotchas, recurring findings, or explicit user requests to remember something. Example: memory_ingest({ connectionId: "warehouse", content: "ARR is reported in cents in this warehouse." }).',
   memory_ingest_status:
     'Read the current or final status for a memory ingest run. Example: memory_ingest_status({ runId: "memory-run-1" }).',
 } satisfies Record<string, string>;
@@ -856,7 +856,7 @@ export function registerKtxContextTools(deps: RegisterKtxContextToolsDeps): void
         const ingestInput: MemoryAgentInput = {
           userId: userContext.userId,
           chatId: `mcp-${randomUUID()}`,
-          userMessage: 'Ingest external knowledge into KTX memory.',
+          userMessage: 'Ingest external knowledge into ktx memory.',
           assistantMessage: input.content,
           connectionId: input.connectionId,
           sourceType: 'external_ingest',

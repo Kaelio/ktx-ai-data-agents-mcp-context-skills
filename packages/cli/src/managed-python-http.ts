@@ -65,7 +65,7 @@ function normalizedBaseUrl(baseUrl: string): string {
 function parseJsonObject(raw: string, path: string): Record<string, unknown> {
   const parsed = JSON.parse(raw) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`KTX daemon HTTP ${path} returned non-object JSON`);
+    throw new Error(`ktx daemon HTTP ${path} returned non-object JSON`);
   }
   return parsed as Record<string, unknown>;
 }
@@ -96,7 +96,7 @@ async function postManagedDaemonJson(
           const text = Buffer.concat(chunks).toString('utf8');
           const statusCode = response.statusCode ?? 0;
           if (statusCode < 200 || statusCode >= 300) {
-            reject(new Error(`KTX daemon HTTP ${path} failed with ${statusCode}: ${text}`));
+            reject(new Error(`ktx daemon HTTP ${path} failed with ${statusCode}: ${text}`));
             return;
           }
           try {
@@ -138,7 +138,7 @@ export function createManagedPythonDaemonBaseUrlResolver(
       force: false,
     });
     const verb = daemon.status === 'started' ? 'Started' : 'Using existing';
-    writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} KTX daemon: ${daemon.baseUrl}`);
+    writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} ktx daemon: ${daemon.baseUrl}`);
     cachedBaseUrl = daemon.baseUrl;
     return cachedBaseUrl;
   };

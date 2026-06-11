@@ -68,7 +68,7 @@ function createTargetState(target: KtxPublicIngestPlanTarget): ContextBuildTarge
 export function renderDemoBanner(projectDir?: string): string {
   const lines = [
     '',
-    `┌  ${cyan('Demo mode')} — data has been pre-processed and KTX context is already built.`,
+    `┌  ${cyan('Demo mode')} — data has been pre-processed and ktx context is already built.`,
     '│  This walkthrough illustrates the setup steps. Selections are pre-filled and read-only.',
   ];
   if (projectDir) {
@@ -95,7 +95,7 @@ export function renderDemoAgentTransition(): string {
   const lines = [
     '┌  Demo project is ready — let\'s connect your agent',
     '│',
-    '│  Your KTX context has been built with demo data.',
+    '│  Your ktx context has been built with demo data.',
     '│  Select an agent to start using it.',
     '└',
   ];
@@ -106,12 +106,12 @@ export function renderDemoAgentTransition(): string {
 export function renderDemoCompletionSummary(projectDir: string, agentInstalled: boolean): string {
   const lines: string[] = [
     '',
-    `${cyan('★')} KTX demo is ready`,
+    `${cyan('★')} ktx demo is ready`,
     '',
   ];
 
   if (agentInstalled) {
-    lines.push('  Your agent is connected to a demo KTX project.');
+    lines.push('  Your agent is connected to a demo ktx project.');
   } else {
     lines.push('  Demo project created. Connect an agent to start using it:');
     lines.push(`  $ ${cyan(`ktx setup --agents --project-dir ${projectDir}`)}`);
@@ -120,7 +120,7 @@ export function renderDemoCompletionSummary(projectDir: string, agentInstalled: 
   lines.push(
     '',
     `  ${dim('⚠')} This project is in a temporary directory and will be`,
-    '    cleaned up by your system. To set up KTX with your own',
+    '    cleaned up by your system. To set up ktx with your own',
     '    data, run: ktx setup',
     '',
     `  Project: ${projectDir}`,
@@ -234,9 +234,9 @@ export function buildDemoReplayTimeline(): DemoReplayEvent[] {
 function renderDemoContextCompletionSummary(): string {
   const lines = [
     '',
-    `${cyan('★')} KTX finished building context`,
+    `${cyan('★')} ktx finished building context`,
     '',
-    '  KTX created:',
+    '  ktx created:',
     `    ${cyan('📊')} 46 semantic layer definitions`,
     `    ${cyan('📝')} 28 wiki pages`,
     '',

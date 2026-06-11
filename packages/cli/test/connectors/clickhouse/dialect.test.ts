@@ -13,7 +13,7 @@ describe('KtxClickHouseDialect', () => {
     expect(dialect.formatTableName({ catalog: null, db: null, name: 'events' })).toBe('`events`');
   });
 
-  it('maps nullable and low-cardinality ClickHouse types to KTX dimension types', () => {
+  it('maps nullable and low-cardinality ClickHouse types to ktx dimension types', () => {
     expect(dialect.mapToDimensionType('Nullable(DateTime64(3))')).toBe('time');
     expect(dialect.mapToDimensionType('LowCardinality(Nullable(String))')).toBe('string');
     expect(dialect.mapToDimensionType('UInt64')).toBe('number');

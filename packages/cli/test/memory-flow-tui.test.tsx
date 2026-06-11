@@ -102,7 +102,7 @@ describe('sanitizeMemoryFlowTuiError', () => {
 });
 
 describe('MemoryFlowTuiApp', () => {
-  it('always shows the KTX logo', () => {
+  it('always shows the ktx logo', () => {
     const { lastFrame } = renderInkTest(<MemoryFlowTuiApp input={replayInput()} terminalWidth={120} onExit={vi.fn()} showBoot={false} />);
     expect(lastFrame()).toContain('╚███╔╝');
   });
@@ -197,7 +197,7 @@ describe('MemoryFlowTuiApp', () => {
     expect(frame).toContain('Created so far:');
     expect(frame).toContain('order lifecycle');
     expect(frame).toContain('customer metrics');
-    expect(frame).toContain('KTX finished ingesting your data');
+    expect(frame).toContain('ktx finished ingesting your data');
     expect(frame).toContain('ktx sl');
     expect(frame).toContain('ktx wiki');
     expect(frame).not.toContain('ktx serve --mcp stdio --user-id local');
@@ -253,7 +253,7 @@ describe('MemoryFlowTuiApp', () => {
 
   it('hides completion while running', () => {
     const { lastFrame } = renderInkTest(<MemoryFlowTuiApp input={runningReplayInput()} terminalWidth={120} onExit={vi.fn()} showBoot={false} />);
-    expect(lastFrame()).not.toContain('KTX finished ingesting');
+    expect(lastFrame()).not.toContain('ktx finished ingesting');
   });
 });
 

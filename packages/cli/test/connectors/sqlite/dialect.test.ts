@@ -10,7 +10,7 @@ describe('KtxSqliteDialect', () => {
     expect(dialect.formatTableName({ catalog: 'ignored', db: 'ignored', name: 'orders' })).toBe('"orders"');
   });
 
-  it('maps native SQLite types to KTX dimension types', () => {
+  it('maps native SQLite types to ktx dimension types', () => {
     expect(dialect.mapToDimensionType('INTEGER')).toBe('number');
     expect(dialect.mapToDimensionType('numeric(10,2)')).toBe('number');
     expect(dialect.mapToDimensionType('timestamp')).toBe('time');

@@ -307,12 +307,12 @@ connection is unreachable or misconfigured the build is blocked up front and
 **ktx** names the failing connection by id and connector type:
 
 ```text
-KTX cannot build context: a required connection failed its live test.
+ktx cannot build context: a required connection failed its live test.
 
 Failed connections:
   warehouse (postgres)
 
-Each connection must be reachable before KTX builds context.
+Each connection must be reachable before ktx builds context.
 Run `ktx connection test <id>` to see the error, fix the connection, then retry.
 ```
 

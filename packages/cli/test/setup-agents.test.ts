@@ -406,16 +406,16 @@ describe('setup agents', () => {
     });
 
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'What should agents be allowed to do with this KTX project?',
+      message: 'What should agents be allowed to do with this ktx project?',
       options: [
         {
           value: 'mcp',
-          label: 'Ask data questions with KTX MCP',
+          label: 'Ask data questions with ktx MCP',
           hint: 'Installs the MCP connection and analytics workflow skill. Best for normal use.',
         },
         {
           value: 'mcp-cli',
-          label: 'Ask data questions + manage KTX with CLI commands',
+          label: 'Ask data questions + manage ktx with CLI commands',
           hint: 'Adds an admin CLI skill so agents can run ktx status, sl, wiki, and setup commands.',
         },
         {
@@ -459,16 +459,16 @@ describe('setup agents', () => {
     ).resolves.toMatchObject({ status: 'skipped', projectDir: tempDir });
 
     expect(prompts.select).toHaveBeenCalledWith({
-      message: 'What should agents be allowed to do with this KTX project?',
+      message: 'What should agents be allowed to do with this ktx project?',
       options: [
         {
           value: 'mcp',
-          label: 'Ask data questions with KTX MCP',
+          label: 'Ask data questions with ktx MCP',
           hint: 'Installs the MCP connection and analytics workflow skill. Best for normal use.',
         },
         {
           value: 'mcp-cli',
-          label: 'Ask data questions + manage KTX with CLI commands',
+          label: 'Ask data questions + manage ktx with CLI commands',
           hint: 'Adds an admin CLI skill so agents can run ktx status, sl, wiki, and setup commands.',
         },
         {
@@ -518,17 +518,17 @@ describe('setup agents', () => {
       });
 
       expect(prompts.select).toHaveBeenCalledWith({
-        message: `Where should KTX install supported agent config?\n\nKTX project: ${tempDir}`,
+        message: `Where should ktx install supported agent config?\n\nktx project: ${tempDir}`,
         options: [
           {
             value: 'project',
-            label: 'Project scope (KTX project directory)',
-            hint: 'Only agents opened from this KTX project path load the project-scoped config.',
+            label: 'Project scope (ktx project directory)',
+            hint: 'Only agents opened from this ktx project path load the project-scoped config.',
           },
           {
             value: 'global',
             label: 'Global scope (user config)',
-            hint: 'Agents can load this KTX project from any working directory.',
+            hint: 'Agents can load this ktx project from any working directory.',
           },
         ],
       });
@@ -584,7 +584,7 @@ describe('setup agents', () => {
         args: [expect.stringContaining('bin.js'), '--project-dir', tempDir, 'mcp', 'stdio'],
       });
 
-      expect(await readZipText(analyticsSkillPath, 'ktx-analytics/SKILL.md')).toContain('KTX Analytics Workflow');
+      expect(await readZipText(analyticsSkillPath, 'ktx-analytics/SKILL.md')).toContain('ktx Analytics Workflow');
       await expect(readZipText(analyticsSkillPath, 'ktx/SKILL.md')).rejects.toThrow('Missing zip entry');
       await expect(readZipText(analyticsSkillPath, '.claude-plugin/plugin.json')).rejects.toThrow('Missing zip entry');
       await expect(readZipText(analyticsSkillPath, 'skills/ktx-analytics/SKILL.md')).rejects.toThrow(
@@ -597,11 +597,11 @@ describe('setup agents', () => {
       expect(io.stdout()).toContain('claude_desktop_config.json');
       expect(io.stdout()).toContain('Required before using agents');
       expect(io.stdout()).toContain('1. Restart Claude Desktop');
-      expect(io.stdout()).toContain('Claude Desktop loads KTX MCP after restart.');
+      expect(io.stdout()).toContain('Claude Desktop loads ktx MCP after restart.');
       expect(io.stdout()).toContain('2. Upload Claude Desktop skills');
       expect(io.stdout()).toContain('Customize > Skills > + > Create skill > Upload a skill');
       expect(io.stdout()).toContain('Upload this file:');
-      expect(io.stdout()).toContain('Toggle the uploaded KTX skills on.');
+      expect(io.stdout()).toContain('Toggle the uploaded ktx skills on.');
       expect(io.stdout()).not.toContain('Run `ktx mcp start`');
     } finally {
       process.env.HOME = previousHome;
@@ -686,7 +686,7 @@ describe('setup agents', () => {
 
       const analyticsSkillPath = join(tempDir, '.ktx/agents/claude/ktx-analytics.zip');
       const adminSkillPath = join(tempDir, '.ktx/agents/claude/ktx.zip');
-      expect(await readZipText(analyticsSkillPath, 'ktx-analytics/SKILL.md')).toContain('KTX Analytics Workflow');
+      expect(await readZipText(analyticsSkillPath, 'ktx-analytics/SKILL.md')).toContain('ktx Analytics Workflow');
       await expect(readZipText(analyticsSkillPath, 'ktx/SKILL.md')).rejects.toThrow('Missing zip entry');
       const adminSkill = await readZipText(adminSkillPath, 'ktx/SKILL.md');
       expect(adminSkill).toContain(`--project-dir ${tempDir}`);
@@ -1026,7 +1026,7 @@ describe('setup agents', () => {
     expect(io.stdout().match(/Space to select/g)).toHaveLength(1);
     expect(prompts.multiselect).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which agent targets should KTX install?',
+        message: 'Which agent targets should ktx install?',
       }),
     );
   });
@@ -1055,7 +1055,7 @@ describe('setup agents', () => {
     expect(output).toContain('Analytics skill installed.');
     expect(output).toContain('Admin CLI skill installed.');
     expect(output).not.toContain('Agent integration complete');
-    expect(output).not.toContain(`KTX project\n  ${tempDir}`);
+    expect(output).not.toContain(`ktx project\n  ${tempDir}`);
     expect(output).not.toContain('Installed agents');
     expect(output).not.toContain('.claude/skills/ktx-analytics/SKILL.md');
     expect(output).not.toContain('.claude/skills/ktx/SKILL.md');
@@ -1167,11 +1167,11 @@ describe('setup agents', () => {
       expect(output).toContain('Run this command before using Claude Code:');
       expect(output).toContain(`ktx mcp start --project-dir ${tempDir}`);
       expect(output).toContain(`ktx mcp stop --project-dir ${tempDir}\n\n2. Open Claude Code`);
-      expect(output).toContain('Open Claude Code from the KTX project directory');
+      expect(output).toContain('Open Claude Code from the ktx project directory');
       expect(output).toContain('RUN:');
       expect(output).toContain(`cd '${tempDir}'`);
       expect(output).toContain('3. Restart Claude Desktop');
-      expect(output).toContain('Claude Desktop loads KTX MCP after restart.');
+      expect(output).toContain('Claude Desktop loads ktx MCP after restart.');
       expect(output).toContain('4. Upload Claude Desktop skills');
       expect(output).toContain('Customize > Skills > + > Create skill > Upload a skill');
       expect(output).toContain(join(tempDir, '.ktx/agents/claude/ktx-analytics.zip'));
@@ -1179,7 +1179,7 @@ describe('setup agents', () => {
       expect(output).toContain('Upload this file:');
       expect(output).toContain('All set.');
       expect(output).not.toContain('Finish Claude Desktop setup');
-      expect(output).not.toContain('Run `ktx mcp start` to enable the configured KTX MCP server.');
+      expect(output).not.toContain('Run `ktx mcp start` to enable the configured ktx MCP server.');
     } finally {
       process.env.HOME = previousHome;
       await rm(home, { recursive: true, force: true });
@@ -1216,7 +1216,7 @@ describe('setup agents', () => {
       expect(output).toContain('2. Open Claude Code');
       expect(output).toContain('RUN:');
       expect(output).toContain('claude');
-      expect(output).not.toContain('Open Claude Code from the KTX project directory');
+      expect(output).not.toContain('Open Claude Code from the ktx project directory');
       expect(output).not.toContain(`cd '${tempDir}'`);
     } finally {
       process.env.HOME = previousHome;
@@ -1263,7 +1263,7 @@ describe('setup agents', () => {
     expect(output).toContain('3. Configure unsupported MCP clients');
     expect(output).toContain('4. Start MCP');
     expect(output).toContain('Run this command before using Codex, Cursor, OpenCode, and Universal .agents:');
-    expect(output).toContain('Open Cursor from the KTX project directory');
+    expect(output).toContain('Open Cursor from the ktx project directory');
     expect(output).toContain('Open ~/.codex/config.toml, then paste this block:\n\n  PASTE:\n  [mcp_servers.ktx]');
     expect(output).toContain('Open opencode.json, then paste this block:');
     expect(output).toContain('Use this endpoint when setting up unsupported MCP clients:');
@@ -1298,9 +1298,9 @@ describe('setup agents', () => {
       expect(heading).toContain('Upload Claude Desktop skills');
       expect(heading).not.toMatch(/^2\. /);
 
-      const sub = format('  Toggle the uploaded KTX skills on.');
+      const sub = format('  Toggle the uploaded ktx skills on.');
       expect(sub).toMatch(/^ {3}/);
-      expect(sub).toContain('Toggle the uploaded KTX skills on.');
+      expect(sub).toContain('Toggle the uploaded ktx skills on.');
     });
 
     it('renders skill bundle .zip paths as bullets and shortens HOME to ~', () => {

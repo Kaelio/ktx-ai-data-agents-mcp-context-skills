@@ -166,7 +166,7 @@ function sourceAdapter(source: KtxSetupSourceType): string {
 }
 
 function connectionNamePrompt(label: string): string {
-  return `Name this ${label} connection\nKTX will use this short name in commands and config. You can rename it now.`;
+  return `Name this ${label} connection\nktx will use this short name in commands and config. You can rename it now.`;
 }
 
 function sourceSubpathPrompt(source: KtxSetupSourceType): string {
@@ -266,7 +266,7 @@ async function chooseSourceCredentialRef(input: {
 }): Promise<string | 'back'> {
   while (true) {
     const choice = await input.prompts.select({
-      message: `How should KTX find your ${input.label}?`,
+      message: `How should ktx find your ${input.label}?`,
       options: [
         ...(input.existingRef ? [{ value: 'keep', label: 'Keep existing credential' }] : []),
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
@@ -1179,7 +1179,7 @@ async function promptForInteractiveSource(
                     }
                     if (subpaths.length > 1) {
                       const selected = await prompts.select({
-                        message: 'Multiple dbt projects found — which one should KTX use?',
+                        message: 'Multiple dbt projects found — which one should ktx use?',
                         options: [
                           ...subpaths.map((p) => ({ value: p || '.', label: p || '(project root)' })),
                           { value: 'back', label: 'Back' },
@@ -1341,7 +1341,7 @@ async function promptForInteractiveSource(
     },
     async (currentState) => {
       const crawlMode = await prompts.select({
-        message: 'Which Notion pages should KTX ingest?',
+        message: 'Which Notion pages should ktx ingest?',
         options: [
           { value: 'all_accessible', label: 'All pages the integration can access' },
           { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
@@ -1979,7 +1979,7 @@ export async function runKtxSetupSourcesStep(
         : args.inputMode === 'disabled'
           ? []
           : await prompts.multiselect({
-              message: withMultiselectNavigation('Which context sources should KTX ingest?'),
+              message: withMultiselectNavigation('Which context sources should ktx ingest?'),
               options: contextSourceChecklist.options,
               ...(contextSourceChecklist.initialValues.length > 0
                 ? { initialValues: contextSourceChecklist.initialValues }

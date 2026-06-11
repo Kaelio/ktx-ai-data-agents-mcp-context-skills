@@ -1,5 +1,5 @@
-import { tool } from 'ai';
-import { z, type ZodType } from 'zod';
+import { tool, type Tool } from 'ai';
+import { z } from 'zod';
 import { noopLogger, type KtxLogger } from '../../context/core/config.js';
 import type { KtxRuntimeToolDescriptor } from '../llm/runtime-port.js';
 import { normalizeKtxRuntimeToolOutput } from '../llm/runtime-tools.js';
@@ -73,7 +73,7 @@ interface MethodologyEntry {
 /**
  * SECURITY: All tools require authentication. userId must always be provided in ToolContext.
  */
-export abstract class BaseTool<TInput extends ZodType = ZodType> {
+export abstract class BaseTool<TInput extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> {
   protected readonly logger: KtxLogger;
 
   abstract readonly name: string;
@@ -86,37 +86,9 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
 
   abstract get inputSchema(): TInput;
 
-  abstract call(input: z.infer<TInput>, context: ToolContext): Promise<any>;
+  abstract call(input: z.infer<TInput>, context: ToolContext): Promise<unknown>;
 
-  getParametersSchema(): {
-    type: 'object';
-    properties: Record<string, any>;
-    required?: string[];
-  } {
-    const jsonSchema = z.toJSONSchema(this.inputSchema, {
-      target: 'draft-7',
-    });
-
-    return jsonSchema as any;
-  }
-
-  toAnthropicFormat(): {
-    name: string;
-    description: string;
-    input_schema: {
-      type: 'object';
-      properties: Record<string, any>;
-      required?: string[];
-    };
-  } {
-    return {
-      name: this.name,
-      description: this.description,
-      input_schema: this.getParametersSchema(),
-    };
-  }
-
-  toAiSdkTool(context: ToolContext): any {
+  toAiSdkTool(context: ToolContext): Tool {
     const toolName = this.name;
     const logger = this.logger;
 
@@ -137,7 +109,7 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
           if (!callContext.userId) {
             throw new Error('Authentication required: userId must be provided in ToolContext');
           }
-          const parsedInput = this.parseInput(params as Record<string, any>);
+          const parsedInput = this.parseInput(params as Record<string, unknown>);
           const result = await this.call(parsedInput, callContext);
           return result;
         } catch (error) {
@@ -171,19 +143,19 @@ export abstract class BaseTool<TInput extends ZodType = ZodType> {
     return {
       name: toolName,
       description: this.description,
-      inputSchema: this.inputSchema as unknown as KtxRuntimeToolDescriptor['inputSchema'],
+      inputSchema: this.inputSchema,
       execute: async (params) => {
         const callContext = { ...context };
         if (!callContext.userId) {
           throw new Error('Authentication required: userId must be provided in ToolContext');
         }
-        const parsedInput = this.parseInput(params as Record<string, any>);
+        const parsedInput = this.parseInput(params as Record<string, unknown>);
         return normalizeKtxRuntimeToolOutput(await this.call(parsedInput, callContext));
       },
     };
   }
 
-  parseInput(input: Record<string, any>): z.infer<TInput> {
+  parseInput(input: Record<string, unknown>): z.infer<TInput> {
     return this.inputSchema.parse(input);
   }
 

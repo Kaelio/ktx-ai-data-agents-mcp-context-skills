@@ -186,7 +186,7 @@ export function validateMetabaseMappings(args: {
       continue;
     }
     if (!args.knownKtxConnectionIds.has(connectionId)) {
-      errors.push({ key, reason: `KTX connection ${connectionId} does not exist` });
+      errors.push({ key, reason: `ktx connection ${connectionId} does not exist` });
     }
   }
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
@@ -207,7 +207,7 @@ export function validateMappingPhysicalMatch(
   }
 
   if (target.connection_type !== expectedType) {
-    return `Metabase database engine '${engine}' does not match KTX connection type '${target.connection_type}'`;
+    return `Metabase database engine '${engine}' does not match ktx connection type '${target.connection_type}'`;
   }
 
   const metabaseDb = normalizeName(mapping.metabaseDbName);
@@ -215,7 +215,7 @@ export function validateMappingPhysicalMatch(
 
   if (engine === 'snowflake' || engine === 'bigquery' || engine === 'bigquery-cloud-sdk') {
     if (metabaseDb && targetDb && metabaseDb !== targetDb) {
-      return `Metabase database '${mapping.metabaseDbName}' does not match KTX connection database '${displayValue(
+      return `Metabase database '${mapping.metabaseDbName}' does not match ktx connection database '${displayValue(
         getTargetDatabase(target),
       )}'`;
     }
@@ -227,12 +227,12 @@ export function validateMappingPhysicalMatch(
     const targetHost = normalizeHost(target.host);
 
     if (metabaseHost && targetHost && metabaseHost !== targetHost) {
-      return `Metabase host '${mapping.metabaseHost}' does not match KTX connection host '${displayValue(
+      return `Metabase host '${mapping.metabaseHost}' does not match ktx connection host '${displayValue(
         target.host,
       )}'`;
     }
     if (metabaseDb && targetDb && metabaseDb !== targetDb) {
-      return `Metabase database '${mapping.metabaseDbName}' does not match KTX connection database '${displayValue(
+      return `Metabase database '${mapping.metabaseDbName}' does not match ktx connection database '${displayValue(
         getTargetDatabase(target),
       )}'`;
     }
@@ -274,7 +274,7 @@ export async function refreshMetabaseMapping(args: {
     if (!target) {
       physicalMismatches.push({
         mappingId: String(mapping.id),
-        reason: `KTX connection ${mapping.ktxConnectionId} does not exist`,
+        reason: `ktx connection ${mapping.ktxConnectionId} does not exist`,
       });
       continue;
     }

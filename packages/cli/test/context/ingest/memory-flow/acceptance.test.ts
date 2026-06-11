@@ -17,7 +17,7 @@ describe('memory-flow acceptance scenarios', () => {
   it('renders a completed replay with a clear saved-memory completion line', () => {
     const output = renderScenario(successfulReplayScenario());
 
-    expect(output).toContain('KTX memory flow  warehouse/metricflow  done');
+    expect(output).toContain('ktx memory flow  warehouse/metricflow  done');
     expect(output).toContain('Saved 3 memories from 4 raw files: 2 wiki pages, 1 SL updates.');
     expect(output).toContain('Commit: abc12345  Run: run-success  Report: ingest-report.json');
   });
@@ -48,7 +48,7 @@ describe('memory-flow acceptance scenarios', () => {
   it('renders no ANSI color codes in the text fallback for terminals without color support', () => {
     const output = renderScenario(successfulReplayScenario(), 80);
 
-    expect(output).toContain('KTX memory flow  warehouse/metricflow  done');
+    expect(output).toContain('ktx memory flow  warehouse/metricflow  done');
     expect(output).not.toMatch(/\u001b\[[0-9;]*m/);
   });
 

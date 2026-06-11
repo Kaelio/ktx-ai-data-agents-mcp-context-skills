@@ -99,7 +99,7 @@ export async function runKtxSetupReadyChangeMenu(
       { value: 'databases', label: 'Databases' },
       { value: 'sources', label: 'Context sources' },
       ...(status.runtime.required ? [{ value: 'runtime', label: 'Runtime' }] : []),
-      { value: 'context', label: 'Rebuild KTX context' },
+      { value: 'context', label: 'Rebuild ktx context' },
       { value: 'agents', label: 'Agent integration' },
       { value: 'exit', label: 'Exit' },
     ],

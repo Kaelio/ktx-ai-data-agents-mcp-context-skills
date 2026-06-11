@@ -17,19 +17,19 @@ unchanged bounded pattern shards do not schedule LLM work.
 ## Prerequisites
 
 - Docker with Compose v2
-- Node and pnpm matching the KTX workspace
-- `uv` on `PATH` so the KTX-managed Python runtime can install the bundled
+- Node and pnpm matching the **ktx** workspace
+- `uv` on `PATH` so the **ktx**-managed Python runtime can install the bundled
   runtime wheel
 
 ## Run
 
-From the KTX repository root:
+From the **ktx** repository root:
 
 ```bash
 examples/postgres-historic/scripts/smoke.sh
 ```
 
-The smoke creates a temporary KTX project, isolates the managed Python runtime
+The smoke creates a temporary **ktx** project, isolates the managed Python runtime
 under the temporary project parent, starts Postgres on `127.0.0.1:55432`, and
 uses this connection URL:
 
@@ -41,7 +41,7 @@ Set `KTX_POSTGRES_HISTORIC_KEEP_DOCKER=1` to leave the container running after
 the script exits.
 
 The smoke validates the query-history raw snapshot path without requiring LLM
-credentials. It uses KTX's local stage-only ingest API after `ktx setup`, so the
+credentials. It uses **ktx**'s local stage-only ingest API after `ktx setup`, so the
 deterministic reader, batch SQL parser, stable artifact writer, and diff-based
 WorkUnit planning are checked independently from curation.
 
@@ -124,6 +124,6 @@ table.
 - Missing grants: confirm `GRANT pg_read_all_stats TO ktx_reader;`.
 - Empty snapshot: rerun `scripts/generate-workload.sh base` and keep
   `--query-history-min-executions 2` for the smoke.
-- SQL-analysis failures: run `pnpm run ktx -- dev runtime status` from the KTX
+- SQL-analysis failures: run `pnpm run ktx -- dev runtime status` from the **ktx**
   repository root and confirm `uv`, the bundled Python wheel, and the managed
   runtime all pass.

@@ -1,11 +1,11 @@
 ---
 name: sl
-description: KTX's semantic layer - a structured catalog of sources (tables/views), measures, joins, and segments expressed as YAML. Covers the schema and how to query it via `sl_query`. Use when the task involves querying pre-defined metrics (ARR, churn, retention, LTV, MAU) or reading SL source YAML to understand the catalog. Capture is handled by the `sl_capture` skill (memory-agent only).
+description: ktx's semantic layer - a structured catalog of sources (tables/views), measures, joins, and segments expressed as YAML. Covers the schema and how to query it via `sl_query`. Use when the task involves querying pre-defined metrics (ARR, churn, retention, LTV, MAU) or reading SL source YAML to understand the catalog. Capture is handled by the `sl_capture` skill (memory-agent only).
 ---
 
 # Semantic Layer
 
-KTX's semantic layer (SL) is a structured catalog. Each **source** represents a table, a SQL view, or an overlay that enriches a manifest-backed table with measures, computed columns, joins, and named segments. The catalog is the single source of truth for reusable business metrics.
+ktx's semantic layer (SL) is a structured catalog. Each **source** represents a table, a SQL view, or an overlay that enriches a manifest-backed table with measures, computed columns, joins, and named segments. The catalog is the single source of truth for reusable business metrics.
 
 This skill covers two parts:
 - **Part 1** - Schema reference (what an SL source looks like).

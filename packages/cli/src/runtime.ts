@@ -45,7 +45,7 @@ function writeJson(io: KtxCliIo, value: unknown): void {
 
 function writeInstallResult(io: KtxCliIo, result: ManagedPythonRuntimeInstallResult): void {
   const verb = result.status === 'ready' ? 'Using existing' : 'Installed';
-  io.stdout.write(`${verb} KTX Python runtime\n`);
+  io.stdout.write(`${verb} ktx Python runtime\n`);
   io.stdout.write(`version: ${result.manifest.cliVersion}\n`);
   io.stdout.write(`features: ${result.manifest.features.join(', ')}\n`);
   io.stdout.write(`python: ${result.manifest.python.executable}\n`);
@@ -56,7 +56,7 @@ function writeInstallResult(io: KtxCliIo, result: ManagedPythonRuntimeInstallRes
 
 function writeDaemonStart(io: KtxCliIo, result: ManagedPythonDaemonStartResult): void {
   const verb = result.status === 'reused' ? 'Using existing' : 'Started';
-  io.stdout.write(`${verb} KTX daemon\n`);
+  io.stdout.write(`${verb} ktx daemon\n`);
   io.stdout.write(`url: ${result.baseUrl}\n`);
   io.stdout.write(`pid: ${result.state.pid}\n`);
   io.stdout.write(`version: ${result.state.version}\n`);
@@ -68,10 +68,10 @@ function writeDaemonStart(io: KtxCliIo, result: ManagedPythonDaemonStartResult):
 
 function writeDaemonStop(io: KtxCliIo, result: ManagedPythonDaemonStopResult): void {
   if (result.status === 'already-stopped') {
-    io.stdout.write('KTX daemon already stopped\n');
+    io.stdout.write('ktx daemon already stopped\n');
     return;
   }
-  io.stdout.write('Stopped KTX daemon\n');
+  io.stdout.write('Stopped ktx daemon\n');
   io.stdout.write(`pid: ${result.state?.pid ?? 'unknown'}\n`);
   io.stdout.write(`state: ${result.layout.daemonStatePath}\n`);
 }
@@ -94,11 +94,11 @@ function writeDaemonStopAll(io: KtxCliIo, result: ManagedPythonDaemonStopAllResu
     result.failed.length === 0 &&
     result.scanErrors.length === 0
   ) {
-    io.stdout.write('No KTX daemons found\n');
+    io.stdout.write('No ktx daemons found\n');
     return 0;
   }
   if (failed === 0) {
-    io.stdout.write(`Stopped ${result.stopped.length} KTX daemons\n`);
+    io.stdout.write(`Stopped ${result.stopped.length} ktx daemons\n`);
     if (result.stale.length > 0) {
       io.stdout.write(`Cleaned ${result.stale.length} stale daemon states\n`);
     }
@@ -111,7 +111,7 @@ function writeDaemonStopAll(io: KtxCliIo, result: ManagedPythonDaemonStopAllResu
     return 0;
   }
   io.stderr.write(
-    `Stopped ${result.stopped.length} KTX daemons; failed ${result.failed.length}${
+    `Stopped ${result.stopped.length} ktx daemons; failed ${result.failed.length}${
       result.stale.length > 0 ? `; cleaned stale ${result.stale.length}` : ''
     }\n`,
   );
@@ -129,7 +129,7 @@ function writeDaemonStopAll(io: KtxCliIo, result: ManagedPythonDaemonStopAllResu
 }
 
 function writeStatus(io: KtxCliIo, status: ManagedPythonRuntimeStatus): void {
-  io.stdout.write('KTX Python runtime\n');
+  io.stdout.write('ktx Python runtime\n');
   io.stdout.write(`status: ${status.kind}\n`);
   io.stdout.write(`detail: ${status.detail}\n`);
   io.stdout.write(`runtime root: ${status.layout.runtimeRoot}\n`);
@@ -142,7 +142,7 @@ function writeStatus(io: KtxCliIo, status: ManagedPythonRuntimeStatus): void {
 }
 
 function writeRuntimeChecks(io: KtxCliIo, checks: ManagedPythonRuntimeDoctorCheck[]): void {
-  io.stdout.write('KTX Python runtime checks\n');
+  io.stdout.write('ktx Python runtime checks\n');
   for (const check of checks) {
     io.stdout.write(`${check.status.toUpperCase()} ${check.label}: ${check.detail}\n`);
     if (check.fix) {

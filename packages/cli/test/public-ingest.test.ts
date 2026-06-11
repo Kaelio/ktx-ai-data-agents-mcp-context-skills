@@ -837,7 +837,7 @@ describe('runKtxPublicIngest', () => {
     const io = makeIo();
     const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn(async (_args, scanIo) => {
-      scanIo.stdout.write('KTX scan completed\n');
+      scanIo.stdout.write('ktx scan completed\n');
       scanIo.stdout.write('Mode: structural\n');
       scanIo.stdout.write('Report: raw-sources/warehouse/live-database/sync-1/scan-report.json\n');
       scanIo.stdout.write('Raw sources: raw-sources/warehouse/live-database/sync-1\n');
@@ -861,7 +861,7 @@ describe('runKtxPublicIngest', () => {
 
     expect(io.stdout()).toContain('Ingest finished\n');
     expect(io.stdout()).toContain('warehouse');
-    expect(io.stdout()).not.toContain('KTX scan completed');
+    expect(io.stdout()).not.toContain('ktx scan completed');
     expect(io.stdout()).not.toContain('Mode: structural');
     expect(io.stdout()).not.toContain('Report: raw-sources');
     expect(io.stdout()).not.toContain('live-database');
@@ -871,7 +871,7 @@ describe('runKtxPublicIngest', () => {
     const io = makeIo();
     const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn(async (_args, scanIo) => {
-      scanIo.stdout.write('KTX scan enrichment failed after structural scan completed: embedding service timed out\n');
+      scanIo.stdout.write('ktx scan enrichment failed after structural scan completed: embedding service timed out\n');
       return 1;
     });
 
@@ -894,7 +894,7 @@ describe('runKtxPublicIngest', () => {
       'warehouse failed: Database enrichment failed after schema context completed: embedding service timed out.',
     );
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project');
-    expect(io.stdout()).not.toContain('KTX scan enrichment failed');
+    expect(io.stdout()).not.toContain('ktx scan enrichment failed');
     expect(io.stdout()).not.toContain('structural scan');
   });
 
@@ -988,7 +988,7 @@ describe('runKtxPublicIngest', () => {
       docs: { driver: 'notion' },
     });
     const runScan = vi.fn<NonNullable<KtxPublicIngestDeps['runScan']>>(async (_args, scanIo, deps) => {
-      scanIo.stdout.write('KTX scan completed\n');
+      scanIo.stdout.write('ktx scan completed\n');
       scanIo.stdout.write('Report: raw-sources/warehouse/live-database/sync-1/scan-report.json\n');
       await deps?.progress?.update(0.12, 'Inspecting database schema');
       const enrichmentProgress = deps?.progress?.startPhase(0.5);
@@ -1030,7 +1030,7 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain('Ingest finished');
     expect(io.stdout()).toContain('warehouse');
     expect(io.stdout()).toContain('docs');
-    expect(io.stdout()).not.toContain('KTX scan completed');
+    expect(io.stdout()).not.toContain('ktx scan completed');
     expect(io.stdout()).not.toContain('Report:');
     expect(io.stdout()).not.toContain('Adapter:');
     expect(io.stderr()).toContain('[1/2] warehouse · database schema\n');
@@ -1080,7 +1080,7 @@ describe('runKtxPublicIngest', () => {
     const project = deepReadyProject({ warehouse: { driver: 'postgres' } });
     const runScan = vi.fn<NonNullable<KtxPublicIngestDeps['runScan']>>(async (_args, scanIo, deps) => {
       await deps?.progress?.update(0.42, 'Enriching schema metadata');
-      scanIo.stdout.write('KTX scan enrichment failed after structural scan completed: embedding service timed out\n');
+      scanIo.stdout.write('ktx scan enrichment failed after structural scan completed: embedding service timed out\n');
       return 1;
     });
 
@@ -1105,7 +1105,7 @@ describe('runKtxPublicIngest', () => {
     expect(io.stdout()).toContain(
       'warehouse failed: Database enrichment failed after schema context completed: embedding service timed out.',
     );
-    expect(io.stdout()).not.toContain('KTX scan enrichment failed');
+    expect(io.stdout()).not.toContain('ktx scan enrichment failed');
     expect(io.stdout()).not.toContain('structural scan');
   });
 
@@ -1477,7 +1477,7 @@ describe('runKtxPublicIngest', () => {
       scanIo.stdout.write('Run: scan-run-1\n');
       scanIo.stdout.write('Mode: enriched\n');
       scanIo.stdout.write('Dry run: no\n');
-      scanIo.stdout.write('KTX scan completed\n');
+      scanIo.stdout.write('ktx scan completed\n');
       return 0;
     });
     const runIngest = vi.fn(async (_args, ingestIo) => {
@@ -1516,7 +1516,7 @@ describe('runKtxPublicIngest', () => {
     const runIngest = vi.fn(async (_args, ingestIo) => {
       ingestIo.stderr.write('Missing bundled Python runtime manifest: /repo/packages/cli/assets/python/manifest.json\n');
       ingestIo.stderr.write('In a source checkout, build the local runtime assets with: pnpm run artifacts:build\n');
-      ingestIo.stderr.write('Then retry the runtime-backed KTX command.\n');
+      ingestIo.stderr.write('Then retry the runtime-backed ktx command.\n');
       return 1;
     });
 
@@ -1542,7 +1542,7 @@ describe('runKtxPublicIngest', () => {
       'In a source checkout, build the local runtime assets with: pnpm run artifacts:build',
     );
     expect(io.stdout()).toContain('Retry: ktx ingest warehouse --project-dir /tmp/project --query-history');
-    expect(io.stdout()).not.toContain('Then retry the runtime-backed KTX command');
+    expect(io.stdout()).not.toContain('Then retry the runtime-backed ktx command');
   });
 
   it('fails enrichment-readiness targets before work starts while continuing independent --all targets', async () => {

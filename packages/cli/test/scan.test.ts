@@ -293,7 +293,7 @@ const reportWithAttention: KtxScanReport = {
   warnings: [
     {
       code: 'connector_capability_missing',
-      message: 'KTX scan connector is missing optional capability: columnStats',
+      message: 'ktx scan connector is missing optional capability: columnStats',
       recoverable: true,
       metadata: { capability: 'columnStats' },
     },
@@ -372,7 +372,7 @@ describe('runKtxScan', () => {
         connector: undefined,
       }),
     );
-    expect(io.stdout()).toContain('KTX scan completed\n');
+    expect(io.stdout()).toContain('ktx scan completed\n');
     expect(io.stdout()).toContain('Run: scan-run-1');
     expect(io.stdout()).toContain('Mode: structural');
     expect(io.stdout()).toContain('What changed\n');
@@ -494,7 +494,7 @@ describe('runKtxScan', () => {
     );
   });
 
-  it('passes KTX daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
+  it('passes ktx daemon options to local ingest adapters when no explicit daemon URL is set', async () => {
     await initKtxProject({ projectDir: tempDir });
     const createLocalIngestAdapters = vi.fn(() => []);
     const runLocalScan = vi.fn(
@@ -649,7 +649,7 @@ describe('runKtxScan', () => {
       warnings: [
         {
           code: 'connector_capability_missing',
-          message: 'KTX scan connector cannot run read-only SQL relationship validation',
+          message: 'ktx scan connector cannot run read-only SQL relationship validation',
           recoverable: true,
           metadata: { capability: 'readOnlySql' },
         },
@@ -690,7 +690,7 @@ describe('runKtxScan', () => {
     expect(io.stdout()).toContain('Review: 12');
     expect(io.stdout()).toContain('Rejected: 44');
     expect(io.stdout()).toContain(
-      'connector_capability_missing: KTX scan connector cannot run read-only SQL relationship validation',
+      'connector_capability_missing: ktx scan connector cannot run read-only SQL relationship validation',
     );
   });
 
@@ -972,7 +972,7 @@ describe('runKtxScan', () => {
     }
 
     expect(io.stdout()).toContain('✓');
-    expect(io.stdout()).toContain('KTX scan completed');
+    expect(io.stdout()).toContain('ktx scan completed');
     expect(io.stdout()).toContain('\u001b[');
   });
 
@@ -1017,7 +1017,7 @@ describe('runKtxScan', () => {
       }
     }
 
-    expect(io.stdout()).toContain('KTX scan completed');
+    expect(io.stdout()).toContain('ktx scan completed');
     expect(io.stdout()).not.toContain('\u001b[');
   });
 

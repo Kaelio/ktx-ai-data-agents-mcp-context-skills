@@ -9,7 +9,7 @@ import {
 
 const removedAutoCommitKey = ['auto', 'commit'].join('_');
 
-describe('KTX project config', () => {
+describe('ktx project config', () => {
   it.each(['status', 'replay', 'run', 'watch'])('accepts former ingest subcommand name "%s" as a connection id', (connectionId) => {
     expect(
       parseKtxProjectConfig(`

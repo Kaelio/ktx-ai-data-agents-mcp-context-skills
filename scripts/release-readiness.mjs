@@ -319,9 +319,9 @@ async function main() {
     return;
   }
 
-  process.stdout.write(`KTX release mode: ${report.releaseMode}\n`);
-  process.stdout.write(`KTX source revision: ${report.sourceRevision ?? 'local'}\n`);
-  process.stdout.write(`KTX packages: ${report.packageNames.join(', ')}\n`);
+  process.stdout.write(`ktx release mode: ${report.releaseMode}\n`);
+  process.stdout.write(`ktx source revision: ${report.sourceRevision ?? 'local'}\n`);
+  process.stdout.write(`ktx packages: ${report.packageNames.join(', ')}\n`);
   process.stdout.write(`Published package smoke: ${report.publishedPackageSmokeGate.status}\n`);
   process.stdout.write(`Published package smoke script: ${report.publishedPackageSmokeGate.script}\n`);
   process.stdout.write(`Published package smoke reason: ${report.publishedPackageSmokeGate.reason}\n`);

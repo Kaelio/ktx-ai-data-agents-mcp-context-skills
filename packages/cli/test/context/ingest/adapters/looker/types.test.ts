@@ -255,7 +255,7 @@ describe('Looker staged runtime schemas', () => {
     });
   });
 
-  it('accepts slug-shaped connection ids inside KTX Looker runtime schemas', () => {
+  it('accepts slug-shaped connection ids inside ktx Looker runtime schemas', () => {
     const parsedTargetTable = {
       ok: true as const,
       catalog: 'proj',
@@ -313,7 +313,7 @@ describe('Looker staged runtime schemas', () => {
     });
   });
 
-  it('rejects unsafe KTX Looker connection ids', () => {
+  it('rejects unsafe ktx Looker connection ids', () => {
     expect(() =>
       parseLookerPullConfig({
         lookerConnectionId: '../prod-looker',

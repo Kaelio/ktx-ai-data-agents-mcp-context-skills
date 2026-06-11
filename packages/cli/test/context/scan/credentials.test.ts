@@ -9,7 +9,7 @@ import {
 } from '../../../src/context/scan/credentials.js';
 import type { KtxCredentialEnvelope, KtxScanReport, KtxScanWarning } from '../../../src/context/scan/types.js';
 
-describe('KTX scan credential redaction', () => {
+describe('ktx scan credential redaction', () => {
   it('keeps credential references inspectable', () => {
     const envReference: KtxCredentialEnvelope = { kind: 'env', name: 'DATABASE_URL' };
     const fileReference: KtxCredentialEnvelope = { kind: 'file', path: '~/.config/ktx/warehouse' };

@@ -317,7 +317,7 @@ function compositeSkipBlocks(report: KtxRelationshipBenchmarkReport): string[] {
 
 export function formatKtxRelationshipBenchmarkReportMarkdown(report: KtxRelationshipBenchmarkReport): string {
   const lines = [
-    '# KTX Relationship Discovery Benchmark Evidence',
+    '# ktx Relationship Discovery Benchmark Evidence',
     '',
     `Generated: ${report.generatedAt}`,
     '',

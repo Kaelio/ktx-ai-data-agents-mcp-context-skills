@@ -21,7 +21,7 @@ export function formatClaudeCodePromptCachingWarning(fields: string[]): string |
   if (fields.length === 0) {
     return null;
   }
-  return `claude-code ignores ${fields.join(', ')} because the Claude Agent SDK does not expose KTX prompt-cache TTL, tool, or history markers.`;
+  return `claude-code ignores ${fields.join(', ')} because the Claude Agent SDK does not expose ktx prompt-cache TTL, tool, or history markers.`;
 }
 
 export function formatClaudeCodePromptCachingFix(): string {

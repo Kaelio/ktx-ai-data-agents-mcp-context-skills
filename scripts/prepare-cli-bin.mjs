@@ -36,7 +36,7 @@ export async function ensureCliBinExecutable(rootDir = ktxRootDir()) {
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const binPath = await ensureCliBinExecutable();
-    process.stdout.write(`Prepared KTX CLI bin: ${binPath}\n`);
+    process.stdout.write(`Prepared ktx CLI bin: ${binPath}\n`);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

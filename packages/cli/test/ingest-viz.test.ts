@@ -90,8 +90,8 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(runLocal).toHaveBeenCalledWith(expect.objectContaining({ memoryFlow: expect.any(Object) }));
     expect(io.stdout()).toContain('\u001b[2J\u001b[H');
-    expect((io.stdout().match(/KTX memory flow/g) ?? []).length).toBeGreaterThan(1);
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect((io.stdout().match(/ktx memory flow/g) ?? []).length).toBeGreaterThan(1);
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
     expect(io.stdout()).toContain('fake-orders');
     expect(io.stderr()).toBe('');
   });
@@ -145,7 +145,7 @@ describe('runKtxIngest viz and replay', () => {
     expect(liveSession.update).toHaveBeenCalled();
     expect(liveSession.close).toHaveBeenCalledTimes(1);
     expect(io.stdout()).not.toContain('\u001b[2J\u001b[H');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toBe('');
   });
 
@@ -303,7 +303,7 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(startLiveMemoryFlow).toHaveBeenCalledTimes(1);
     expect(io.stdout()).toContain('\u001b[2J\u001b[H');
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
   });
 
   it('falls back to text live rendering when TUI startup fails with a redacted warning', async () => {
@@ -345,7 +345,7 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(io.stderr()).toContain('TUI visualization unavailable: Failed [redacted-url] [redacted]');
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
     expect(io.stdout()).toContain('\u001b[2J\u001b[H');
   });
 
@@ -384,7 +384,7 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(startLiveMemoryFlow).not.toHaveBeenCalled();
     expect(runLocal).toHaveBeenCalledWith(expect.not.objectContaining({ memoryFlow: expect.anything() }));
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
   });
 
   it('attaches a plain progress memory-flow sink for interactive plain run output', async () => {
@@ -416,7 +416,7 @@ describe('runKtxIngest viz and replay', () => {
     expect(io.stderr()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: plain-run');
     expect(io.stdout()).not.toContain('[5%]');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
   });
 
   it('falls back to plain run output for run --viz when stdout is not interactive', async () => {
@@ -447,7 +447,7 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(io.stdout()).toContain('Job: non-tty-viz-run');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdout is not an interactive terminal; printing plain output.',
     );
@@ -493,7 +493,7 @@ describe('runKtxIngest viz and replay', () => {
     expect(io.stderr()).toContain('[5%] Fetching source files for warehouse/fake');
     expect(io.stdout()).toContain('Job: raw-missing-viz-run');
     expect(io.stdout()).not.toContain('[5%]');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdin raw mode is unavailable; printing plain output.',
     );
@@ -547,7 +547,7 @@ describe('runKtxIngest viz and replay', () => {
       runKtxIngest({ command: 'watch', projectDir, outputMode: 'viz', inputMode: 'disabled' }, io.io),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
     expect(io.stdout()).toContain('Run: run-watch-latest');
     expect(io.stderr()).toBe('');
   });
@@ -572,7 +572,7 @@ describe('runKtxIngest viz and replay', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/metabase  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/metabase  done');
     expect(io.stdout()).toContain('Saved 2 memories from 2 raw files');
     expect(io.stdout()).toContain('Commit: abc12345  Run: run-1  Report: report-1');
     expect(io.stdout()).toContain('SOURCE');
@@ -667,7 +667,7 @@ describe('runKtxIngest viz and replay', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
     expect(io.stdout()).toContain('SOURCE');
     expect(io.stdout()).toContain('CHUNKS');
     expect(io.stdout()).toContain('WORKUNITS');
@@ -736,7 +736,7 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(renderStoredMemoryFlow).toHaveBeenCalledTimes(1);
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
   });
 
   it('does not use TUI for stored --viz when input is disabled', async () => {
@@ -766,7 +766,7 @@ describe('runKtxIngest viz and replay', () => {
     ).resolves.toBe(0);
 
     expect(renderStoredMemoryFlow).not.toHaveBeenCalled();
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
   });
 
   it('falls back to plain status for stored --viz when stdin raw mode is unavailable', async () => {
@@ -797,7 +797,7 @@ describe('runKtxIngest viz and replay', () => {
     expect(renderStoredMemoryFlow).not.toHaveBeenCalled();
     expect(io.stdout()).toContain('Run: run-raw-missing-stored-viz-run');
     expect(io.stdout()).toContain('Job: raw-missing-stored-viz-run');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdin raw mode is unavailable; printing plain output.',
     );
@@ -826,7 +826,7 @@ describe('runKtxIngest viz and replay', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
     expect(io.stdout()).not.toContain('\u001b[2J\u001b[H');
     expect(io.stderr()).toBe('');
   });
@@ -854,7 +854,7 @@ describe('runKtxIngest viz and replay', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(io.stdout()).toContain('KTX memory flow  warehouse/fake  done');
+    expect(io.stdout()).toContain('ktx memory flow  warehouse/fake  done');
     expect(io.stdout()).not.toContain('\u001b[2J\u001b[H');
     expect(io.stderr()).toBe('');
   });
@@ -884,7 +884,7 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(io.stdout()).toContain('Run: run-redirected-no-input-viz-run');
     expect(io.stdout()).toContain('Job: redirected-no-input-viz-run');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdout is not an interactive terminal; printing plain output.',
     );
@@ -910,7 +910,7 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(io.stdout()).toContain('Run: run-dumb-terminal-viz-run');
     expect(io.stdout()).toContain('Job: dumb-terminal-viz-run');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but TERM=dumb does not support the visual renderer; printing plain output.',
     );
@@ -932,7 +932,7 @@ describe('runKtxIngest viz and replay', () => {
 
     expect(io.stdout()).toContain('Run: run-viz-run-2');
     expect(io.stdout()).toContain('Job: viz-run-2');
-    expect(io.stdout()).not.toContain('KTX memory flow');
+    expect(io.stdout()).not.toContain('ktx memory flow');
     expect(io.stderr()).toContain(
       'Visualization requested but stdout is not an interactive terminal; printing plain output.',
     );

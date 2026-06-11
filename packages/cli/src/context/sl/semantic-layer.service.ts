@@ -115,7 +115,7 @@ export class SemanticLayerService {
   async listConnectionIds(): Promise<string[]> {
     try {
       const result = await this.configService.listFiles(SL_DIR_PREFIX);
-      // Directories under semantic-layer/ are connectionIds. Local KTX projects use
+      // Directories under semantic-layer/ are connectionIds. Local ktx projects use
       // readable ids like "warehouse" and "dbt-main", not only UUIDs.
       return result.files
         .map((f) => f.replace(`${SL_DIR_PREFIX}/`, '').split('/')[0])

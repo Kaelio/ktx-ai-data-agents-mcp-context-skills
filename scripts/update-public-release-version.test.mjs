@@ -27,7 +27,7 @@ async function readText(path) {
 const DAEMON_PYPROJECT = `[project]
 name = "ktx-daemon"
 version = "0.4.0"
-description = "Portable compute package for KTX semantic-layer operations"
+description = "Portable compute package for ktx semantic-layer operations"
 
 [build-system]
 requires = ["hatchling"]

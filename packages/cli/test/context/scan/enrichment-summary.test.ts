@@ -5,7 +5,7 @@ import {
   skippedKtxScanEnrichmentSummary,
 } from '../../../src/context/scan/enrichment-summary.js';
 
-describe('KTX scan enrichment summaries', () => {
+describe('ktx scan enrichment summaries', () => {
   it('keeps structural scans skipped when no enrichment was requested', () => {
     expect(failedKtxScanEnrichmentSummary('structural', false)).toEqual(skippedKtxScanEnrichmentSummary);
   });

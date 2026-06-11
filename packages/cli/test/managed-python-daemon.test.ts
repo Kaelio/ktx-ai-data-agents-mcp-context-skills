@@ -126,7 +126,7 @@ function daemonOptionsBase(root: string) {
   } as const;
 }
 
-describe('KTX daemon lifecycle', () => {
+describe('ktx daemon lifecycle', () => {
   let tempDir: string;
 
   beforeEach(async () => {

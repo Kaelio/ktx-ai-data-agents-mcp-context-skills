@@ -402,7 +402,7 @@ describe('setup status', () => {
     expect(status.llm).toMatchObject({ backend: 'vertex', ready: true, model: 'claude-sonnet-4-6' });
     expect(status.context).toMatchObject({ ready: true, status: 'completed' });
     expect(rendered).toContain('LLM ready: yes (claude-sonnet-4-6)');
-    expect(rendered).toContain('KTX context built: yes');
+    expect(rendered).toContain('ktx context built: yes');
   });
 
   it('reports context ready after a partial ingest report saved memory', async () => {
@@ -462,10 +462,10 @@ describe('setup status', () => {
     const status = await readKtxSetupStatus(tempDir);
     const rendered = formatKtxSetupStatus(status);
 
-    expect(rendered).toContain(`No KTX project found at ${tempDir}.`);
+    expect(rendered).toContain(`No ktx project found at ${tempDir}.`);
     expect(rendered).toContain('Check another project: ktx --project-dir <folder> status');
     expect(rendered).toContain('Or from that folder: ktx status');
-    expect(rendered).toContain('Create a new KTX project here: ktx setup');
+    expect(rendered).toContain('Create a new ktx project here: ktx setup');
     expect(rendered).not.toContain('Project ready: no');
     expect(JSON.parse(JSON.stringify(status))).toMatchObject({ project: { path: tempDir, ready: false } });
   });
@@ -475,13 +475,13 @@ describe('setup status', () => {
 
     const rendered = formatKtxSetupStatus(await readKtxSetupStatus(tempDir));
 
-    expect(rendered).toContain(`KTX project: ${tempDir}`);
+    expect(rendered).toContain(`ktx project: ${tempDir}`);
     expect(rendered).toContain('Project ready: yes');
     expect(rendered).toContain('LLM ready: no');
     expect(rendered).toContain('Databases configured: no');
     expect(rendered).not.toContain(['Primary sources', 'configured'].join(' '));
-    expect(rendered).toContain('KTX context built: no');
-    expect(rendered).not.toContain('No KTX project found.');
+    expect(rendered).toContain('ktx context built: no');
+    expect(rendered).not.toContain('No ktx project found.');
   });
 
   it('formats a concise ready summary for completed agent setup', () => {
@@ -511,7 +511,7 @@ describe('setup status', () => {
           `  ktx mcp stop --project-dir ${tempDir}`,
           '',
           '2. Open Claude Code',
-          '  Open Claude Code from the KTX project directory:',
+          '  Open Claude Code from the ktx project directory:',
           '',
           '  RUN:',
           `  cd '${tempDir}'`,
@@ -528,7 +528,7 @@ describe('setup status', () => {
     expect(rendered).toContain('    RUN:');
     expect(rendered).toContain('    If you need to stop MCP later:');
     expect(rendered).toContain(`ktx mcp stop --project-dir ${tempDir}`);
-    expect(rendered).toContain('After that, try\n  Ask your agent: "Use KTX to show me the available tables."');
+    expect(rendered).toContain('After that, try\n  Ask your agent: "Use ktx to show me the available tables."');
     expect(rendered).not.toContain('Verify');
     expect(rendered).not.toContain('Project ready: yes');
     expect(rendered).not.toContain('What you can do next');
@@ -582,8 +582,8 @@ describe('setup status', () => {
     expect(output).toContain('Requires MCP to be started.');
     expect(output).toContain('Analytics skill installed.');
     expect(output).not.toContain('Agent integration complete');
-    expect(output).toContain('Finish KTX agent setup');
-    expect(output).not.toContain('KTX project ready');
+    expect(output).toContain('Finish ktx agent setup');
+    expect(output).not.toContain('ktx project ready');
     expect(output).toContain('REQUIRED BEFORE USING AGENTS');
     expect(output).toContain('Run this command before using Claude Code:');
     expect(output).toContain(`ktx mcp start --project-dir ${tempDir}`);
@@ -651,7 +651,7 @@ describe('setup status', () => {
       ),
     ).resolves.toBe(0);
 
-    expect(testIo.stdout()).toContain('KTX setup');
+    expect(testIo.stdout()).toContain('ktx setup');
     expect(testIo.stdout()).toContain(`Project: ${tempDir}`);
     expect(testIo.stdout()).toContain('Project ready: yes');
     expect(testIo.stdout()).toContain('What you can do next:');
@@ -733,7 +733,7 @@ describe('setup status', () => {
     await expect(stat(join(projectDir, '.ktx'))).resolves.toBeDefined();
   });
 
-  it('preserves KTX scaffold files in an initially empty project directory when setup fails', async () => {
+  it('preserves ktx scaffold files in an initially empty project directory when setup fails', async () => {
     const testIo = makeIo();
 
     await expect(
@@ -860,12 +860,12 @@ describe('setup status', () => {
     const select = vi.fn(async (options: { options: Array<{ value: string; label: string }> }) => {
       const labels = options.options.map((option) => option.label);
       expect(labels).toEqual([
-        'Set up KTX for my data',
+        'Set up ktx for my data',
         'Check setup status',
-        'Explore a pre-built KTX project',
+        'Explore a pre-built ktx project',
         'Exit',
       ]);
-      expect(labels.indexOf('Explore a pre-built KTX project')).toBe(labels.length - 2);
+      expect(labels.indexOf('Explore a pre-built ktx project')).toBe(labels.length - 2);
       return 'exit';
     });
     const cancel = vi.fn();
@@ -901,17 +901,17 @@ describe('setup status', () => {
     const missingIo = makeIo();
     const existingIo = makeIo();
     const missingSelect = vi.fn(async (options: { options: Array<{ value: string; label: string }> }) => {
-      expect(options.options.map((option) => option.label)).not.toContain('Connect a coding agent to KTX');
+      expect(options.options.map((option) => option.label)).not.toContain('Connect a coding agent to ktx');
       return 'exit';
     });
     const existingSelect = vi.fn(async (options: { options: Array<{ value: string; label: string }> }) => {
       const labels = options.options.map((option) => option.label);
       expect(labels).toEqual([
         'Resume or change an existing setup',
-        'Create a new KTX project',
-        'Connect a coding agent to KTX',
+        'Create a new ktx project',
+        'Connect a coding agent to ktx',
         'Check setup status',
-        'Explore a pre-built KTX project',
+        'Explore a pre-built ktx project',
         'Exit',
       ]);
       return 'exit';
@@ -1009,13 +1009,13 @@ describe('setup status', () => {
 
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Where should KTX create the project?',
+        message: 'Where should ktx create the project?',
         options: expect.arrayContaining([expect.objectContaining({ value: 'back', label: 'Back' })]),
       }),
     );
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Where should KTX create the project?',
+        message: 'Where should ktx create the project?',
         options: expect.not.arrayContaining([expect.objectContaining({ value: 'exit', label: 'Exit' })]),
       }),
     );
@@ -1068,7 +1068,7 @@ describe('setup status', () => {
 
     expect(projectPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Where should KTX create the project?',
+        message: 'Where should ktx create the project?',
         options: expect.arrayContaining([expect.objectContaining({ value: 'back', label: 'Back' })]),
       }),
     );
@@ -1145,7 +1145,7 @@ describe('setup status', () => {
       }),
     );
     expect(projectPrompts.select).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Where should KTX create the project?' }),
+      expect.objectContaining({ message: 'Where should ktx create the project?' }),
     );
     await expect(stat(join(newProjectDir, 'ktx.yaml'))).resolves.toBeDefined();
     await expect(readFile(join(existingProjectDir, 'ktx.yaml'), 'utf-8')).resolves.toBe(existingConfig);
@@ -1268,7 +1268,7 @@ describe('setup status', () => {
     await expect(readFile(join(tempDir, '.ktx', 'setup', 'state.json'), 'utf-8')).resolves.toBe(
       `${JSON.stringify({ completed_steps: ['project', 'sources'] }, null, 2)}\n`,
     );
-    expect(testIo.stdout()).toContain('KTX setup');
+    expect(testIo.stdout()).toContain('ktx setup');
     expect(testIo.stdout()).toContain(`Project: ${tempDir}`);
     expect(testIo.stdout()).toContain('Project ready: yes');
     expect(testIo.stderr()).toBe('');
@@ -1969,7 +1969,7 @@ describe('setup status', () => {
     ).resolves.toBe(0);
 
     expect(calls).toEqual(['model', 'embeddings', 'databases', 'sources']);
-    expect(io.stderr()).not.toContain('KTX cannot build agent-ready context yet.');
+    expect(io.stderr()).not.toContain('ktx cannot build agent-ready context yet.');
   });
 
   it('runs context after sources and before agents in full setup', async () => {
@@ -2185,7 +2185,7 @@ describe('setup status', () => {
     expect(runtime).not.toHaveBeenCalled();
     expect(context).not.toHaveBeenCalled();
     expect(agents).toHaveBeenCalledTimes(1);
-    expect(io.stderr()).not.toContain('KTX context is not ready for agents.');
+    expect(io.stderr()).not.toContain('ktx context is not ready for agents.');
   });
 
   it('runs non-TTY --agents with a target without requiring --no-input or --yes', async () => {

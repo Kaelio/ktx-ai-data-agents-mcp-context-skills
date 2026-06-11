@@ -415,7 +415,7 @@ export function renderContextBuildView(
   const hasActive = allTargets.some((t) => t.status === 'running' || t.status === 'queued');
   const allDone = totalCount > 0 && !hasActive;
 
-  const headerParts = [options.title ?? 'Building KTX context'];
+  const headerParts = [options.title ?? 'Building ktx context'];
   if (totalCount > 0) {
     const progressParts: string[] = [`${doneCount}/${totalCount}`];
     if (state.totalElapsedMs > 0) progressParts.push(formatDuration(state.totalElapsedMs));
@@ -738,7 +738,7 @@ function failedStepDetail(result: KtxPublicIngestTargetResult): string | null {
 const INTERNAL_FAILURE_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Mode|Dry run|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
 const ACTIONABLE_FAILURE_LINE_RE =
-  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX daemon HTTP|Error:|Failed\b|Could not\b|Cannot\b)/;
+  /^(Missing bundled Python runtime manifest|ktx Python runtime is required|ktx daemon HTTP|Error:|Failed\b|Could not\b|Cannot\b)/;
 
 function trimErrorPrefix(line: string): string {
   return line.replace(/^Error:\s*/, '');
@@ -749,7 +749,7 @@ function firstCapturedFailureLine(output: string | undefined): string | null {
     .split(/\r?\n/)
     .map((candidate) => candidate.trim())
     .filter((candidate) => candidate.length > 0)
-    .filter((candidate) => !candidate.startsWith('KTX scan completed'))
+    .filter((candidate) => !candidate.startsWith('ktx scan completed'))
     .filter((candidate) => !INTERNAL_FAILURE_LINE_RE.test(candidate));
   const line = lines.find((candidate) => ACTIONABLE_FAILURE_LINE_RE.test(candidate)) ?? lines.at(-1) ?? null;
   return line ? trimErrorPrefix(line) : null;
@@ -789,7 +789,7 @@ function failureTextForTarget(input: {
   const code = networkErrorCode(input.error, input.capturedOutput);
   if (code && isLocalSqlAnalysisConnectionRefused({ capturedOutput: input.capturedOutput, fallback: input.fallback })) {
     return [
-      `KTX could not reach the local SQL analysis runtime while processing query history for ${input.target.connectionId}.`,
+      `ktx could not reach the local SQL analysis runtime while processing query history for ${input.target.connectionId}.`,
       `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
       `Retry: ${retryCommand({
         projectDir: input.projectDir,
@@ -803,7 +803,7 @@ function failureTextForTarget(input: {
   if (code) {
     const operation = input.target.operation === 'database-ingest' ? 'reading schema for' : 'ingesting';
     return [
-      `KTX lost its connection to ${friendlyDriverName(input.target.driver)} while ${operation} ${input.target.connectionId}.`,
+      `ktx lost its connection to ${friendlyDriverName(input.target.driver)} while ${operation} ${input.target.connectionId}.`,
       `Reason: ${NETWORK_ERROR_REASONS[code]} (${code}).`,
       `Retry: ${retryCommand({
         projectDir: input.projectDir,

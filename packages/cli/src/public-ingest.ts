@@ -875,8 +875,8 @@ function createPlainPublicIngestProgress(io: KtxCliIo, options: PlainPublicInges
 const INTERNAL_STATUS_LINE_RE =
   /^(Report|Run|Job|Status|Adapter|Connection|Sync|Diff|Tasks|Work units|Failed tasks|Saved memory|Provenance rows):\s*/;
 const ACTIONABLE_FAILURE_LINE_RE =
-  /^(Missing bundled Python runtime manifest|KTX Python runtime is required|KTX daemon HTTP|Error:|Failed\b|Could not\b|Cannot\b)/;
-const RUNTIME_BACKED_RETRY_LINE_RE = /^Then retry the runtime-backed KTX command\.?$/;
+  /^(Missing bundled Python runtime manifest|ktx Python runtime is required|ktx daemon HTTP|Error:|Failed\b|Could not\b|Cannot\b)/;
+const RUNTIME_BACKED_RETRY_LINE_RE = /^Then retry the runtime-backed ktx command\.?$/;
 
 function trimErrorPrefix(line: string): string {
   return line.replace(/^Error:\s*/, '');
@@ -887,7 +887,7 @@ function capturedFailureMessage(output: string): string | undefined {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .filter((line) => !line.startsWith('KTX scan completed'))
+    .filter((line) => !line.startsWith('ktx scan completed'))
     .filter((line) => !INTERNAL_STATUS_LINE_RE.test(line))
     .map(publicIngestOutputLine);
 

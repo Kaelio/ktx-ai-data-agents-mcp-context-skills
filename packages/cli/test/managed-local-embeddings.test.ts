@@ -95,7 +95,7 @@ function daemonResult(status: 'started' | 'reused' = 'reused'): ManagedPythonDae
 }
 
 describe('managedLocalEmbeddingHealthConfig', () => {
-  it('uses the active KTX daemon URL for the immediate health check', () => {
+  it('uses the active ktx daemon URL for the immediate health check', () => {
     expect(
       managedLocalEmbeddingHealthConfig({
         baseUrl: 'http://127.0.0.1:61234',
@@ -112,7 +112,7 @@ describe('managedLocalEmbeddingHealthConfig', () => {
 });
 
 describe('ensureManagedLocalEmbeddingsDaemon', () => {
-  it('ensures the local-embeddings feature and starts the KTX daemon', async () => {
+  it('ensures the local-embeddings feature and starts the ktx daemon', async () => {
     const io = makeIo();
     const ensureRuntime = vi.fn(async () => runtime());
     const startDaemon = vi.fn(async () => daemonResult('started'));
@@ -144,7 +144,7 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
       features: ['local-embeddings'],
       force: false,
     });
-    expect(io.stderr()).toContain('Started KTX daemon: http://127.0.0.1:61234');
+    expect(io.stderr()).toContain('Started ktx daemon: http://127.0.0.1:61234');
   });
 
   it('reuses an already running daemon without reporting a new start', async () => {
@@ -159,7 +159,7 @@ describe('ensureManagedLocalEmbeddingsDaemon', () => {
       startDaemon: vi.fn(async () => daemonResult('reused')),
     });
 
-    expect(io.stderr()).toContain('Using KTX daemon: http://127.0.0.1:61234');
+    expect(io.stderr()).toContain('Using ktx daemon: http://127.0.0.1:61234');
   });
 });
 

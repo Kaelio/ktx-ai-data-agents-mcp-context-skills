@@ -1,6 +1,6 @@
 ---
 name: notion_synthesize
-description: Synthesize durable KTX wiki pages and semantic-layer sources from staged Notion pages, databases, data-source rows, and clustered Notion evidence. Load when a WorkUnit contains Notion raw files or Notion evidence chunks.
+description: Synthesize durable ktx wiki pages and semantic-layer sources from staged Notion pages, databases, data-source rows, and clustered Notion evidence. Load when a WorkUnit contains Notion raw files or Notion evidence chunks.
 callers: [memory_agent]
 ---
 

@@ -279,7 +279,7 @@ describe('relationship diagnostics artifacts', () => {
       warnings: [
         {
           code: 'connector_capability_missing',
-          message: 'KTX scan connector cannot run standalone statistical relationship validation',
+          message: 'ktx scan connector cannot run standalone statistical relationship validation',
           recoverable: true,
           metadata: { capability: 'readOnlySql' },
         },

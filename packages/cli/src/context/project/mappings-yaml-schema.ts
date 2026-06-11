@@ -15,7 +15,7 @@ export const metabaseMappingsSchema = z
     databaseMappings: z
       .record(z.string(), stringTargetSchema)
       .default({})
-      .describe('Map of Metabase database ID (positive integer string) to KTX connection ID. Use null to explicitly unmap.'),
+      .describe('Map of Metabase database ID (positive integer string) to ktx connection ID. Use null to explicitly unmap.'),
     syncEnabled: z
       .record(z.string(), z.boolean())
       .default({})
@@ -38,7 +38,7 @@ export const lookerMappingsSchema = z
     connectionMappings: z
       .record(z.string().min(1), stringTargetSchema)
       .default({})
-      .describe('Map of Looker connection name to KTX connection ID. Use null to explicitly unmap.'),
+      .describe('Map of Looker connection name to ktx connection ID. Use null to explicitly unmap.'),
   })
   .describe('Looker connection-to-warehouse mapping configuration.');
 

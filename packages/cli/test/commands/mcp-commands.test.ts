@@ -51,7 +51,7 @@ describe('registerMcpCommands', () => {
     registerMcpCommands(program, context);
 
     await expect(program.parseAsync(['mcp', 'start', '--host', '0.0.0.0'], { from: 'user' })).rejects.toThrow(
-      'Binding KTX MCP to 0.0.0.0 requires --token or KTX_MCP_TOKEN',
+      'Binding ktx MCP to 0.0.0.0 requires --token or KTX_MCP_TOKEN',
     );
     expect(startDaemon).not.toHaveBeenCalled();
   });
@@ -80,11 +80,11 @@ describe('registerMcpCommands', () => {
     expect(startDaemon).toHaveBeenCalledTimes(1);
     expect(context.io.stdout.write).toHaveBeenCalledWith(
       [
-        'KTX MCP daemon already running: http://127.0.0.1:7878/mcp',
+        'ktx MCP daemon already running: http://127.0.0.1:7878/mcp',
         '',
-        'KTX is ready for configured agents.',
-        'Open your agent for this KTX project and ask a data question, for example:',
-        '  "Use KTX to show me the available tables and metrics."',
+        'ktx is ready for configured agents.',
+        'Open your agent for this ktx project and ask a data question, for example:',
+        '  "Use ktx to show me the available tables and metrics."',
         '',
       ].join('\n'),
     );
@@ -112,10 +112,10 @@ describe('registerMcpCommands', () => {
     await program.parseAsync(['--project-dir', '/tmp/ktx-started', 'mcp', 'start'], { from: 'user' });
 
     expect(context.io.stdout.write).toHaveBeenCalledWith(
-      expect.stringContaining('KTX MCP daemon started: http://127.0.0.1:7878/mcp\n\nKTX is ready for configured agents.'),
+      expect.stringContaining('ktx MCP daemon started: http://127.0.0.1:7878/mcp\n\nktx is ready for configured agents.'),
     );
     expect(context.io.stdout.write).toHaveBeenCalledWith(
-      expect.stringContaining('"Use KTX to show me the available tables and metrics."'),
+      expect.stringContaining('"Use ktx to show me the available tables and metrics."'),
     );
   });
 

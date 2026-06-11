@@ -244,7 +244,7 @@ as "ready, LLM optional" and judge the data layer by the connection and
 
 For known failure signatures (`invalid ELF header`,
 `Native CLI binary for <plat> not found`, `Missing Anthropic API key`,
-`claude-code` probe failure, `KTX cannot work without a database` on resume,
+`claude-code` probe failure, `ktx cannot work without a database` on resume,
 `Run in a TTY, or pass --target <target>.` with a misleading exit 1, and a
 secret that resolves empty only during `ktx ingest`/`ktx mcp`), see
 [troubleshooting.md](troubleshooting.md).

@@ -62,11 +62,11 @@ export function managedRuntimeInstallCommand(feature: KtxRuntimeFeature): string
 
 function installPrompt(feature: KtxRuntimeFeature): string {
   const label = feature === 'local-embeddings' ? 'local embeddings Python runtime' : 'core Python runtime';
-  return `KTX needs to install the ${label}. This downloads Python dependencies with uv. Continue?`;
+  return `ktx needs to install the ${label}. This downloads Python dependencies with uv. Continue?`;
 }
 
 function runtimeRequiredMessage(feature: KtxRuntimeFeature): string {
-  return `KTX Python runtime is required for this command. Run: ${managedRuntimeInstallCommand(feature)}`;
+  return `ktx Python runtime is required for this command. Run: ${managedRuntimeInstallCommand(feature)}`;
 }
 
 function hasFeature(manifest: InstalledKtxRuntimeManifest, feature: KtxRuntimeFeature): boolean {
@@ -101,22 +101,22 @@ export async function ensureManagedPythonCommandRuntime(
     const confirmInstall = options.confirmInstall ?? defaultConfirmInstall;
     const confirmed = await confirmInstall(installPrompt(feature), options.io);
     if (!confirmed) {
-      throw new Error(`KTX Python runtime installation was cancelled. Run: ${managedRuntimeInstallCommand(feature)}`);
+      throw new Error(`ktx Python runtime installation was cancelled. Run: ${managedRuntimeInstallCommand(feature)}`);
     }
   }
 
   const progress = (options.spinner ?? (() => createStaticCliSpinner(options.io)))();
-  progress.start(`Installing KTX Python runtime (${feature}) with uv...`);
+  progress.start(`Installing ktx Python runtime (${feature}) with uv...`);
   try {
     const installed = await installRuntime({
       cliVersion: options.cliVersion,
       features: [feature],
       force: false,
     });
-    progress.stop(`KTX Python runtime ready: ${installed.layout.versionDir}`);
+    progress.stop(`ktx Python runtime ready: ${installed.layout.versionDir}`);
     return { layout: installed.layout, manifest: installed.manifest };
   } catch (error) {
-    progress.error(`KTX Python runtime install failed: ${error instanceof Error ? error.message : String(error)}`);
+    progress.error(`ktx Python runtime install failed: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   }
 }

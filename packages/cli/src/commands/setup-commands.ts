@@ -16,7 +16,7 @@ async function runSetupArgs(
 function positiveInteger(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`Expected a positive integer, received ${value}`);
+    throw new InvalidArgumentError(`Expected a positive integer, received ${value}`);
   }
   return parsed;
 }
@@ -202,8 +202,8 @@ function shouldShowSetupEntryMenu(
 export function registerSetupCommands(program: Command, context: KtxCliCommandContext): void {
   const setup = program
     .command('setup')
-    .description('Set up or resume a local KTX project')
-    .addOption(new Option('--project-dir <path>', 'KTX project directory').hideHelp())
+    .description('Set up or resume a local ktx project')
+    .addOption(new Option('--project-dir <path>', 'ktx project directory').hideHelp())
     .option('--agents', 'Install agent integration only', false)
     .addOption(
       new Option('--target <target>', 'Agent target').choices([
@@ -295,7 +295,7 @@ export function registerSetupCommands(program: Command, context: KtxCliCommandCo
         .hideHelp(),
     )
     .addOption(
-      new Option('--skip-databases', 'Leave database setup incomplete; KTX cannot work until a database is added')
+      new Option('--skip-databases', 'Leave database setup incomplete; ktx cannot work until a database is added')
         .hideHelp()
         .default(false),
     )

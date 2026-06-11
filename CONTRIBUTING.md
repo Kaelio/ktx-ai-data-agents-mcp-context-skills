@@ -1,6 +1,6 @@
-# Contributing to KTX
+# Contributing to ktx
 
-Thanks for your interest in KTX. This page covers **how to contribute** and
+Thanks for your interest in **ktx**. This page covers **how to contribute** and
 the **contributor rewards program**. For development setup, repository
 layout, and verification commands, see the
 [Contributing guide in the docs](https://docs.kaelio.com/ktx/docs/community/contributing).
@@ -23,7 +23,7 @@ layout, and verification commands, see the
 ## Contributor rewards program
 
 We send merch to contributors whose pull requests get merged. The goal is
-to thank the people building KTX with us, not to drive volume.
+to thank the people building **ktx** with us, not to drive volume.
 
 ### How it works
 
@@ -76,7 +76,7 @@ See the [Community & Support](https://docs.kaelio.com/ktx/docs/community/support
 page for the full guide. The short version:
 
 - **Questions, "how do I...", setup help, sharing patterns**: join the
-  [KTX Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ).
+  [**ktx** Slack](https://join.slack.com/t/ktxcommunity/shared_invite/zt-3y9b44m1x-LVyNNJD5nwaZHq4XS29LMQ).
 - **Bugs**: use the [Bug report](.github/ISSUE_TEMPLATE/bug_report.yml)
   template.
 - **Feature requests**: use the
@@ -87,7 +87,7 @@ page for the full guide. The short version:
 
 ## Code of conduct
 
-KTX follows the
+**ktx** follows the
 [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
 Be respectful, assume good intent, and keep discussion focused on the
 project. Report concerns to the maintainers in Slack or by email at

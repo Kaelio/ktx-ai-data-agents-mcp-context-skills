@@ -153,7 +153,7 @@ async function detectCompositeRelationships(input: {
   } catch (error) {
     input.warnings.push({
       code: 'relationship_validation_failed',
-      message: `KTX composite relationship detection failed: ${error instanceof Error ? error.message : String(error)}`,
+      message: `ktx composite relationship detection failed: ${error instanceof Error ? error.message : String(error)}`,
       recoverable: true,
       metadata: { source: 'composite_relationship_detection' },
     });
@@ -185,7 +185,7 @@ function sqlExecutor(input: DiscoverKtxRelationshipsInput): {
       warnings: [
         {
           code: 'connector_capability_missing',
-          message: 'KTX scan connector cannot run read-only SQL relationship validation',
+          message: 'ktx scan connector cannot run read-only SQL relationship validation',
           recoverable: true,
           metadata: { capability: 'readOnlySql' },
         },
@@ -199,7 +199,7 @@ function sqlExecutor(input: DiscoverKtxRelationshipsInput): {
       warnings: [
         {
           code: 'relationship_validation_failed',
-          message: 'KTX scan connector advertises readOnlySql but does not expose executeReadOnly',
+          message: 'ktx scan connector advertises readOnlySql but does not expose executeReadOnly',
           recoverable: true,
           metadata: { capability: 'readOnlySql' },
         },

@@ -106,7 +106,7 @@ describe('repo-fetch', () => {
 
     const cacheGit = createSimpleGit(cacheDir);
     await cacheGit.addConfig('user.email', 'test@ktx.local');
-    await cacheGit.addConfig('user.name', 'KTX Test');
+    await cacheGit.addConfig('user.name', 'ktx Test');
     await writeFile(join(cacheDir, 'local-only.txt'), 'local commit\n', 'utf-8');
     await cacheGit.add('.');
     await cacheGit.commit('local-only divergent commit');

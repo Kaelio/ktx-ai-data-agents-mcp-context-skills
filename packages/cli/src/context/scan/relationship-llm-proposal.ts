@@ -182,7 +182,7 @@ function mapValidProposals(
     const toColumn = toTable ? findColumn(toTable, item.toColumn) : null;
     if (!fromTable || !toTable || !fromColumn || !toColumn) {
       warnings.push(
-        invalidReferenceWarning('KTX relationship LLM proposal referenced a table or column that is not in the schema.', {
+        invalidReferenceWarning('ktx relationship LLM proposal referenced a table or column that is not in the schema.', {
           proposal: item,
         }),
       );
@@ -218,7 +218,7 @@ function generationFailureWarning(error: unknown): KtxScanWarning {
   const message = error instanceof Error ? error.message : String(error);
   return {
     code: 'relationship_llm_proposal_failed',
-    message: `KTX relationship LLM proposal failed: ${message}`,
+    message: `ktx relationship LLM proposal failed: ${message}`,
     recoverable: true,
   };
 }
@@ -233,7 +233,7 @@ export async function proposeKtxRelationshipCandidatesWithLlm(
   const settings = mergeSettings(input.settings);
   const evidence = buildEvidencePacket(input.schema, input.profile, settings);
   const system = [
-    'You are helping KTX review possible SQL relationships before validation.',
+    'You are helping ktx review possible SQL relationships before validation.',
     'Use only the compact schema evidence. Propose likely primary keys and foreign keys for later SQL validation.',
     'Return structured output only; never assume a join is accepted.',
   ].join('\n');

@@ -65,7 +65,7 @@ export async function createKtxMcpServerFactory(input: {
       embeddingProvider,
     });
   } catch (error) {
-    io.stderr.write(`KTX MCP memory_ingest disabled: ${error instanceof Error ? error.message : String(error)}\n`);
+    io.stderr.write(`ktx MCP memory_ingest disabled: ${error instanceof Error ? error.message : String(error)}\n`);
   }
 
   return () =>

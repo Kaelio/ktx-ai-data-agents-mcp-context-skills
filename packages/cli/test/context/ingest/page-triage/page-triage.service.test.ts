@@ -198,7 +198,7 @@ describe('PageTriageService', () => {
         'Reusable outbound sequence:',
         '',
         '- Ask about current customer success expansion workflow.',
-        '- Position KTX as AI search visibility for CS teams.',
+        '- Position ktx as AI search visibility for CS teams.',
         '- Close with a discovery call request.',
       ].join('\n'),
       'utf-8',
@@ -233,7 +233,7 @@ describe('PageTriageService', () => {
             {
               candidateKey: 'cold-call-script',
               topic: 'Cold Call Script',
-              assertion: 'Cold call outreach should position KTX around AI search visibility for CS teams.',
+              assertion: 'Cold call outreach should position ktx around AI search visibility for CS teams.',
               rationale: 'The script gives a reusable outbound call sequence and positioning language.',
               evidenceChunkIds: ['00000000-0000-0000-0000-000000000101'],
               suggestedPageKey: 'cold-call-script',

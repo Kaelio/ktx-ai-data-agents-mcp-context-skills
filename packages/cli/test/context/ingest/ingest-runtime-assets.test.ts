@@ -34,7 +34,7 @@ function forbiddenProductPattern() {
 }
 
 describe('ingest runtime assets', () => {
-  it('resolves every reusable ingest skill from packaged KTX assets without server fallback', async () => {
+  it('resolves every reusable ingest skill from packaged ktx assets without server fallback', async () => {
     const registry = new SkillsRegistryService({ skillsDir });
     const expected = [...new Set([...adapterSkillNames, ...adapterReconcileSkillNames])].sort();
 
@@ -48,7 +48,7 @@ describe('ingest runtime assets', () => {
     }
   });
 
-  it('loads page-triage and light-extraction prompts from packaged KTX prompt assets', async () => {
+  it('loads page-triage and light-extraction prompts from packaged ktx prompt assets', async () => {
     const prompts = new PromptService({ promptsDir, partials: [] });
 
     for (const promptName of pageTriagePromptNames) {
@@ -61,7 +61,7 @@ describe('ingest runtime assets', () => {
     await expect(prompts.loadPrompt('skills/light_extraction')).resolves.toContain('# Light Context Extraction');
   });
 
-  it('packages historic-SQL table digest guidance from KTX assets', async () => {
+  it('packages historic-SQL table digest guidance from ktx assets', async () => {
     const registry = new SkillsRegistryService({ skillsDir });
     const skills = await registry.listSkills(['historic_sql_table_digest'], 'memory_agent');
 
@@ -77,7 +77,7 @@ describe('ingest runtime assets', () => {
     expect(body).not.toMatch(forbiddenProductPattern());
   });
 
-  it('packages historic-SQL patterns guidance from KTX assets', async () => {
+  it('packages historic-SQL patterns guidance from ktx assets', async () => {
     const registry = new SkillsRegistryService({ skillsDir });
     const skills = await registry.listSkills(['historic_sql_patterns'], 'memory_agent');
 

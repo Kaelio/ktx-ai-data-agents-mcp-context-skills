@@ -64,7 +64,7 @@ function fullOrigin(value: string): string {
 
 export function buildMcpSecurityConfig(input: McpSecurityConfigInput): McpSecurityConfig {
   if (!isLoopbackHost(input.host) && !input.token) {
-    throw new Error(`Binding KTX MCP to ${input.host} requires --token or KTX_MCP_TOKEN`);
+    throw new Error(`Binding ktx MCP to ${input.host} requires --token or KTX_MCP_TOKEN`);
   }
   const allowedHostSet = new Set<string>(DEFAULT_ALLOWED_HOSTS);
   if (!isLoopbackHost(input.host)) {
@@ -94,16 +94,16 @@ export function isMcpRequestAuthorized(
 ): McpAuthorizationResult {
   const host = headerValue(request.headers, 'host');
   if (!host || !config.allowedHosts.includes(normalizeHostHeader(host))) {
-    return { ok: false, status: 403, message: 'Host header is not allowed for KTX MCP.' };
+    return { ok: false, status: 403, message: 'Host header is not allowed for ktx MCP.' };
   }
   const origin = headerValue(request.headers, 'origin');
   if (origin && !config.allowedOrigins.includes(origin)) {
-    return { ok: false, status: 403, message: 'Origin header is not allowed for KTX MCP.' };
+    return { ok: false, status: 403, message: 'Origin header is not allowed for ktx MCP.' };
   }
   if (request.path === '/mcp' && config.token) {
     const auth = headerValue(request.headers, 'authorization');
     if (auth !== `Bearer ${config.token}`) {
-      return { ok: false, status: 401, message: 'Missing or invalid KTX MCP bearer token.' };
+      return { ok: false, status: 401, message: 'Missing or invalid ktx MCP bearer token.' };
     }
   }
   return { ok: true };

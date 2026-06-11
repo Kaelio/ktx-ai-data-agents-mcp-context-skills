@@ -193,7 +193,7 @@ function isClaudeRateLimitResult(result: SDKResultMessage, rejectedSignal: RateL
 }
 
 function claudeRateLimitSignal(message: SDKMessage): RateLimitSignal | null {
-  const record = message as unknown as Record<string, unknown>;
+  const record = message as Record<string, unknown>;
   if (record.type === 'rate_limit_event') {
     const info = record.rate_limit_info as Record<string, unknown> | undefined;
     if (!info) return null;
@@ -253,7 +253,7 @@ function baseOptions(input: {
         ? { behavior: 'allow', toolUseID: options.toolUseID }
         : {
             behavior: 'deny',
-            message: `KTX claude-code runtime only permits current KTX MCP tools; denied ${toolName}.`,
+            message: `ktx claude-code runtime only permits current ktx MCP tools; denied ${toolName}.`,
             toolUseID: options.toolUseID,
           },
     permissionMode: 'dontAsk',

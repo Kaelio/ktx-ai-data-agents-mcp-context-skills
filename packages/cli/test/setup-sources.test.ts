@@ -57,7 +57,7 @@ function prompts(values: {
 }
 
 function connectionNamePrompt(label: string): string {
-  return `Name this ${label} connection\nKTX will use this short name in commands and config. You can rename it now.`;
+  return `Name this ${label} connection\nktx will use this short name in commands and config. You can rename it now.`;
 }
 
 function textInputPrompt(message: string): string {
@@ -445,7 +445,7 @@ describe('setup sources step', () => {
 
     expect(pickNotionRootPages).toHaveBeenCalledOnce();
     expect(testPrompts.select).toHaveBeenCalledWith({
-      message: 'Which Notion pages should KTX ingest?',
+      message: 'Which Notion pages should ktx ingest?',
       options: [
         { value: 'all_accessible', label: 'All pages the integration can access' },
         { value: 'selected_roots', label: 'Specific pages and their subpages (choose them in a picker)' },
@@ -673,7 +673,7 @@ describe('setup sources step', () => {
   it('lets visible Metabase mapping surface refresh and validation failures', async () => {
     await addPrimarySource();
     const runMapping = vi.fn(async (_projectDir: string, _connectionId: string, io: KtxCliIo) => {
-      io.stderr.write('1: Metabase database does not match KTX connection database\n');
+      io.stderr.write('1: Metabase database does not match ktx connection database\n');
       return 1;
     });
     const io = makeIo();
@@ -704,7 +704,7 @@ describe('setup sources step', () => {
         stderr: expect.objectContaining({ write: expect.any(Function) }),
       }),
     );
-    expect(io.stderr()).toContain('1: Metabase database does not match KTX connection database');
+    expect(io.stderr()).toContain('1: Metabase database does not match ktx connection database');
     expect(io.stderr()).not.toContain('Metabase mapping validation failed');
     expect(testPrompts.log).toHaveBeenCalledWith('Validating Metabase mapping...');
     expect(testPrompts.select).toHaveBeenCalledWith(
@@ -761,7 +761,7 @@ describe('setup sources step', () => {
     expect(testPrompts.multiselect).toHaveBeenCalledWith(
       expect.objectContaining({
         message:
-          'Which context sources should KTX ingest?\nUse Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+          'Which context sources should ktx ingest?\nUse Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
       }),
     );
     const options = vi.mocked(testPrompts.multiselect).mock.calls[0]?.[0].options ?? [];
@@ -1404,7 +1404,7 @@ describe('setup sources step', () => {
     ).resolves.toEqual({ status: 'ready', projectDir, connectionIds: ['notion-main'] });
 
     expect(testPrompts.select).toHaveBeenCalledWith({
-      message: 'How should KTX find your Notion integration token?',
+      message: 'How should ktx find your Notion integration token?',
       options: [
         { value: 'keep', label: 'Keep existing credential' },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
@@ -1473,7 +1473,7 @@ describe('setup sources step', () => {
       initialValue: 'https://metabase-old.example.com',
     });
     expect(testPrompts.select).toHaveBeenCalledWith({
-      message: 'How should KTX find your Metabase API key?',
+      message: 'How should ktx find your Metabase API key?',
       options: [
         { value: 'keep', label: 'Keep existing credential' },
         { value: 'paste', label: 'Paste a key and save it as a local secret file' },
@@ -1817,7 +1817,7 @@ describe('setup sources step', () => {
         select: ['env', 'back', 'env', 'all_accessible'],
         text: ['notion-main'],
         deps: { validateNotion: vi.fn(async () => ({ ok: true as const, detail: 'roots=0' })) },
-        repeatedSelectMessage: 'How should KTX find your Notion integration token?',
+        repeatedSelectMessage: 'How should ktx find your Notion integration token?',
       },
     ];
 
@@ -1961,7 +1961,7 @@ describe('setup sources step', () => {
 
     expect(testPrompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Multiple dbt projects found — which one should KTX use?',
+        message: 'Multiple dbt projects found — which one should ktx use?',
       }),
     );
     expect(testPrompts.text).toHaveBeenCalledTimes(2);

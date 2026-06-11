@@ -157,9 +157,9 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       layout: { versionDir: '/runtime/0.2.0' },
     });
 
-    expect(io.stderr()).toContain('Installing KTX Python runtime (local-embeddings) with uv...');
-    expect(io.stderr()).toContain('KTX Python runtime ready: /runtime/0.2.0');
-    expect(io.stderr().match(/Installing KTX Python runtime/g)).toHaveLength(1);
+    expect(io.stderr()).toContain('Installing ktx Python runtime (local-embeddings) with uv...');
+    expect(io.stderr()).toContain('ktx Python runtime ready: /runtime/0.2.0');
+    expect(io.stderr().match(/Installing ktx Python runtime/g)).toHaveLength(1);
   });
 
   it('shows runtime installation progress with the CLI spinner', async () => {
@@ -181,8 +181,8 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
     });
 
     expect(events).toEqual([
-      'start:Installing KTX Python runtime (local-embeddings) with uv...',
-      'stop:KTX Python runtime ready: /runtime/0.2.0',
+      'start:Installing ktx Python runtime (local-embeddings) with uv...',
+      'stop:ktx Python runtime ready: /runtime/0.2.0',
     ]);
   });
 
@@ -221,7 +221,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
         readStatus: vi.fn(async () => missingStatus()),
         installRuntime,
       }),
-    ).rejects.toThrow('KTX Python runtime is required for this command. Run: ktx admin runtime install --yes');
+    ).rejects.toThrow('ktx Python runtime is required for this command. Run: ktx admin runtime install --yes');
 
     expect(installRuntime).not.toHaveBeenCalled();
   });
@@ -251,8 +251,8 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       force: false,
     });
     expect(events).toEqual([
-      'start:Installing KTX Python runtime (core) with uv...',
-      'stop:KTX Python runtime ready: /runtime/0.2.0',
+      'start:Installing ktx Python runtime (core) with uv...',
+      'stop:ktx Python runtime ready: /runtime/0.2.0',
     ]);
   });
 
@@ -274,7 +274,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
     });
 
     expect(confirmInstall).toHaveBeenCalledWith(
-      'KTX needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
+      'ktx needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
       io.io,
     );
     expect(installRuntime).toHaveBeenCalledWith({
@@ -282,7 +282,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
       features: ['core'],
       force: false,
     });
-    expect(events).toContainEqual('start:Installing KTX Python runtime (core) with uv...');
+    expect(events).toContainEqual('start:Installing ktx Python runtime (core) with uv...');
   });
 
   it('uses injected runtime confirmation instead of reading process TTY directly', async () => {
@@ -306,10 +306,10 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
     ).resolves.toBe(compute);
 
     expect(confirmInstall).toHaveBeenCalledWith(
-      'KTX needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
+      'ktx needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
       io.io,
     );
-    expect(events).toContainEqual('start:Installing KTX Python runtime (core) with uv...');
+    expect(events).toContainEqual('start:Installing ktx Python runtime (core) with uv...');
   });
 
   it('can decide default runtime prompting from injected io capabilities', async () => {
@@ -325,6 +325,6 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
         installRuntime: vi.fn(),
         createPythonCompute: () => ({ query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() }),
       }),
-    ).rejects.toThrow('KTX Python runtime installation was cancelled');
+    ).rejects.toThrow('ktx Python runtime installation was cancelled');
   });
 });

@@ -32,7 +32,7 @@ export function runtimeWheelPyproject() {
   return `[project]
 name = "${RUNTIME_WHEEL_DISTRIBUTION_NAME}"
 version = "${RUNTIME_WHEEL_PACKAGE_VERSION}"
-description = "Bundled Python runtime payload for the KTX npm package"
+description = "Bundled Python runtime payload for the ktx npm package"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
@@ -76,7 +76,7 @@ packages = ["semantic_layer", "ktx_daemon"]
 export function runtimeWheelReadme() {
   return `# kaelio-ktx Python runtime
 
-Bundled Python runtime wheel for KTX.
+Bundled Python runtime wheel for ktx.
 
 This wheel is built from the repository's \`semantic_layer\` and
 \`ktx_daemon\` source trees for inclusion in the npm package. It is not a

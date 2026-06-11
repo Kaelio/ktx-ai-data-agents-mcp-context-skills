@@ -52,7 +52,7 @@ export async function runKtxMcpStdioServer(options: RunKtxMcpStdioServerOptions)
     };
     transport.onclose = () => settle(resolve);
     transport.onerror = (error) => {
-      options.io?.stderr.write(`KTX MCP stdio transport error: ${error.message}\n`);
+      options.io?.stderr.write(`ktx MCP stdio transport error: ${error.message}\n`);
       settle(() => reject(error));
     };
     stdin.once('end', closeTransport);

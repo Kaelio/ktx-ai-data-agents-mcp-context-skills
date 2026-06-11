@@ -20,8 +20,8 @@ async function readCiWorkflowOrSkip(testContext) {
   return readFile(ciWorkflowPath, 'utf-8');
 }
 
-describe('KTX CI artifact upload contract', () => {
-  it('uploads verified KTX package artifacts from the standalone check job', async (testContext) => {
+describe('ktx CI artifact upload contract', () => {
+  it('uploads verified ktx package artifacts from the standalone check job', async (testContext) => {
     const workflow = await readCiWorkflowOrSkip(testContext);
     if (workflow === null) {
       return;

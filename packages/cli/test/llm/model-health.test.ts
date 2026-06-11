@@ -4,7 +4,7 @@ import { runKtxLlmHealthCheck } from '../../src/llm/model-health.js';
 
 const anthropicModel = { modelId: 'claude-sonnet-4-6' } as never;
 
-describe('KTX LLM health check', () => {
+describe('ktx LLM health check', () => {
   it('runs a minimal non-streaming model call through the configured provider', async () => {
     const generateText = vi.fn(async () => ({ text: 'ok' }));
     const createAnthropic = vi.fn(() => vi.fn(() => anthropicModel));

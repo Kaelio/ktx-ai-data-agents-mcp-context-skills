@@ -1,6 +1,6 @@
 # ktx-daemon
 
-`ktx-daemon` is the portable Python compute package for KTX.
+`ktx-daemon` is the portable Python compute package for **ktx**.
 
 It supports portable compute in two modes:
 
@@ -99,6 +99,6 @@ Code execution is off by default. When enabled, it runs Python `exec` in the
 daemon process with the same in-process boundary as the one-shot
 `code-execute` command and does not provide OS-level sandboxing.
 
-HTTP code execution uses the standalone KTX boundary. It does not forward
+HTTP code execution uses the standalone **ktx** boundary. It does not forward
 caller authorization headers to a host app and does not connect scratchpad or
 visualization helpers to host application APIs.

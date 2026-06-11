@@ -28,7 +28,7 @@ export function normalizeKtxRuntimeToolOutput(value: unknown): KtxRuntimeToolOut
 
 function assertObjectSchema(name: string, schema: z.ZodType): asserts schema is z.ZodObject<z.ZodRawShape> {
   if (!(schema instanceof z.ZodObject)) {
-    throw new Error(`KTX runtime tool "${name}" must use z.object input schema for claude-code`);
+    throw new Error(`ktx runtime tool "${name}" must use z.object input schema for claude-code`);
   }
 }
 
@@ -75,7 +75,7 @@ export function createRuntimeToolDescriptorFromAiTool(name: string, aiSdkTool: T
     inputSchema: aiSdkTool.inputSchema as KtxRuntimeToolDescriptor['inputSchema'],
     execute: async (input) => {
       if (typeof aiSdkTool.execute !== 'function') {
-        throw new Error(`KTX runtime tool "${name}" has no execute function`);
+        throw new Error(`ktx runtime tool "${name}" has no execute function`);
       }
       return normalizeKtxRuntimeToolOutput(
         await aiSdkTool.execute(input as never, { toolCallId: `runtime-${name}` } as never),

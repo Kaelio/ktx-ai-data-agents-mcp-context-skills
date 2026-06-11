@@ -107,7 +107,7 @@ export interface KtxSnowflakeScanConnectorOptions {
   connectionId: string;
   connection: KtxSnowflakeConnectionConfig | undefined;
   /**
-   * KTX project directory. When provided, snowflake-sdk's logger is redirected to
+   * ktx project directory. When provided, snowflake-sdk's logger is redirected to
    * `<projectDir>/.ktx/logs/snowflake.log` so its JSON output does not bleed into
    * the CLI's TTY. Tests that use a fake driverFactory can leave this undefined.
    */

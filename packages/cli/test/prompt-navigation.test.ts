@@ -7,8 +7,8 @@ describe('prompt navigation helpers', () => {
   });
 
   it('adds a blank separator between multiline menu copy and the option list', () => {
-    expect(withMenuOptionSpacing('Which embedding option should KTX use?\n\nKTX uses embeddings for search.')).toBe(
-      'Which embedding option should KTX use?\n\nKTX uses embeddings for search.\n',
+    expect(withMenuOptionSpacing('Which embedding option should ktx use?\n\nktx uses embeddings for search.')).toBe(
+      'Which embedding option should ktx use?\n\nktx uses embeddings for search.\n',
     );
   });
 
@@ -25,10 +25,10 @@ describe('prompt navigation helpers', () => {
   it('adds a blank separator between text input helper copy and the editable value', () => {
     expect(
       withTextInputNavigation(
-        'Name this PostgreSQL connection\nKTX will use this short name in commands and config. You can rename it now.',
+        'Name this PostgreSQL connection\nktx will use this short name in commands and config. You can rename it now.',
       ),
     ).toBe(
-      'Name this PostgreSQL connection\n│\n│  KTX will use this short name in commands and config. You can rename it now.\n│  Press Escape to go back.\n│',
+      'Name this PostgreSQL connection\n│\n│  ktx will use this short name in commands and config. You can rename it now.\n│  Press Escape to go back.\n│',
     );
   });
 
@@ -39,10 +39,10 @@ describe('prompt navigation helpers', () => {
   it('normalizes already hinted text input prompts without duplicating the hint', () => {
     expect(
       withTextInputNavigation(
-        'Name this PostgreSQL connection\nKTX will use this short name in commands and config. You can rename it now.\nPress Escape to go back.',
+        'Name this PostgreSQL connection\nktx will use this short name in commands and config. You can rename it now.\nPress Escape to go back.',
       ),
     ).toBe(
-      'Name this PostgreSQL connection\n│\n│  KTX will use this short name in commands and config. You can rename it now.\n│  Press Escape to go back.\n│',
+      'Name this PostgreSQL connection\n│\n│  ktx will use this short name in commands and config. You can rename it now.\n│  Press Escape to go back.\n│',
     );
   });
 
@@ -53,7 +53,7 @@ describe('prompt navigation helpers', () => {
 
   it('is idempotent when text input navigation with body is applied twice', () => {
     const once = withTextInputNavigation(
-      'Name this PostgreSQL connection\nKTX will use this short name in commands and config.',
+      'Name this PostgreSQL connection\nktx will use this short name in commands and config.',
     );
     expect(withTextInputNavigation(once)).toBe(once);
   });

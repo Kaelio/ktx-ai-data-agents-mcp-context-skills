@@ -77,7 +77,7 @@ import type { SourceAdapter } from './types.js';
 
 const promptsDir = fileURLToPath(new URL('../../prompts', import.meta.url));
 const skillsDir = fileURLToPath(new URL('../../skills', import.meta.url));
-const LOCAL_AUTHOR = { name: 'KTX Local', email: 'local@ktx.local' };
+const LOCAL_AUTHOR = { name: 'ktx Local', email: 'local@ktx.local' };
 const LOCAL_SHAPE_WARNING = 'Local ingest validates semantic-layer YAML shape only.';
 const INGEST_TRACE_LEVELS = new Set<IngestTraceLevel>(['error', 'info', 'debug', 'trace']);
 
@@ -232,8 +232,9 @@ class LocalSlPythonPort implements SlPythonPort {
 }
 
 class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
-  private validateParsedSource(sourceName: string, parsed: Record<string, unknown>) {
-    const isOverlay = parsed.table == null && parsed.sql == null;
+  private validateParsedSource(sourceName: string, parsed: unknown) {
+    const fields = (parsed ?? {}) as { table?: unknown; sql?: unknown };
+    const isOverlay = fields.table == null && fields.sql == null;
     const result = (isOverlay ? sourceOverlaySchema : sourceDefinitionSchema).safeParse(parsed);
     return result.success
       ? { errors: [], warnings: [LOCAL_SHAPE_WARNING] }
@@ -255,7 +256,7 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
       const { sources, loadErrors } = await deps.semanticLayerService.loadAllSources(connectionId);
       const source = sources.find((candidate) => candidate.name === sourceName);
       if (source) {
-        return this.validateParsedSource(sourceName, source as unknown as Record<string, unknown>);
+        return this.validateParsedSource(sourceName, source);
       }
       const detail =
         loadErrors.length > 0
@@ -279,7 +280,7 @@ class LocalShapeOnlySlValidator implements SlValidatorPort<SlValidationDeps> {
     }
 
     try {
-      const parsed = YAML.parse(file.content) as unknown as Record<string, unknown>;
+      const parsed = YAML.parse(file.content) as Record<string, unknown>;
       return this.validateParsedSource(sourceName, parsed);
     } catch (error) {
       return {

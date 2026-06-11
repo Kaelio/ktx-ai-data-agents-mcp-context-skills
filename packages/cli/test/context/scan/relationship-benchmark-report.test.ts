@@ -258,7 +258,7 @@ describe('relationship benchmark report', () => {
       }),
     );
 
-    expect(markdown).toContain('# KTX Relationship Discovery Benchmark Evidence');
+    expect(markdown).toContain('# ktx Relationship Discovery Benchmark Evidence');
     expect(markdown).toContain(
       '| demo_b2b_no_declared_constraints | smoke | declared_pks_and_declared_fks_removed | run | no | 0.500 | 0.000 | 0.000 | 0 |',
     );

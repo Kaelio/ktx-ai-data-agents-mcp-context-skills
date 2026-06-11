@@ -9,9 +9,9 @@ import { ManagedPythonDaemonStartError } from '../src/managed-python-daemon.js';
 import { type KtxSetupEmbeddingsPromptAdapter, runKtxSetupEmbeddingsStep } from '../src/setup-embeddings.js';
 
 const EMBEDDING_OPTION_PROMPT_MESSAGE = [
-  'Which embedding option should KTX use?',
+  'Which embedding option should ktx use?',
   '',
-  'KTX uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
+  'ktx uses embeddings for semantic search over semantic-layer sources, wiki context, schema metadata, ' +
     'and relationship evidence.',
 ].join('\n');
 
@@ -128,7 +128,7 @@ describe('setup embeddings step', () => {
     });
     expect(vi.mocked(prompts.select).mock.calls.map((call) => call[0].message)).toEqual([
       EMBEDDING_OPTION_PROMPT_MESSAGE,
-      'How should KTX find your OpenAI embedding API key?',
+      'How should ktx find your OpenAI embedding API key?',
       EMBEDDING_OPTION_PROMPT_MESSAGE,
     ]);
   });
@@ -286,7 +286,7 @@ describe('setup embeddings step', () => {
     const io = makeIo();
     const ensureLocalEmbeddings = vi.fn(async () => {
       throw new Error(
-        'KTX Python runtime is required for this command. Run: ktx admin runtime install --feature local-embeddings --yes',
+        'ktx Python runtime is required for this command. Run: ktx admin runtime install --feature local-embeddings --yes',
       );
     });
 
@@ -304,7 +304,7 @@ describe('setup embeddings step', () => {
 
     expect(result.status).toBe('failed');
     expect(io.stderr()).toContain(
-      'KTX Python runtime is required for this command. Run: ktx admin runtime install --feature local-embeddings --yes',
+      'ktx Python runtime is required for this command. Run: ktx admin runtime install --feature local-embeddings --yes',
     );
   });
 
@@ -361,7 +361,7 @@ describe('setup embeddings step', () => {
     );
 
     expect(result.status).toBe('failed');
-    expect(io.stderr()).toContain('Recent KTX daemon stderr:');
+    expect(io.stderr()).toContain('Recent ktx daemon stderr:');
     expect(io.stderr()).toContain('daemon traceback line 6');
     expect(io.stderr()).toContain('daemon traceback line 45');
     expect(io.stderr()).not.toContain('daemon traceback line 5');
@@ -395,7 +395,7 @@ describe('setup embeddings step', () => {
 
     expect(result.status).toBe('failed');
     expect(io.stderr()).toContain('Local embedding health check failed: fetch failed: connect ECONNREFUSED');
-    expect(io.stderr()).toContain('Recent KTX daemon stderr:');
+    expect(io.stderr()).toContain('Recent ktx daemon stderr:');
     expect(io.stderr()).toContain('daemon startup traceback 6');
     expect(io.stderr()).toContain('daemon startup traceback 45');
     expect(io.stderr()).not.toContain('daemon startup traceback 5');
@@ -425,7 +425,7 @@ describe('setup embeddings step', () => {
     );
 
     expect(result.status).toBe('failed');
-    expect(io.stderr()).not.toContain('Recent KTX daemon stderr:');
+    expect(io.stderr()).not.toContain('Recent ktx daemon stderr:');
   });
 
   it('uses fixed OpenAI defaults and only asks for credentials when OpenAI is selected', async () => {
@@ -506,7 +506,7 @@ describe('setup embeddings step', () => {
     });
     expect(prompts.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Local embeddings are not reachable. Start the local KTX daemon, then retry.',
+        message: 'Local embeddings are not reachable. Start the local ktx daemon, then retry.',
         options: expect.arrayContaining([expect.objectContaining({ value: 'openai' })]),
       }),
     );

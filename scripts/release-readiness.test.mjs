@@ -102,7 +102,7 @@ async function writeReadyFixture(root, options = {}) {
 }
 
 describe('release readiness policy', () => {
-  it('reads the checked release policy path from the KTX root', async () => {
+  it('reads the checked release policy path from the ktx root', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ktx-release-policy-test-'));
     try {
       const policy = releasePolicy();

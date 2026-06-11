@@ -17,7 +17,7 @@ The copied project initializes its own Git repository on first use.
 
 ## orbit-relationship-verification
 
-`orbit-relationship-verification/` is a checked-in KTX project used by
+`orbit-relationship-verification/` is a checked-in **ktx** project used by
 `pnpm run relationships:verify-orbit`. It points the `orbit` SQLite connection
 at the Orbit-style no-declared-constraint relationship fixture and verifies that
 relationship enrichment writes nine accepted joins without requiring a local
@@ -27,7 +27,7 @@ warehouse credential.
 
 `postgres-historic/` is a manual Docker-backed smoke for Postgres
 query-history ingest via `pg_stat_statements`. It verifies setup, staged
-query-history artifacts, KTX daemon batch SQL analysis, bounded pattern
+query-history artifacts, **ktx** daemon batch SQL analysis, bounded pattern
 WorkUnit shards, and no-WorkUnit idempotency for unchanged bucketed table
 inputs and pattern shards.
 

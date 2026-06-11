@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLocalKtxLlmProviderFromConfig, createLocalKtxLlmRuntimeFromConfig } from '../../../src/context/llm/local-config.js';
 
-describe('local KTX LLM runtime config', () => {
+describe('local ktx LLM runtime config', () => {
   it('creates a Claude Code runtime for claude-code backend without creating an AI SDK provider', () => {
     const runtime = createLocalKtxLlmRuntimeFromConfig(
       {

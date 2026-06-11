@@ -29,7 +29,7 @@ function sdk(): LookerSdkPort {
 }
 
 describe('DefaultLookerConnectionClientFactory', () => {
-  it('resolves credentials by Looker connection id and creates a KTX Looker client', async () => {
+  it('resolves credentials by Looker connection id and creates a ktx Looker client', async () => {
     const fakeSdk = sdk();
     const resolver: LookerCredentialResolver = {
       resolve: vi.fn().mockResolvedValue({

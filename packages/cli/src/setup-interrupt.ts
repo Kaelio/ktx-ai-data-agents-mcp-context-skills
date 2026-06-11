@@ -4,7 +4,7 @@ import { cancel, confirm, isCancel as isClackCancel } from '@clack/prompts';
 
 export class KtxSetupExitError extends Error {
   constructor() {
-    super('KTX setup exit requested');
+    super('ktx setup exit requested');
     this.name = 'KtxSetupExitError';
   }
 }
