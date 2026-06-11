@@ -263,6 +263,26 @@ and route ingest, setup, memory, indexing, and docs through it. Do not add an
 `auto_commit`-style switch unless the user explicitly asks for staged-only runs
 and accepts the extra runtime path.
 
+## Code Comments
+
+Code must be self-explanatory. A comment exists only to state a constraint the
+code cannot show; everything else belongs in the PR description or nowhere.
+
+- **MUST**: Keep each comment to 1-3 lines stating only what the code cannot
+  show: a cross-file invariant ("error-severity issues never reach here — the
+  doctor exits on them first"), a required ordering ("ktx.yaml is written
+  before git init, so a crash cannot leave a bare `.git`"), or a library quirk
+  ("zod reports unknown record keys as `invalid_key`").
+- **MUST**: State each invariant once, at the public entry point. Do not repeat
+  the same guarantee across a helper, its wrapper, and the call site.
+- **MUST NOT**: Write prose comment blocks — design rationale, alternatives
+  considered, change narration ("is now written before…"), caller enumerations
+  ("shared by X, Y, and Z"), or restatements of what the code already shows.
+  That is the author addressing the reviewer, and it rots once merged.
+- **MAY**: Open a regression test with a 1-3 line comment stating the scenario
+  it guards when the test name cannot carry it. Omit design history and
+  references to removed designs.
+
 ## TypeScript Standards
 
 - Use Node 22+ and pnpm workspace commands.
