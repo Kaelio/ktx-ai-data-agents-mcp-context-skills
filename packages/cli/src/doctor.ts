@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { KtxConfigIssue } from './context/project/config.js';
+import { shouldUseColorOutput } from './io/tty.js';
 import { KTX_NEXT_STEP_DIRECT_COMMANDS } from './next-steps.js';
 import type { BuildProjectStatusOptions } from './status-project.js';
 
@@ -232,12 +233,6 @@ const GROUP_LABEL: Record<DoctorGroup, string> = {
   search: 'Semantic search',
   history: 'Query history',
 };
-
-function shouldUseColor(io: KtxDoctorIo): boolean {
-  if (io.stdout.isTTY !== true) return false;
-  const env = process.env;
-  return !env.NO_COLOR && env.TERM !== 'dumb' && !env.CI;
-}
 
 function styleStatus(useColor: boolean, status: DoctorStatus, text: string): string {
   if (!useColor) return text;
@@ -480,7 +475,7 @@ export function renderInvalidConfigMessage(
     return;
   }
 
-  const useColor = shouldUseColor(io);
+  const useColor = shouldUseColorOutput(io.stdout);
   const dim = (text: string) => styleDim(useColor, text);
   const bold = (text: string) => styleBold(useColor, text);
   const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
@@ -522,7 +517,7 @@ export function renderValidConfigMessage(
     return;
   }
 
-  const useColor = shouldUseColor(io);
+  const useColor = shouldUseColorOutput(io.stdout);
   const dim = (text: string) => styleDim(useColor, text);
   const bold = (text: string) => styleBold(useColor, text);
   const status = (s: DoctorStatus, text: string) => styleStatus(useColor, s, text);
@@ -557,7 +552,7 @@ export function renderMissingProjectMessage(
     return;
   }
 
-  const useColor = shouldUseColor(io);
+  const useColor = shouldUseColorOutput(io.stdout);
   const dim = (text: string) => styleDim(useColor, text);
   const bold = (text: string) => styleBold(useColor, text);
   const abbreviated = abbreviateHome(projectDir) ?? projectDir;
@@ -638,7 +633,7 @@ export async function runKtxDoctor(
         io.stdout.write(
           renderProjectStatus(projectStatus, {
             verbose,
-            useColor: shouldUseColor(io),
+            useColor: shouldUseColorOutput(io.stdout),
             durationMs: Date.now() - startedAt,
             toolchainChecks,
           }),
@@ -651,7 +646,7 @@ export async function runKtxDoctor(
     const report: DoctorReport = { title: 'ktx status', checks: setupChecks };
     const renderOptions: RenderOptions = {
       verbose: args.verbose ?? false,
-      useColor: shouldUseColor(io),
+      useColor: shouldUseColorOutput(io.stdout),
       durationMs: Date.now() - startedAt,
       command: args.command,
     };

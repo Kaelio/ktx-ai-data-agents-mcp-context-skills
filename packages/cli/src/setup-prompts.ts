@@ -12,8 +12,10 @@ import {
   text,
 } from '@clack/prompts';
 import type { KtxCliIo } from './cli-runtime.js';
-import { isWritableTtyOutput } from './io/tty.js';
+import { unicodeSupported } from './io/symbols.js';
+import { colorDepthForOutput, isWritableTtyOutput } from './io/tty.js';
 import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-navigation.js';
+import { renderKtxSetupBanner } from './setup-banner.js';
 import { revealPassword } from './reveal-password-prompt.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
 
@@ -215,6 +217,14 @@ export function createKtxSetupUiAdapter(): KtxSetupUiAdapter {
   return {
     intro(title, io) {
       if (isWritableTtyOutput(io.stdout)) {
+        const banner = renderKtxSetupBanner({
+          columns: io.stdout.columns ?? 80,
+          colorDepth: colorDepthForOutput(io.stdout),
+          unicode: unicodeSupported,
+        });
+        if (banner !== '') {
+          io.stdout.write(banner);
+        }
         intro(title, { output: io.stdout });
         return;
       }

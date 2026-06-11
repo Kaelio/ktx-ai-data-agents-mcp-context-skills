@@ -254,6 +254,9 @@ describe('setup prompt adapter', () => {
     ui.intro('ktx setup', io);
     ui.note('  $ ktx status', 'What you can do next', io);
 
+    const bannerWrite = output.write.mock.calls.map((call) => String(call[0])).join('');
+    expect(bannerWrite).toContain('██');
+    expect(bannerWrite).toContain('context layer for data agents');
     expect(mocks.intro).toHaveBeenCalledWith('ktx setup', { output });
     expect(mocks.note).toHaveBeenCalledWith('  $ ktx status', 'What you can do next', { output });
   });
