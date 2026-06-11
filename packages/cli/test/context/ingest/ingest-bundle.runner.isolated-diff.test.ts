@@ -1901,13 +1901,13 @@ describe('IngestBundleRunner isolated diff path', () => {
       });
       deps.agentRunner.runLoop = vi.fn(async (params: any) => {
         if (params.telemetryTags.operationName === 'ingest-isolated-diff-textual-resolver') {
-          const current = await params.toolSet.read_integration_file.execute({
+          const current = await params.toolSet.read_repair_file.execute({
             path: 'semantic-layer/warehouse/mart_account_segments.yaml',
           });
           expect(current.markdown).toContain('total_contract_arr_cents');
           const patch = await params.toolSet.read_failed_patch.execute({});
           expect(patch.markdown).toContain('account_count');
-          await params.toolSet.write_integration_file.execute({
+          await params.toolSet.write_repair_file.execute({
             path: 'semantic-layer/warehouse/mart_account_segments.yaml',
             content:
               'name: mart_account_segments\n' +
@@ -2105,7 +2105,6 @@ describe('IngestBundleRunner isolated diff path', () => {
       });
       const trace = await readFile(join(runtime.configDir, '.ktx/ingest-traces/job-final-gate-repair/trace.jsonl'), 'utf-8');
       expect(trace).toContain('gate_repair_repaired');
-      expect(trace).toContain('final_artifact_gates_after_gate_repair_finished');
       expect(trace).toContain('final_gate_repair_committed');
     } finally {
       await rm(runtime.homeDir, { recursive: true, force: true });
@@ -2191,7 +2190,8 @@ describe('IngestBundleRunner isolated diff path', () => {
       const reportCreate = vi.mocked(deps.reports.create).mock.calls.at(-1)?.[0] as any;
       expect(reportCreate.body.status).toBe('failed');
       expect(reportCreate.body.isolatedDiff).toMatchObject({
-        gateRepairAttempts: 1,
+        // Both attempts of the verify-based repair loop ran without an edit.
+        gateRepairAttempts: 2,
         gateRepairs: 0,
         gateRepairFailures: 1,
       });

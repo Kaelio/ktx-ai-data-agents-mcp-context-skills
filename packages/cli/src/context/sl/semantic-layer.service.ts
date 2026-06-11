@@ -521,6 +521,7 @@ export class SemanticLayerService {
     return null;
   }
 
+
   async validatePhysicalTableReferences(
     connectionId: string,
     sources: SemanticLayerSource[],
@@ -758,6 +759,23 @@ export class SemanticLayerService {
       // any column-without-type errors via the warehouse probe.
     }
     merged.push(toPush);
+
+    // A join target the engine cannot resolve fails every downstream gate and
+    // query with the error attributed to the phantom target. Reject it here,
+    // on the source that declares it, while the writing agent can still fix it.
+    const missingJoinTargets = findMissingJoinTargets(
+      toPush.joins,
+      merged.map((s) => s.name),
+    );
+    const joinTargetErrors = missingJoinTargets.map(
+      (missing) =>
+        `${toPush.name}: ${formatMissingJoinTarget(missing)}. Declare joins only to existing ` +
+        `semantic-layer sources in this connection, or drop the join and keep the relationship ` +
+        `in a column description.`,
+    );
+    if (joinTargetErrors.length > 0) {
+      return { errors: [...loadErrors, ...joinTargetErrors], warnings: [], perSourceWarnings: {} };
+    }
 
     const validatable = merged.filter((s) => s.table != null || s.sql != null);
     if (validatable.length === 0) {
@@ -1425,6 +1443,47 @@ function parseJoinColumns(
     return { localColumn: left.column, targetColumn: right.column };
   }
   return { localColumn: left.column, targetColumn: right.column };
+}
+
+export interface MissingJoinTarget {
+  to: string;
+  /** Source whose name matches only case-insensitively, if any — the usual authoring mistake. */
+  caseMismatch: string | null;
+}
+
+/**
+ * Join targets that do not exactly match a known source name. The Python
+ * engine resolves `joins[].to` by exact name within one connection's source
+ * set (`engine._collect_orphan_join_target_errors`) and `query()` raises on a
+ * miss, so anything looser here — case-insensitive matches, table refs,
+ * sources in other connections — would pass this gate and then fail
+ * query/validation as an orphan join target.
+ */
+export function findMissingJoinTargets(
+  joins: Array<{ to: string }> | undefined,
+  knownSourceNames: Iterable<string>,
+): MissingJoinTarget[] {
+  const known = new Set<string>();
+  const canonicalByLower = new Map<string, string>();
+  for (const name of knownSourceNames) {
+    known.add(name);
+    canonicalByLower.set(name.toLowerCase(), name);
+  }
+  const missing: MissingJoinTarget[] = [];
+  for (const join of joins ?? []) {
+    if (known.has(join.to)) {
+      continue;
+    }
+    missing.push({ to: join.to, caseMismatch: canonicalByLower.get(join.to.toLowerCase()) ?? null });
+  }
+  return missing;
+}
+
+export function formatMissingJoinTarget(missing: MissingJoinTarget): string {
+  const hint = missing.caseMismatch
+    ? `; join targets are case-sensitive — the source is named "${missing.caseMismatch}"`
+    : '';
+  return `join target "${missing.to}" does not exist${hint}`;
 }
 
 /**

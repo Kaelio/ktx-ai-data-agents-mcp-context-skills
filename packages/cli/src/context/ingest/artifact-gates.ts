@@ -2,12 +2,8 @@ import type { SemanticLayerService } from '../../context/sl/semantic-layer.servi
 import type { TouchedSlSource } from '../../context/tools/touched-sl-sources.js';
 import type { KnowledgeWikiService } from '../../context/wiki/knowledge-wiki.service.js';
 import { findMissingWikiRefs } from '../wiki/wiki-ref-validation.js';
+import type { WuValidationResult } from './stages/validate-wu-sources.js';
 import { findInvalidWikiBodyRefs } from './wiki-body-refs.js';
-
-interface TouchedValidationResult {
-  invalidSources: string[];
-  validSources: string[];
-}
 
 export interface FinalArtifactGateInput {
   connectionIds: string[];
@@ -15,7 +11,7 @@ export interface FinalArtifactGateInput {
   touchedSlSources: TouchedSlSource[];
   wikiService: KnowledgeWikiService;
   semanticLayerService: SemanticLayerService;
-  validateTouchedSources(touched: TouchedSlSource[]): Promise<TouchedValidationResult>;
+  validateTouchedSources(touched: TouchedSlSource[]): Promise<WuValidationResult>;
   tableExists(connectionId: string, tableRef: string): Promise<boolean>;
 }
 
@@ -38,54 +34,6 @@ function slEntityNames(source: Awaited<ReturnType<SemanticLayerService['loadAllS
     ...(source.columns ?? []).map((column) => column.name),
     ...(source.segments ?? []).map((segment) => segment.name),
   ]);
-}
-
-function uniqueTouchedSources(sources: TouchedSlSource[]): TouchedSlSource[] {
-  const seen = new Set<string>();
-  const unique: TouchedSlSource[] = [];
-  for (const source of sources) {
-    const key = `${source.connectionId}:${source.sourceName}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    unique.push(source);
-  }
-  return unique.sort((left, right) => {
-    const byConnection = left.connectionId.localeCompare(right.connectionId);
-    return byConnection === 0 ? left.sourceName.localeCompare(right.sourceName) : byConnection;
-  });
-}
-
-async function expandTouchedSlSourcesWithDirectJoinNeighbors(input: FinalArtifactGateInput): Promise<TouchedSlSource[]> {
-  const expanded = [...input.touchedSlSources];
-  const touchedByConnection = new Map<string, Set<string>>();
-  for (const source of input.touchedSlSources) {
-    const bucket = touchedByConnection.get(source.connectionId) ?? new Set<string>();
-    bucket.add(source.sourceName);
-    touchedByConnection.set(source.connectionId, bucket);
-  }
-
-  for (const connectionId of input.connectionIds) {
-    const touched = touchedByConnection.get(connectionId);
-    if (!touched || touched.size === 0) {
-      continue;
-    }
-    const { sources } = await input.semanticLayerService.loadAllSources(connectionId);
-    for (const source of sources) {
-      const sourceIsTouched = touched.has(source.name);
-      if (sourceIsTouched) {
-        for (const join of source.joins ?? []) {
-          expanded.push({ connectionId, sourceName: join.to });
-        }
-      }
-      if ((source.joins ?? []).some((join) => touched.has(join.to))) {
-        expanded.push({ connectionId, sourceName: source.name });
-      }
-    }
-  }
-
-  return uniqueTouchedSources(expanded);
 }
 
 async function validateWikiSlRefs(input: FinalArtifactGateInput): Promise<string[]> {
@@ -146,9 +94,13 @@ async function validateWikiRefs(input: FinalArtifactGateInput): Promise<string[]
 }
 
 export async function validateFinalIngestArtifacts(input: FinalArtifactGateInput): Promise<void> {
-  const touchedWithDependencies = await expandTouchedSlSourcesWithDirectJoinNeighbors(input);
-  const validation = await input.validateTouchedSources(touchedWithDependencies);
-  const errors: string[] = validation.invalidSources.map((source) => `semantic-layer validation failed for ${source}`);
+  // Join-neighbor expansion happens inside validateTouchedSources so work-unit
+  // validation and this gate check the same set — a source that passes one
+  // passes the other.
+  const validation = await input.validateTouchedSources(input.touchedSlSources);
+  const errors: string[] = validation.invalidSources.map(
+    (invalid) => `semantic-layer validation failed for ${invalid.source}: ${invalid.errors.join('; ')}`,
+  );
   errors.push(...(await validateWikiSlRefs(input)));
   const danglingWikiRefs = await validateWikiRefs(input);
   if (danglingWikiRefs.length > 0) {

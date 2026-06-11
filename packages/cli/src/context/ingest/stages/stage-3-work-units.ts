@@ -3,20 +3,16 @@ import { isAbortError } from '../../core/abort.js';
 import type { AgentRunnerPort, KtxRuntimeToolSet, RunLoopMetrics } from '../../../context/llm/runtime-port.js';
 import type { CaptureSession, MemoryAction } from '../../../context/memory/types.js';
 import { listTouchedSlSources, type TouchedSlSource } from '../../../context/tools/touched-sl-sources.js';
+import { formatInvalidWuSources, type WuValidationResult } from './validate-wu-sources.js';
 import type { WorkUnit } from '../types.js';
 
 const MAX_WORK_UNIT_PROMPT_CHARS = 240_000;
-
-interface TouchedValidationResult {
-  invalidSources: string[];
-  validSources: string[];
-}
 
 export interface WorkUnitExecutionDeps {
   sessionWorktreeGit: { revParseHead(): Promise<string | null> };
   agentRunner: AgentRunnerPort;
   validateWikiRefs?: (actions: MemoryAction[]) => Promise<string[]>;
-  validateTouchedSources: (touched: TouchedSlSource[]) => Promise<TouchedValidationResult>;
+  validateTouchedSources: (touched: TouchedSlSource[]) => Promise<WuValidationResult>;
   resetHardTo: (targetSha: string) => Promise<void>;
   buildSystemPrompt: (wu: WorkUnit) => string;
   buildUserPrompt: (wu: WorkUnit) => string;
@@ -156,7 +152,7 @@ export async function executeWorkUnit(deps: WorkUnitExecutionDeps, wu: WorkUnit)
       // Spec: invalid SL writes reset the session worktree to the WU's pre-state, WU is marked failed,
       // its files are absent from the Stage Index. Per-source surgical revert is the
       // memory-agent pattern — NOT the bundle-ingest pattern.
-      return failWithReset(`sl_validate failed for: ${validation.invalidSources.join(', ')}`);
+      return failWithReset(`sl_validate failed for: ${formatInvalidWuSources(validation.invalidSources)}`);
     }
   }
 

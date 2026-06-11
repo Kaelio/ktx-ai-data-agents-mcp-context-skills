@@ -1,13 +1,15 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import type { AgentRunnerPort, KtxRuntimeToolSet } from '../../../context/llm/runtime-port.js';
+import type {
+  ConstrainedRepairResult,
+  ConstrainedRepairToolContext,
+  RepairVerification,
+} from '../constrained-repair.js';
+import { buildDeleteRepairFileTool, runConstrainedRepairLoop } from '../constrained-repair.js';
 import type { IngestTraceWriter } from '../ingest-trace.js';
-import { traceTimed } from '../ingest-trace.js';
 
-export type TextualConflictResolutionResult =
-  | { status: 'repaired'; attempts: number; changedPaths: string[] }
-  | { status: 'failed'; attempts: number; reason: string };
+export type TextualConflictResolutionResult = ConstrainedRepairResult;
 
 export interface ResolveTextualConflictInput {
   agentRunner: AgentRunnerPort;
@@ -17,50 +19,15 @@ export interface ResolveTextualConflictInput {
   touchedPaths: string[];
   trace: IngestTraceWriter;
   reason: string;
+  /**
+   * Re-runs the artifact gates against the current worktree. A resolution —
+   * including an explicit no-change declaration for a redundant patch —
+   * counts as successful only when this passes.
+   */
+  verify(changedPaths: string[]): Promise<RepairVerification>;
   maxAttempts?: number;
   stepBudget?: number;
   abortSignal?: AbortSignal;
-}
-
-const readIntegrationFileSchema = z.object({
-  path: z.string().min(1),
-});
-
-const writeIntegrationFileSchema = z.object({
-  path: z.string().min(1),
-  content: z.string(),
-});
-
-const deleteIntegrationFileSchema = z.object({
-  path: z.string().min(1),
-});
-
-function normalizeRepoPath(path: string): string {
-  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '');
-  const parts = normalized.split('/').filter((part) => part.length > 0);
-  if (parts.length === 0 || parts.some((part) => part === '.' || part === '..')) {
-    throw new Error(`resolver path must be a repository-relative path: ${path}`);
-  }
-  return parts.join('/');
-}
-
-function assertAllowedPath(path: string, allowedPaths: ReadonlySet<string>): string {
-  const normalized = normalizeRepoPath(path);
-  if (!allowedPaths.has(normalized)) {
-    throw new Error(`resolver path not allowed: ${normalized}`);
-  }
-  return normalized;
-}
-
-async function readOptionalFile(path: string): Promise<{ exists: boolean; content: string }> {
-  try {
-    return { exists: true, content: await readFile(path, 'utf-8') };
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      return { exists: false, content: '' };
-    }
-    throw error;
-  }
 }
 
 function buildResolverSystemPrompt(): string {
@@ -71,10 +38,12 @@ You repair one failed ktx isolated-diff patch inside the integration worktree.
 <rules>
 - Preserve accepted integration content that is unrelated to the failed patch.
 - Incorporate the failed patch only when the patch evidence is compatible with the current file.
+- If the current file already represents everything the failed patch contributes (for example a
+  duplicate page created by another work unit), call declare_patch_redundant instead of editing.
 - Edit only paths exposed by the resolver tools.
 - Prefer the smallest text edit that makes the composed artifact coherent.
 - Do not create new facts that are absent from the current file or failed patch.
-- Stop after writing the repaired file content.
+- Stop after writing the repaired file content or declaring the patch redundant.
 </rules>`;
 }
 
@@ -85,7 +54,11 @@ function buildResolverUserPrompt(input: {
   reason: string;
   attempt: number;
   maxAttempts: number;
+  previousFailure: string | null;
 }): string {
+  const previousFailureBlock = input.previousFailure
+    ? `\nPrevious attempt did not pass the artifact gates:\n${input.previousFailure}\n`
+    : '';
   return `Repair isolated-diff textual conflict.
 
 WorkUnit: ${input.unitKey}
@@ -96,17 +69,22 @@ ${input.touchedPaths.map((path) => `- ${path}`).join('\n')}
 
 Git apply failure:
 ${input.reason}
-
-Use read_failed_patch first. Then read the touched integration files, write the
-repaired content, and stop.`;
+${previousFailureBlock}
+Use read_failed_patch first. Then read the touched integration files and either
+write the repaired content or, when the patch adds nothing the current files do
+not already cover, call declare_patch_redundant. Then stop.`;
 }
 
-function buildToolSet(input: {
-  workdir: string;
+function buildResolverExtraTools(input: {
   patchPath: string;
-  allowedPaths: ReadonlySet<string>;
-  editedPaths: Set<string>;
+  context: ConstrainedRepairToolContext;
 }): KtxRuntimeToolSet {
+  const declareSchema = z.object({
+    reason: z
+      .string()
+      .min(1)
+      .describe('Why the integration tree already represents everything this patch contributes.'),
+  });
   return {
     read_failed_patch: {
       name: 'read_failed_patch',
@@ -120,46 +98,18 @@ function buildToolSet(input: {
         };
       },
     },
-    read_integration_file: {
-      name: 'read_integration_file',
-      description: 'Read one allowed file from the current integration worktree.',
-      inputSchema: readIntegrationFileSchema,
-      execute: async ({ path }: z.infer<typeof readIntegrationFileSchema>) => {
-        const normalized = assertAllowedPath(path, input.allowedPaths);
-        const file = await readOptionalFile(join(input.workdir, normalized));
+    ...buildDeleteRepairFileTool(input.context),
+    declare_patch_redundant: {
+      name: 'declare_patch_redundant',
+      description:
+        'Declare that the failed patch needs no integration because the current worktree already ' +
+        'represents its content (for example a duplicate page created by another work unit).',
+      inputSchema: declareSchema,
+      execute: async ({ reason }: z.infer<typeof declareSchema>) => {
+        input.context.declareNoChange(reason);
         return {
-          markdown: file.exists ? file.content : `(missing file: ${normalized})`,
-          structured: { path: normalized, exists: file.exists },
-        };
-      },
-    },
-    write_integration_file: {
-      name: 'write_integration_file',
-      description: 'Replace one allowed integration worktree file with repaired text content.',
-      inputSchema: writeIntegrationFileSchema,
-      execute: async ({ path, content }: z.infer<typeof writeIntegrationFileSchema>) => {
-        const normalized = assertAllowedPath(path, input.allowedPaths);
-        const fullPath = join(input.workdir, normalized);
-        await mkdir(dirname(fullPath), { recursive: true });
-        await writeFile(fullPath, content, 'utf-8');
-        input.editedPaths.add(normalized);
-        return {
-          markdown: `Wrote ${normalized}`,
-          structured: { path: normalized, bytes: Buffer.byteLength(content) },
-        };
-      },
-    },
-    delete_integration_file: {
-      name: 'delete_integration_file',
-      description: 'Delete one allowed integration worktree file when the failed patch proves the deletion is correct.',
-      inputSchema: deleteIntegrationFileSchema,
-      execute: async ({ path }: z.infer<typeof deleteIntegrationFileSchema>) => {
-        const normalized = assertAllowedPath(path, input.allowedPaths);
-        await rm(join(input.workdir, normalized), { force: true });
-        input.editedPaths.add(normalized);
-        return {
-          markdown: `Deleted ${normalized}`,
-          structured: { path: normalized },
+          markdown: `Declared patch redundant: ${reason}`,
+          structured: { reason },
         };
       },
     },
@@ -169,72 +119,42 @@ function buildToolSet(input: {
 export async function resolveTextualConflict(
   input: ResolveTextualConflictInput,
 ): Promise<TextualConflictResolutionResult> {
-  const allowedPaths = new Set(input.touchedPaths.map(normalizeRepoPath));
-  const maxAttempts = input.maxAttempts ?? 1;
-  const stepBudget = input.stepBudget ?? 12;
-  let lastFailure = 'resolver did not run';
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const editedPaths = new Set<string>();
-    const traceData = {
+  const sortedTouchedPaths = [...input.touchedPaths].sort();
+  return runConstrainedRepairLoop({
+    agentRunner: input.agentRunner,
+    workdir: input.workdir,
+    allowedPaths: input.touchedPaths,
+    trace: input.trace,
+    tracePhase: 'resolver',
+    traceEventName: 'textual_conflict_resolver',
+    traceData: {
       unitKey: input.unitKey,
       patchPath: input.patchPath,
-      touchedPaths: [...allowedPaths].sort(),
-      attempt,
-      maxAttempts,
+      touchedPaths: sortedTouchedPaths,
       reason: input.reason,
-    };
-    const result = await traceTimed(input.trace, 'resolver', 'textual_conflict_resolver', traceData, async () =>
-      input.agentRunner.runLoop({
-        modelRole: 'repair',
-        systemPrompt: buildResolverSystemPrompt(),
-        userPrompt: buildResolverUserPrompt({
-          unitKey: input.unitKey,
-          patchPath: input.patchPath,
-          touchedPaths: [...allowedPaths].sort(),
-          reason: input.reason,
-          attempt,
-          maxAttempts,
-        }),
-        toolSet: buildToolSet({
-          workdir: input.workdir,
-          patchPath: input.patchPath,
-          allowedPaths,
-          editedPaths,
-        }),
-        stepBudget,
-        telemetryTags: {
-          operationName: 'ingest-isolated-diff-textual-resolver',
-          source: input.trace.context.sourceKey,
-          jobId: input.trace.context.jobId,
-          unitKey: input.unitKey,
-        },
-        abortSignal: input.abortSignal,
+    },
+    systemPrompt: buildResolverSystemPrompt(),
+    buildUserPrompt: ({ attempt, maxAttempts, previousFailure }) =>
+      buildResolverUserPrompt({
+        unitKey: input.unitKey,
+        patchPath: input.patchPath,
+        touchedPaths: sortedTouchedPaths,
+        reason: input.reason,
+        attempt,
+        maxAttempts,
+        previousFailure,
       }),
-    );
-
-    if (result.stopReason === 'error') {
-      lastFailure = result.error?.message ?? 'resolver agent loop errored';
-      await input.trace.event('error', 'resolver', 'textual_conflict_resolver_failed', traceData, result.error);
-      continue;
-    }
-
-    const changedPaths = [...editedPaths].sort();
-    if (changedPaths.length === 0) {
-      lastFailure = 'resolver completed without editing an allowed path';
-      await input.trace.event('error', 'resolver', 'textual_conflict_resolver_failed', {
-        ...traceData,
-        reason: lastFailure,
-      });
-      continue;
-    }
-
-    await input.trace.event('debug', 'resolver', 'textual_conflict_resolver_repaired', {
-      ...traceData,
-      changedPaths,
-    });
-    return { status: 'repaired', attempts: attempt, changedPaths };
-  }
-
-  return { status: 'failed', attempts: maxAttempts, reason: lastFailure };
+    buildExtraTools: (context) => buildResolverExtraTools({ patchPath: input.patchPath, context }),
+    verify: input.verify,
+    noChangeFailureReason: 'resolver completed without editing an allowed path or declaring the patch redundant',
+    telemetryTags: {
+      operationName: 'ingest-isolated-diff-textual-resolver',
+      source: input.trace.context.sourceKey,
+      jobId: input.trace.context.jobId,
+      unitKey: input.unitKey,
+    },
+    maxAttempts: input.maxAttempts,
+    stepBudget: input.stepBudget ?? 12,
+    abortSignal: input.abortSignal,
+  });
 }
