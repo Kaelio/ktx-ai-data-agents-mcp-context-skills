@@ -6,48 +6,35 @@ import type {
 } from '../../context/connections/query-executor.js';
 import { normalizeQueryRows } from '../../context/connections/query-executor.js';
 import { assertReadOnlySql, limitSqlForExecution } from '../../context/connections/read-only-sql.js';
-import type { FederatedMember } from '../../context/connections/federation.js';
-
-const ATTACH_TYPE_BY_DRIVER: Record<string, string> = {
-  postgres: 'postgres',
-  mysql: 'mysql',
-  sqlite: 'sqlite',
-};
+import { attachTypeForDriver, type FederatedMember } from '../../context/connections/federation.js';
 
 function quoteDuckdbIdentifier(id: string): string {
   return `"${id.replaceAll('"', '""')}"`;
 }
 
-/** @internal */
-export function attachTypeForDriver(driver: string): string {
-  const type = ATTACH_TYPE_BY_DRIVER[driver.toLowerCase()];
-  if (!type) {
-    throw new Error(`Driver "${driver}" cannot be attached by DuckDB federation.`);
-  }
-  return type;
-}
-
 function memberUrl(member: FederatedMember, env: NodeJS.ProcessEnv): string {
-  const raw = (member.config as { url?: unknown }).url;
-  if (typeof raw !== 'string' || raw.length === 0) {
+  if (member.url === undefined || member.url.length === 0) {
     throw new Error(`Federated member "${member.connectionId}" has no url in ktx.yaml.`);
   }
-  return resolveStringReference(raw, env);
+  return resolveStringReference(member.url, env);
 }
 
 /** @internal */
 export function buildAttachStatements(members: FederatedMember[], env: NodeJS.ProcessEnv): string[] {
-  const statements: string[] = [];
-  for (const member of members) {
-    const type = attachTypeForDriver(member.driver);
-    const url = memberUrl(member, env);
-    const safeUrl = url.replaceAll("'", "''");
-    statements.push(`INSTALL ${type}; LOAD ${type};`);
-    statements.push(
-      `ATTACH '${safeUrl}' AS ${quoteDuckdbIdentifier(member.connectionId)} (TYPE ${type}, READ_ONLY);`,
-    );
-  }
-  return statements;
+  const attachments = members.map((member) => ({
+    type: attachTypeForDriver(member.driver),
+    url: memberUrl(member, env),
+    alias: member.connectionId,
+  }));
+
+  const loadStatements = [...new Set(attachments.map((a) => a.type))].map(
+    (type) => `INSTALL ${type}; LOAD ${type};`,
+  );
+  const attachStatements = attachments.map(
+    ({ type, url, alias }) =>
+      `ATTACH '${url.replaceAll("'", "''")}' AS ${quoteDuckdbIdentifier(alias)} (TYPE ${type}, READ_ONLY);`,
+  );
+  return [...loadStatements, ...attachStatements];
 }
 
 export async function executeFederatedQuery(

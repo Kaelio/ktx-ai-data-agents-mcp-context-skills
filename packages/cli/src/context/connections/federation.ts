@@ -3,13 +3,30 @@ import type { KtxProjectConnectionConfig } from '../project/config.js';
 /** Stable id for the runtime-derived federated connection. Never written to ktx.yaml. */
 export const FEDERATED_CONNECTION_ID = '_ktx_federated';
 
-/** Drivers DuckDB can ATTACH live with first-party extensions. */
-const ATTACH_COMPATIBLE_DRIVERS = new Set(['postgres', 'mysql', 'sqlite']);
+/**
+ * Maps each attach-compatible driver to the DuckDB extension that attaches it.
+ * The keys are the single source of truth for federation membership: a driver
+ * participates iff it appears here.
+ */
+const ATTACH_TYPE_BY_DRIVER: Record<string, string> = {
+  postgres: 'postgres',
+  mysql: 'mysql',
+  sqlite: 'sqlite',
+};
+
+export function attachTypeForDriver(driver: string): string {
+  const type = ATTACH_TYPE_BY_DRIVER[driver.toLowerCase()];
+  if (!type) {
+    throw new Error(`Driver "${driver}" cannot be attached by DuckDB federation.`);
+  }
+  return type;
+}
 
 export interface FederatedMember {
   connectionId: string;
   driver: string;
-  config: KtxProjectConnectionConfig;
+  /** Raw `url` from ktx.yaml; may carry an `env:`/`file:` reference, resolved at execution time. */
+  url: string | undefined;
 }
 
 export interface FederatedConnectionDescriptor {
@@ -26,13 +43,16 @@ export interface FederatedConnectionDescriptor {
 export function deriveFederatedConnection(
   connections: Record<string, KtxProjectConnectionConfig>,
 ): FederatedConnectionDescriptor | null {
-  const members: FederatedMember[] = [];
-  for (const [connectionId, config] of Object.entries(connections)) {
-    const driver = config.driver.toLowerCase();
-    if (ATTACH_COMPATIBLE_DRIVERS.has(driver)) {
-      members.push({ connectionId, driver, config });
-    }
-  }
+  const members: FederatedMember[] = Object.entries(connections)
+    .filter(([, config]) => config.driver.toLowerCase() in ATTACH_TYPE_BY_DRIVER)
+    .map(([connectionId, config]) => {
+      const url = 'url' in config ? config.url : undefined;
+      return {
+        connectionId,
+        driver: config.driver.toLowerCase(),
+        url: typeof url === 'string' ? url : undefined,
+      };
+    });
   if (members.length < 2) {
     return null;
   }
