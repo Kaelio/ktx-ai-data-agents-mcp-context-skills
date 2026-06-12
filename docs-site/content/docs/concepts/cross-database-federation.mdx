@@ -53,16 +53,16 @@ Two attach-compatible connections are present, so federation is active.
 
 ## Table naming in federated queries
 
-Inside a federated query, every table is referenced with a three-part name:
-`connectionId.schema.table`. The connection's `id` field in `ktx.yaml` becomes
-the catalog name inside DuckDB.
+Inside a federated query, postgres and mysql tables use a three-part name:
+`connectionId.schema.table`. SQLite tables, which have no schema layer in
+DuckDB, use the two-part form `connectionId.table`. In both cases the
+connection's `id` field in `ktx.yaml` becomes the catalog name inside DuckDB.
 
 For the example above:
 
 - `pg_books.public.books` — the `books` table in the `public` schema of the
   postgres connection
 - `sqlite_reviews.reviews` — the `reviews` table in the sqlite connection
-  (SQLite has no schema layer, so the two-part form is used)
 
 These fully qualified names are what you write in a source's `table:` field
 and in any cross-database join's `to:` field.
