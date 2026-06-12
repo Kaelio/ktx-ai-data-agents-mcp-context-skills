@@ -14,6 +14,10 @@ const ATTACH_TYPE_BY_DRIVER: Record<string, string> = {
   sqlite: 'sqlite',
 };
 
+function quoteDuckdbIdentifier(id: string): string {
+  return `"${id.replaceAll('"', '""')}"`;
+}
+
 /** @internal */
 export function attachTypeForDriver(driver: string): string {
   const type = ATTACH_TYPE_BY_DRIVER[driver.toLowerCase()];
@@ -39,7 +43,9 @@ export function buildAttachStatements(members: FederatedMember[], env: NodeJS.Pr
     const url = memberUrl(member, env);
     const safeUrl = url.replaceAll("'", "''");
     statements.push(`INSTALL ${type}; LOAD ${type};`);
-    statements.push(`ATTACH '${safeUrl}' AS ${member.connectionId} (TYPE ${type}, READ_ONLY);`);
+    statements.push(
+      `ATTACH '${safeUrl}' AS ${quoteDuckdbIdentifier(member.connectionId)} (TYPE ${type}, READ_ONLY);`,
+    );
   }
   return statements;
 }

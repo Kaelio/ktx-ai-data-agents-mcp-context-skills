@@ -48,4 +48,31 @@ describe('federated cross-catalog join (live DuckDB)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('joins catalogs whose connection ids contain hyphens', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ktx-fed-hyphen-'));
+    const booksPath = join(dir, 'books.db');
+    const reviewsPath = join(dir, 'reviews.db');
+    const books = new Database(booksPath);
+    books.exec("CREATE TABLE books (id INTEGER, title TEXT); INSERT INTO books VALUES (1, 'Dune');");
+    books.close();
+    const reviews = new Database(reviewsPath);
+    reviews.exec('CREATE TABLE reviews (book_id INTEGER, stars INTEGER); INSERT INTO reviews VALUES (1, 5), (1, 3);');
+    reviews.close();
+    const members: FederatedMember[] = [
+      { connectionId: 'books-db', driver: 'sqlite', config: { driver: 'sqlite', url: booksPath } as never },
+      { connectionId: 'reviews-db', driver: 'sqlite', config: { driver: 'sqlite', url: reviewsPath } as never },
+    ];
+    try {
+      const result = await executeFederatedQuery(members, {
+        connectionId: '_ktx_federated',
+        connection: undefined,
+        sql: 'SELECT b.title, AVG(r.stars) AS avg_stars FROM "books-db".books b JOIN "reviews-db".reviews r ON b.id = r.book_id GROUP BY b.title',
+      });
+      expect(result.rows[0][0]).toBe('Dune');
+      expect(Number(result.rows[0][1])).toBeCloseTo(4.0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

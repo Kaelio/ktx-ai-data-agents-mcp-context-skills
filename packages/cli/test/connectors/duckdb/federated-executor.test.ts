@@ -31,10 +31,18 @@ describe('buildAttachStatements', () => {
     );
     expect(stmts).toEqual([
       "INSTALL postgres; LOAD postgres;",
-      "ATTACH 'postgresql://localhost/books' AS pg_books (TYPE postgres, READ_ONLY);",
+      'ATTACH \'postgresql://localhost/books\' AS "pg_books" (TYPE postgres, READ_ONLY);',
       "INSTALL sqlite; LOAD sqlite;",
-      "ATTACH '/data/reviews.db' AS sqlite_reviews (TYPE sqlite, READ_ONLY);",
+      'ATTACH \'/data/reviews.db\' AS "sqlite_reviews" (TYPE sqlite, READ_ONLY);',
     ]);
+  });
+
+  it('quotes a hyphenated connection id as a DuckDB identifier', () => {
+    const stmts = buildAttachStatements(
+      [member('postgres-warehouse', 'postgres', 'postgresql://h/db')],
+      {},
+    );
+    expect(stmts[1]).toBe(`ATTACH 'postgresql://h/db' AS "postgres-warehouse" (TYPE postgres, READ_ONLY);`);
   });
 
   it('throws if a member url is missing', () => {
@@ -48,6 +56,6 @@ describe('buildAttachStatements', () => {
       [member('pg', 'postgres', "postgresql://u:it's@h/db")],
       {},
     );
-    expect(stmts[1]).toBe("ATTACH 'postgresql://u:it''s@h/db' AS pg (TYPE postgres, READ_ONLY);");
+    expect(stmts[1]).toBe('ATTACH \'postgresql://u:it\'\'s@h/db\' AS "pg" (TYPE postgres, READ_ONLY);');
   });
 });
