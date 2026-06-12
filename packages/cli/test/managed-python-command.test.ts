@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { KtxExpectedError } from '../src/errors.js';
 import {
+  createLazyManagedPythonSemanticLayerComputePort,
   createManagedPythonSemanticLayerComputePort,
   ensureManagedPythonCommandRuntime,
   managedRuntimeInstallCommand,
@@ -274,7 +276,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
     });
 
     expect(confirmInstall).toHaveBeenCalledWith(
-      'ktx needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
+      'ktx needs to install the core Python runtime. This downloads a pinned, checksum-verified uv build, Python, and dependencies. Continue?',
       io.io,
     );
     expect(installRuntime).toHaveBeenCalledWith({
@@ -306,7 +308,7 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
     ).resolves.toBe(compute);
 
     expect(confirmInstall).toHaveBeenCalledWith(
-      'ktx needs to install the core Python runtime. This downloads Python dependencies with uv. Continue?',
+      'ktx needs to install the core Python runtime. This downloads a pinned, checksum-verified uv build, Python, and dependencies. Continue?',
       io.io,
     );
     expect(events).toContainEqual('start:Installing ktx Python runtime (core) with uv...');
@@ -326,5 +328,97 @@ describe('createManagedPythonSemanticLayerComputePort', () => {
         createPythonCompute: () => ({ query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() }),
       }),
     ).rejects.toThrow('ktx Python runtime installation was cancelled');
+  });
+});
+
+describe('createLazyManagedPythonSemanticLayerComputePort', () => {
+  it('does not touch the managed runtime at construction, so a server starts without uv', async () => {
+    const io = makeIo();
+    const readStatus = vi.fn(async () => missingStatus());
+    const installRuntime = vi.fn(async (): Promise<ManagedPythonRuntimeInstallResult> => {
+      throw new KtxExpectedError('uv missing');
+    });
+    const createPythonCompute = vi.fn(() => ({ query: vi.fn(), validateSources: vi.fn(), generateSources: vi.fn() }));
+
+    const port = createLazyManagedPythonSemanticLayerComputePort({
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: io.io,
+      readStatus,
+      installRuntime,
+      createPythonCompute,
+    });
+
+    expect(readStatus).not.toHaveBeenCalled();
+    expect(installRuntime).not.toHaveBeenCalled();
+    expect(createPythonCompute).not.toHaveBeenCalled();
+
+    await expect(port.query({ sources: [], query: {} as never, dialect: 'postgres' })).rejects.toBeInstanceOf(
+      KtxExpectedError,
+    );
+    expect(installRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves the runtime once and reuses it across calls', async () => {
+    const io = makeIo();
+    const readStatus = vi.fn(async () => readyStatus());
+    const compute = {
+      query: vi.fn(),
+      validateSources: vi.fn(),
+      generateSources: vi.fn(),
+    };
+    const createPythonCompute = vi.fn(() => compute);
+
+    const port = createLazyManagedPythonSemanticLayerComputePort({
+      cliVersion: '0.2.0',
+      installPolicy: 'never',
+      io: io.io,
+      readStatus,
+      installRuntime: vi.fn(),
+      createPythonCompute,
+    });
+
+    await port.query({ sources: [], query: {} as never, dialect: 'postgres' });
+    await port.validateSources({ sources: [], dialect: 'postgres' });
+
+    expect(readStatus).toHaveBeenCalledTimes(1);
+    expect(createPythonCompute).toHaveBeenCalledTimes(1);
+    expect(compute.query).toHaveBeenCalledTimes(1);
+    expect(compute.validateSources).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the runtime resolution after a failed attempt', async () => {
+    const io = makeIo();
+    const compute = {
+      query: vi.fn(),
+      validateSources: vi.fn(),
+      generateSources: vi.fn(),
+    };
+    const createPythonCompute = vi.fn(() => compute);
+    let attempt = 0;
+    const installRuntime = vi.fn(async (): Promise<ManagedPythonRuntimeInstallResult> => {
+      attempt += 1;
+      if (attempt === 1) {
+        throw new KtxExpectedError('uv missing');
+      }
+      return installResult();
+    });
+
+    const port = createLazyManagedPythonSemanticLayerComputePort({
+      cliVersion: '0.2.0',
+      installPolicy: 'auto',
+      io: io.io,
+      readStatus: vi.fn(async () => missingStatus()),
+      installRuntime,
+      createPythonCompute,
+    });
+
+    await expect(port.query({ sources: [], query: {} as never, dialect: 'postgres' })).rejects.toBeInstanceOf(
+      KtxExpectedError,
+    );
+    await port.query({ sources: [], query: {} as never, dialect: 'postgres' });
+
+    expect(installRuntime).toHaveBeenCalledTimes(2);
+    expect(compute.query).toHaveBeenCalledTimes(1);
   });
 });
