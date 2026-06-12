@@ -40,8 +40,9 @@ export function buildAttachStatements(members: FederatedMember[], env: NodeJS.Pr
   for (const member of members) {
     const type = attachTypeForDriver(member.driver);
     const url = memberUrl(member, env);
+    const safeUrl = url.replaceAll("'", "''");
     statements.push(`INSTALL ${type}; LOAD ${type};`);
-    statements.push(`ATTACH '${url}' AS ${member.connectionId} (TYPE ${type}, READ_ONLY);`);
+    statements.push(`ATTACH '${safeUrl}' AS ${member.connectionId} (TYPE ${type}, READ_ONLY);`);
   }
   return statements;
 }
@@ -72,5 +73,6 @@ export async function executeFederatedQuery(
     };
   } finally {
     connection.closeSync();
+    instance.closeSync();
   }
 }

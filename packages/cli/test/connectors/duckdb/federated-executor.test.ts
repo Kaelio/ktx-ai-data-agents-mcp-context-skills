@@ -42,4 +42,12 @@ describe('buildAttachStatements', () => {
       buildAttachStatements([{ connectionId: 'pg', driver: 'postgres', config: { driver: 'postgres' } as never }], {}),
     ).toThrow(/no url/i);
   });
+
+  it('escapes single quotes in a member url', () => {
+    const stmts = buildAttachStatements(
+      [member('pg', 'postgres', "postgresql://u:it's@h/db")],
+      {},
+    );
+    expect(stmts[1]).toBe("ATTACH 'postgresql://u:it''s@h/db' AS pg (TYPE postgres, READ_ONLY);");
+  });
 });
