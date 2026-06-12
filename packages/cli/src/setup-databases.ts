@@ -1181,7 +1181,7 @@ async function writeConnectionConfig(input: {
   }
 }
 
-/** Derived, never persisted: the federated connection is recomputed from declared connections. */
+/** @internal */
 export function federationNoticeFor(
   connections: Record<string, KtxProjectConnectionConfig>,
 ): string | null {

@@ -14,6 +14,7 @@ const ATTACH_TYPE_BY_DRIVER: Record<string, string> = {
   sqlite: 'sqlite',
 };
 
+/** @internal */
 export function attachTypeForDriver(driver: string): string {
   const type = ATTACH_TYPE_BY_DRIVER[driver.toLowerCase()];
   if (!type) {
@@ -30,11 +31,7 @@ function memberUrl(member: FederatedMember, env: NodeJS.ProcessEnv): string {
   return resolveStringReference(raw, env);
 }
 
-/**
- * Builds INSTALL/LOAD + READ_ONLY ATTACH statements, one member per DuckDB
- * catalog aliased by its connectionId. READ_ONLY makes the attach physically
- * non-writable; assertReadOnlySql guards the query text itself.
- */
+/** @internal */
 export function buildAttachStatements(members: FederatedMember[], env: NodeJS.ProcessEnv): string[] {
   const statements: string[] = [];
   for (const member of members) {
