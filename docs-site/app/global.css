@@ -870,117 +870,75 @@ body::after {
 }
 
 /* ═══════════════════════════════════════════
-   GitHub star widget (navbar)
-   Split pill: GitHub mark + "Star" │ gold star + count.
+   GitHub star widget (sidebar footer pill)
+   Rendered as the `icon` of a fumadocs icon-link, so it sits in the footer
+   pill beside the Slack mark and the theme toggle. GitHub mark + star glyph
+   + live count; the star rotates to coral on hover. The !important sizes win
+   over fumadocs' `[&_svg]:size-4.5` rule on the wrapping link.
    ═══════════════════════════════════════════ */
 .ktx-stars {
   display: inline-flex;
-  align-items: stretch;
-  height: 32px;
-  border-radius: 999px;
-  border: 1px solid var(--color-fd-border);
-  background: color-mix(in oklch, var(--color-fd-card) 72%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-display), var(--font-sans), sans-serif;
   font-size: 13px;
   line-height: 1;
-  color: var(--color-fd-foreground);
-  text-decoration: none;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(27, 27, 24, 0.04);
-  transition:
-    transform 0.3s var(--ktx-ease),
-    box-shadow 0.3s var(--ktx-ease),
-    border-color 0.3s ease;
-  animation: ktx-stars-in 0.5s var(--ktx-ease) both;
 }
 
-@keyframes ktx-stars-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Push the stars to the opposite (right) end of the footer pill, leaving the
+   Slack mark on the left — like justify-content: space-between. The auto margin
+   absorbs the pill's free space; we cancel the theme toggle's own ms-auto so
+   that single gap lands before the stars, not between stars and the toggle. */
+#nd-sidebar a[aria-label="Star ktx on GitHub"] {
+  margin-inline-start: auto;
 }
 
-.ktx-stars:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklch, var(--color-fd-primary) 45%, var(--color-fd-border));
-  box-shadow:
-    0 6px 18px -8px rgba(14, 116, 144, 0.28),
-    0 1px 2px rgba(27, 27, 24, 0.05);
-}
-
-.ktx-stars:focus-visible {
-  outline: 2px solid var(--color-fd-ring);
-  outline-offset: 2px;
-}
-
-.dark .ktx-stars {
-  background: color-mix(in oklch, var(--color-fd-card) 60%, transparent);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-
-.dark .ktx-stars:hover {
-  border-color: rgba(34, 211, 238, 0.4);
-  box-shadow:
-    0 6px 18px -8px rgba(34, 211, 238, 0.3),
-    0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.ktx-stars-seg {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 11px;
-}
-
-.ktx-stars-seg--count {
-  border-left: 1px solid var(--color-fd-border);
-  background: color-mix(in oklch, var(--color-fd-primary) 6%, transparent);
-  transition: background 0.3s var(--ktx-ease);
-}
-
-.ktx-stars:hover .ktx-stars-seg--count {
-  background: color-mix(in oklch, var(--color-fd-primary) 12%, transparent);
+#nd-sidebar [data-theme-toggle] {
+  margin-inline-start: 0;
 }
 
 .ktx-stars-gh {
-  width: 15px;
-  height: 15px;
-  opacity: 0.85;
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0;
 }
 
-.ktx-stars-text {
-  font-weight: 500;
-  letter-spacing: -0.01em;
+.ktx-stars-count-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .ktx-stars-star {
-  width: 14px;
-  height: 14px;
-  fill: #f5b301;
-  transition: transform 0.3s var(--ktx-ease), filter 0.3s var(--ktx-ease);
+  width: 12px !important;
+  height: 12px !important;
+  flex-shrink: 0;
+  fill: currentColor;
+  opacity: 0.7;
+  transition:
+    transform 0.3s var(--ktx-ease),
+    fill 0.3s var(--ktx-ease),
+    opacity 0.3s var(--ktx-ease);
 }
 
-.ktx-stars:hover .ktx-stars-star {
-  transform: scale(1.18) rotate(-8deg);
-  filter: drop-shadow(0 1px 4px rgba(245, 179, 1, 0.55));
+/* The wrapping fumadocs link owns the hover; rotate + colour the star from it. */
+#nd-sidebar a:hover .ktx-stars-star {
+  transform: rotate(-14deg) scale(1.12);
+  fill: var(--ktx-coral);
+  opacity: 1;
 }
 
 .ktx-stars-count {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--color-fd-foreground);
+  letter-spacing: -0.01em;
 }
 
 /* Skeleton shown only on the rare cold (uncached) fetch */
-.ktx-stars--skeleton {
-  animation: none;
-}
-
 .ktx-stars-skeleton-bar {
   display: inline-block;
   width: 26px;
-  height: 11px;
+  height: 10px;
   border-radius: 4px;
   background: linear-gradient(
     90deg,
@@ -997,16 +955,8 @@ body::after {
   to { background-position: -200% 0; }
 }
 
-/* Compact on phones: drop the "Star" word, keep mark + count */
-@media (max-width: 640px) {
-  .ktx-stars-text { display: none; }
-  .ktx-stars-seg { padding: 0 9px; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .ktx-stars { animation: none; transition: none; }
-  .ktx-stars:hover { transform: none; }
-  .ktx-stars:hover .ktx-stars-star { transform: none; }
+  #nd-sidebar a:hover .ktx-stars-star { transform: none; }
   .ktx-stars-skeleton-bar { animation: none; }
 }
 
