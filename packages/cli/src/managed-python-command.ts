@@ -62,7 +62,7 @@ export function managedRuntimeInstallCommand(feature: KtxRuntimeFeature): string
 
 function installPrompt(feature: KtxRuntimeFeature): string {
   const label = feature === 'local-embeddings' ? 'local embeddings Python runtime' : 'core Python runtime';
-  return `ktx needs to install the ${label}. This downloads Python dependencies with uv. Continue?`;
+  return `ktx needs to install the ${label}. This downloads a pinned, checksum-verified uv build, Python, and dependencies. Continue?`;
 }
 
 function runtimeRequiredMessage(feature: KtxRuntimeFeature): string {
@@ -143,4 +143,33 @@ export async function createManagedPythonSemanticLayerComputePort(
     args: [],
     ...(projectId ? { projectId } : {}),
   });
+}
+
+/**
+ * Defers the managed-runtime install to the first semantic-layer call so a
+ * long-lived server (the MCP server) can start and serve context tools that
+ * need no Python even when uv is absent. Caches on success only, so a runtime
+ * installed mid-session is picked up on the next call.
+ */
+export function createLazyManagedPythonSemanticLayerComputePort(
+  options: ManagedPythonSemanticLayerComputeOptions,
+): KtxSemanticLayerComputePort {
+  let cached: KtxSemanticLayerComputePort | undefined;
+  const resolve = async (): Promise<KtxSemanticLayerComputePort> => {
+    if (!cached) {
+      cached = await createManagedPythonSemanticLayerComputePort(options);
+    }
+    return cached;
+  };
+  return {
+    async query(input) {
+      return (await resolve()).query(input);
+    },
+    async validateSources(input) {
+      return (await resolve()).validateSources(input);
+    },
+    async generateSources(input) {
+      return (await resolve()).generateSources(input);
+    },
+  };
 }
