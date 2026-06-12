@@ -13,7 +13,7 @@ export function resolveStringReference(value: string, env: NodeJS.ProcessEnv): s
   }
   if (value.startsWith('file:')) {
     const rawPath = value.slice('file:'.length);
-    const path = rawPath.startsWith('~') ? resolve(homedir(), rawPath.slice(1)) : rawPath;
+    const path = rawPath.startsWith('~') ? resolve(homedir(), rawPath.slice(rawPath[1] === '/' ? 2 : 1)) : rawPath;
     return readFileSync(path, 'utf-8').trim();
   }
   return value;

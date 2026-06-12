@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveStringReference } from '../../../src/connectors/shared/string-reference.js';
 
@@ -25,6 +25,17 @@ describe('resolveStringReference', () => {
       expect(resolveStringReference(`file:${file}`, {})).toBe('hunter2');
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('expands ~ in file: references to the home directory', () => {
+    const name = `.ktx-strref-test-${process.pid}.txt`;
+    const abs = join(homedir(), name);
+    writeFileSync(abs, 'tilde-secret\n');
+    try {
+      expect(resolveStringReference(`file:~/${name}`, {})).toBe('tilde-secret');
+    } finally {
+      rmSync(abs, { force: true });
     }
   });
 });
