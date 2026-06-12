@@ -235,7 +235,7 @@ describe('setup databases step', () => {
     expect(prompts.multiselect).toHaveBeenCalledWith({
       message:
         'Which databases should ktx connect to?\n' +
-        'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+        'Up/Down to move, Tab to select or unselect, Enter to confirm, Escape to go back, Ctrl+C to exit.',
       options: [
         { value: 'postgres', label: 'PostgreSQL' },
         { value: 'bigquery', label: 'BigQuery' },
@@ -273,7 +273,7 @@ describe('setup databases step', () => {
     expect(prompts.multiselect).toHaveBeenCalledTimes(2);
     expect(vi.mocked(prompts.multiselect).mock.calls[1]?.[0].message).toBe(
       'Which databases should ktx connect to?\n' +
-        'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+        'Up/Down to move, Tab to select or unselect, Enter to confirm, Escape to go back, Ctrl+C to exit.',
     );
   });
 

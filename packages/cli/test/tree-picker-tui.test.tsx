@@ -193,22 +193,9 @@ describe('TreePickerApp', () => {
     expect(frame).toContain('◻ Engineering Docs ▸ (1)');
     expect(frame).toContain('◻ Marketing');
     expect(normalizeFrameWrap(frame)).toContain(
-      'Up/Down to move, Right/Left to expand or collapse, Tab to select, Type to search, Enter to confirm, Escape to clear search or go back, Ctrl+C to exit.',
+      'Up/Down to move, Right/Left to expand or collapse, Tab to select or unselect, Type to search, Enter to confirm, Escape to clear search or go back, Ctrl+C to exit.',
     );
     expect(frame).toContain('Search:');
-  });
-
-  it('renders custom help text when supplied', () => {
-    const { lastFrame } = renderInkTest(
-      <TreePickerApp
-        initialState={state()}
-        chrome={chrome({ helpText: 'Bespoke instructions here.' })}
-        terminalRows={24}
-        terminalWidth={100}
-        onExit={vi.fn()}
-      />,
-    );
-    expect(lastFrame() ?? '').toContain('Bespoke instructions here.');
   });
 
   it('renders checked parents and locked descendants with locked glyphs', () => {

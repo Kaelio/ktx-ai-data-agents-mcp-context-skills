@@ -17,6 +17,7 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 import { readKtxMcpDaemonStatus } from './managed-mcp-daemon.js';
+import { withMultiselectNavigation } from './prompt-navigation.js';
 
 export type KtxAgentTarget = 'claude-code' | 'claude-desktop' | 'codex' | 'cursor' | 'opencode' | 'universal';
 export type KtxAgentScope = 'project' | 'global' | 'local';
@@ -82,14 +83,6 @@ const MCP_DAEMON_REQUIRED_NOTICE = 'mcp-daemon-required';
 interface KtxCliLauncher {
   command: string;
   args: string[];
-}
-
-function writeSetupInfo(io: KtxCliIo, message: string): void {
-  if (isWritableTtyOutput(io.stdout)) {
-    log.info(message, { output: io.stdout });
-    return;
-  }
-  io.stdout.write(`${message}\n`);
 }
 
 function writeSetupStep(io: KtxCliIo, message: string): void {
@@ -1097,9 +1090,6 @@ export async function runKtxSetupAgentsStep(
   }
 
   const prompts = deps.prompts ?? createPromptAdapter();
-  if (args.inputMode === 'auto' && args.target === undefined) {
-    writeSetupInfo(io, 'Space to select, Enter to confirm, Esc to go back.');
-  }
   const mode =
     args.inputMode === 'disabled'
       ? args.mode
@@ -1135,7 +1125,7 @@ export async function runKtxSetupAgentsStep(
       : args.inputMode === 'disabled'
         ? []
         : ((await prompts.multiselect({
-            message: 'Which agent targets should ktx install?',
+            message: withMultiselectNavigation('Which agent targets should ktx install?'),
             options: [
               { value: 'claude-code', label: 'Claude Code' },
               { value: 'claude-desktop', label: 'Claude Desktop' },

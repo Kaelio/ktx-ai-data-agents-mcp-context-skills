@@ -1,3 +1,4 @@
+import { updateSettings } from '@clack/core';
 import {
   autocomplete,
   autocompleteMultiselect,
@@ -18,6 +19,11 @@ import { withMenuOptionsSpacing, withTextInputNavigation } from './prompt-naviga
 import { renderKtxSetupBanner } from './setup-banner.js';
 import { revealPassword } from './reveal-password-prompt.js';
 import { withSetupInterruptConfirmation } from './setup-interrupt.js';
+
+// clack remaps Tab to Space only on non-text prompts (flat multiselect/select/
+// confirm); text inputs and autocomplete search set _track, so typed Tab is
+// untouched. This makes Tab the single documented select key across setup.
+updateSettings({ aliases: { tab: 'space' } });
 
 export interface KtxSetupPromptOption<Value extends string = string> {
   value: Value;

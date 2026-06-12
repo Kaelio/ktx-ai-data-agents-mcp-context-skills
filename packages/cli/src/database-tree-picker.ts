@@ -2,6 +2,7 @@ import { parseDottedTableEntry } from './context/scan/enabled-tables.js';
 import type { KtxTableListEntry } from './context/scan/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
 import { profileMark } from './startup-profile.js';
+import { withSearchableMultiselectNavigation } from './prompt-navigation.js';
 import {
   buildInitialState,
   buildPickerTree,
@@ -275,7 +276,9 @@ export async function pickDatabaseScope(
   let selectedSchemas = initialStageOneSchemas(args);
   while (true) {
     const pickedSchemas = await args.prompts.autocompleteMultiselect({
-      message: `Choose ${args.schemaNounPlural} to enable for ${args.connectionId}\nType to filter. Space to select. Enter when done.`,
+      message: withSearchableMultiselectNavigation(
+        `Choose ${args.schemaNounPlural} to enable for ${args.connectionId}`,
+      ),
       placeholder: `Search ${args.schemaNounPlural}`,
       options: schemaOptions(args),
       initialValues: selectedSchemas,
@@ -286,7 +289,7 @@ export async function pickDatabaseScope(
     }
     selectedSchemas = pickedSchemas;
     if (selectedSchemas.length === 0) {
-      io.stderr.write(`Nothing selected - type to filter, or Escape to skip ${args.schemaNoun} scope.\n`);
+      io.stderr.write(`Nothing selected - type to search, or Escape to skip ${args.schemaNoun} scope.\n`);
       continue;
     }
 

@@ -998,7 +998,7 @@ describe('setup agents', () => {
     ).resolves.toEqual({ status: 'skipped', projectDir: tempDir });
   });
 
-  it('prints one navigation hint before interactive agent target prompts', async () => {
+  it('wraps the agent target prompt with the navigation hint and prints no separate hint line', async () => {
     const io = makeIo();
     const prompts = {
       select: vi.fn(async () => 'mcp-cli'),
@@ -1022,13 +1022,14 @@ describe('setup agents', () => {
       ),
     ).resolves.toEqual({ status: 'back', projectDir: tempDir });
 
-    expect(io.stdout()).toContain('Space to select, Enter to confirm, Esc to go back.');
-    expect(io.stdout().match(/Space to select/g)).toHaveLength(1);
     expect(prompts.multiselect).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Which agent targets should ktx install?',
+        message:
+          'Which agent targets should ktx install?\n' +
+          'Up/Down to move, Tab to select or unselect, Enter to confirm, Escape to go back, Ctrl+C to exit.',
       }),
     );
+    expect(io.stdout()).not.toContain('Space to select');
   });
 
   it('prints per-agent install summary after successful installation', async () => {

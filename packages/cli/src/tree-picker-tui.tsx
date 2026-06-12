@@ -12,6 +12,7 @@ import {
   type PickerState,
 } from './tree-picker-state.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { TREE_PICKER_NAVIGATION_HINT } from './prompt-navigation.js';
 
 const COLOR_THEME = {
   text: 'white',
@@ -30,9 +31,6 @@ const NO_COLOR_THEME = {
 } as const;
 
 type TreePickerTheme = Record<keyof typeof COLOR_THEME, string>;
-
-const DEFAULT_TREE_PICKER_HELP_TEXT =
-  'Up/Down to move, Right/Left to expand or collapse, Tab to select, Type to search, Enter to confirm, Escape to clear search or go back, Ctrl+C to exit.';
 
 const DEFAULT_SKIP_EMPTY_MESSAGE =
   'Nothing selected. Skip this step? Press Enter to skip or Escape to go back.';
@@ -60,7 +58,6 @@ export type TreePickerResult = { kind: 'save'; selectedIds: string[] } | { kind:
 
 export interface TreePickerChrome {
   title: string;
-  helpText?: string;
   subtitleLines?: readonly string[];
   warningLines?: readonly string[];
   confirmSaveMessage?: (state: PickerState) => string;
@@ -221,7 +218,6 @@ export function TreePickerApp(props: TreePickerAppProps): ReactNode {
   const hiddenBelow = Math.max(0, visibleIds.length - rows.offset - rows.items.length);
   const searchMatchCount = filterTree(state).visibleIds.size;
   const width = resolveTreePickerWidth(props.terminalWidth);
-  const helpText = props.chrome.helpText ?? DEFAULT_TREE_PICKER_HELP_TEXT;
   const skipEmptyMessage = props.chrome.skipEmptyMessage ?? DEFAULT_SKIP_EMPTY_MESSAGE;
 
   stateRef.current = state;
@@ -284,7 +280,7 @@ export function TreePickerApp(props: TreePickerAppProps): ReactNode {
         borderColor={theme.active}
         paddingLeft={1}
       >
-        <Text color={theme.muted}>{helpText}</Text>
+        <Text color={theme.muted}>{TREE_PICKER_NAVIGATION_HINT}</Text>
         <Text> </Text>
         {(props.chrome.subtitleLines ?? []).map((line, idx) => (
           <Text key={`subtitle-${idx}`} color={theme.muted}>
@@ -304,7 +300,7 @@ export function TreePickerApp(props: TreePickerAppProps): ReactNode {
         <Text>
           <Text color={theme.muted}>Search: </Text>
           {state.isNavigating ? (
-            <Text color={theme.muted}>{state.search.query || '(type to filter)'}</Text>
+            <Text color={theme.muted}>{state.search.query || '(type to search)'}</Text>
           ) : (
             <Text>
               {state.search.query}

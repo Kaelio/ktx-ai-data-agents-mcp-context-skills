@@ -1,5 +1,50 @@
-const MULTISELECT_MENU_NAVIGATION_HINT =
-  'Use Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.';
+/** @internal */
+export const MULTISELECT_NAVIGATION_FRAGMENTS = {
+  move: 'Up/Down to move',
+  expand: 'Right/Left to expand or collapse',
+  select: 'Tab to select or unselect',
+  search: 'Type to search',
+  confirm: 'Enter to confirm',
+  back: 'Escape to go back',
+  backSearchableTree: 'Escape to clear search or go back',
+  exit: 'Ctrl+C to exit',
+} as const;
+
+function composeNavigationHint(fragments: readonly string[]): string {
+  return `${fragments.join(', ')}.`;
+}
+
+const fragment = MULTISELECT_NAVIGATION_FRAGMENTS;
+
+/** @internal */
+export const FLAT_MULTISELECT_NAVIGATION_HINT = composeNavigationHint([
+  fragment.move,
+  fragment.select,
+  fragment.confirm,
+  fragment.back,
+  fragment.exit,
+]);
+
+/** @internal */
+export const SEARCHABLE_MULTISELECT_NAVIGATION_HINT = composeNavigationHint([
+  fragment.move,
+  fragment.select,
+  fragment.search,
+  fragment.confirm,
+  fragment.back,
+  fragment.exit,
+]);
+
+export const TREE_PICKER_NAVIGATION_HINT = composeNavigationHint([
+  fragment.move,
+  fragment.expand,
+  fragment.select,
+  fragment.search,
+  fragment.confirm,
+  fragment.backSearchableTree,
+  fragment.exit,
+]);
+
 const TEXT_INPUT_NAVIGATION_HINT = 'Press Escape to go back.';
 
 function removeTrailingBlankLines(message: string): string {
@@ -51,10 +96,17 @@ export function withMenuOptionsSpacing<T extends { message: string }>(options: T
 }
 
 export function withMultiselectNavigation(message: string): string {
-  if (message.includes(MULTISELECT_MENU_NAVIGATION_HINT)) {
+  if (message.includes(FLAT_MULTISELECT_NAVIGATION_HINT)) {
     return message;
   }
-  return `${message}\n${MULTISELECT_MENU_NAVIGATION_HINT}`;
+  return `${message}\n${FLAT_MULTISELECT_NAVIGATION_HINT}`;
+}
+
+export function withSearchableMultiselectNavigation(message: string): string {
+  if (message.includes(SEARCHABLE_MULTISELECT_NAVIGATION_HINT)) {
+    return message;
+  }
+  return `${message}\n${SEARCHABLE_MULTISELECT_NAVIGATION_HINT}`;
 }
 
 export function withTextInputNavigation(message: string): string {

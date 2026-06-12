@@ -1,3 +1,4 @@
+import { settings } from '@clack/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createKtxSetupPromptAdapter,
@@ -61,6 +62,13 @@ describe('setup prompt adapter', () => {
     mocks.select.mockReset();
     mocks.text.mockReset();
     mocks.withSetupInterruptConfirmation.mockClear();
+  });
+
+  it('registers Tab as a Space alias so flat multiselects toggle on Tab', () => {
+    // Importing the adapter module runs updateSettings({ aliases: { tab: 'space' } }).
+    // clack remaps Tab→Space on non-text prompts, which is what toggles a flat
+    // multiselect option; text inputs set _track, so their typed Tab is untouched.
+    expect(settings.aliases.get('tab')).toBe('space');
   });
 
   it('passes select hint and disabled options through Clack and delegates cancellation handling', async () => {
