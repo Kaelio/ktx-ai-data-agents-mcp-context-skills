@@ -23,7 +23,18 @@ function assertSafePathToken(kind: string, value: string): string {
   return value;
 }
 
+/**
+ * The `_ktx_` prefix is ktx's reserved namespace for runtime-derived virtual
+ * connections (e.g. `_ktx_federated`). User connection ids may not use it.
+ */
+export function isReservedConnectionId(connectionId: string): boolean {
+  return connectionId.startsWith('_ktx_');
+}
+
 export function assertSafeConnectionId(connectionId: string): string {
+  if (isReservedConnectionId(connectionId)) {
+    throw new Error(`Connection id "${connectionId}" uses the reserved "_ktx_" prefix.`);
+  }
   if (!isSafeConnectionId(connectionId)) {
     throw new Error(`Unsafe connection id: ${connectionId}`);
   }
