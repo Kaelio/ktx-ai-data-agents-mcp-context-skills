@@ -62,10 +62,9 @@ export async function compileLocalSlQuery(
 ): Promise<CompileLocalSlQueryResult> {
   await options.onProgress?.({ progress: 0, message: 'Compiling query' });
   const connectionId = resolveLocalConnectionId(project, options.connectionId);
-  const dialect =
-    connectionId === FEDERATED_CONNECTION_ID
-      ? 'duckdb'
-      : sqlAnalysisDialectForDriver(project.config.connections[connectionId]?.driver);
+  const driver =
+    connectionId === FEDERATED_CONNECTION_ID ? 'duckdb' : project.config.connections[connectionId]?.driver;
+  const dialect = sqlAnalysisDialectForDriver(driver);
   const sources = await loadComputableSources(project, connectionId);
 
   await options.onProgress?.({ progress: 0.3, message: 'Generating SQL' });

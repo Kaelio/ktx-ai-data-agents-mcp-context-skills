@@ -46,23 +46,26 @@ export async function executeFederatedQuery(
   const attachStatements = buildAttachStatements(members, env);
 
   const instance = await DuckDBInstance.create(':memory:');
-  const connection = await instance.connect();
   try {
-    for (const statement of attachStatements) {
-      await connection.run(statement);
+    const connection = await instance.connect();
+    try {
+      for (const statement of attachStatements) {
+        await connection.run(statement);
+      }
+      const reader = await connection.runAndReadAll(sql);
+      const rows = normalizeQueryRows(reader.getRows());
+      const headers = reader.columnNames();
+      return {
+        headers,
+        rows,
+        totalRows: rows.length,
+        command: 'SELECT',
+        rowCount: rows.length,
+      };
+    } finally {
+      connection.closeSync();
     }
-    const reader = await connection.runAndReadAll(sql);
-    const rows = normalizeQueryRows(reader.getRows());
-    const headers = reader.columnNames();
-    return {
-      headers,
-      rows,
-      totalRows: rows.length,
-      command: 'SELECT',
-      rowCount: rows.length,
-    };
   } finally {
-    connection.closeSync();
     instance.closeSync();
   }
 }
