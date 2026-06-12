@@ -1,6 +1,6 @@
 import type { KtxEmbeddingConfig } from './llm/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { writePrefixedLines } from './clack.js';
+import { createCliSpinner } from './clack.js';
 import {
   ensureManagedPythonCommandRuntime,
   type KtxManagedPythonInstallPolicy,
@@ -66,15 +66,22 @@ export async function ensureManagedLocalEmbeddingsDaemon(
     io: options.io,
     feature: 'local-embeddings',
   });
-  const daemon = await startDaemon({
-    cliVersion: options.cliVersion,
-    projectDir: options.projectDir,
-    features: ['local-embeddings'],
-    force: false,
-  });
-
+  const spinner = createCliSpinner(options.io);
+  spinner.start('Starting ktx embedding daemon (first run downloads the model)…');
+  let daemon: ManagedPythonDaemonStartResult;
+  try {
+    daemon = await startDaemon({
+      cliVersion: options.cliVersion,
+      projectDir: options.projectDir,
+      features: ['local-embeddings'],
+      force: false,
+    });
+  } catch (error) {
+    spinner.error('ktx embedding daemon failed to start');
+    throw error;
+  }
   const verb = daemon.status === 'started' ? 'Started' : 'Using';
-  writePrefixedLines((chunk) => options.io.stderr.write(chunk), `${verb} ktx daemon: ${daemon.baseUrl}`);
+  spinner.stop(`${verb} ktx daemon: ${daemon.baseUrl}`);
 
   return {
     baseUrl: daemon.baseUrl,

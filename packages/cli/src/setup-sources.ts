@@ -17,7 +17,7 @@ import { type KtxProjectConfig, type KtxProjectConnectionConfig, serializeKtxPro
 import { loadKtxProject } from './context/project/project.js';
 import { markKtxSetupStateStepComplete } from './context/project/setup-config.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { errorMessage, writePrefixedLines } from './clack.js';
+import { createCliSpinner, errorMessage, writePrefixedLines } from './clack.js';
 import { pickNotionRootPages } from './notion-page-picker.js';
 import { runKtxSourceMapping } from './source-mapping.js';
 import {
@@ -975,16 +975,20 @@ async function chooseMetabaseDatabaseId(input: {
   state: SourcePromptState;
   prompts: KtxSetupSourcesPromptAdapter;
   deps: KtxSetupSourcesDeps;
+  io: KtxCliIo;
 }): Promise<number | 'back'> {
   const sourceUrl = input.state.sourceUrl;
   const sourceApiKeyRef = input.state.sourceApiKeyRef;
   if (sourceUrl && sourceApiKeyRef) {
+    const discoverSpinner = createCliSpinner(input.io);
+    discoverSpinner.start('Discovering Metabase databases…');
     try {
       const discovered = await (input.deps.discoverMetabaseDatabases ?? defaultDiscoverMetabaseDatabases)({
         sourceUrl,
         sourceApiKeyRef,
         sourceConnectionId: input.state.sourceConnectionId ?? 'metabase-main',
       });
+      discoverSpinner.stop(`Found ${discovered.length} ${discovered.length === 1 ? 'database' : 'databases'}`);
       if (discovered.length === 1) {
         return discovered[0].id;
       }
@@ -1008,6 +1012,7 @@ async function chooseMetabaseDatabaseId(input: {
     } catch {
       // Discovery is a convenience. Fall back to the raw id prompt when credentials
       // are unavailable locally or the Metabase API cannot be reached yet.
+      discoverSpinner.error('Could not reach Metabase — enter the database id manually');
     }
   }
 
@@ -1148,6 +1153,8 @@ async function promptForInteractiveSource(
                 if (currentState.sourceLocation === 'path' && currentState.sourcePath) {
                   scanDir = currentState.sourcePath;
                 } else if (currentState.sourceLocation === 'git' && currentState.sourceGitUrl) {
+                  const cloneSpinner = createCliSpinner(io);
+                  cloneSpinner.start('Cloning repository to scan for dbt projects…');
                   try {
                     const cacheDir = await mkdtemp(join(tmpdir(), 'ktx-setup-dbt-scan-'));
                     const authToken = currentState.sourceAuthTokenRef
@@ -1160,7 +1167,9 @@ async function promptForInteractiveSource(
                       branch: currentState.sourceBranch ?? 'main',
                     });
                     scanDir = cacheDir;
+                    cloneSpinner.stop('Repository cloned');
                   } catch {
+                    cloneSpinner.error('Could not clone repository');
                     // Clone failed — fall through to manual prompt
                   }
                 }
@@ -1256,6 +1265,7 @@ async function promptForInteractiveSource(
           state,
           prompts,
           deps: { discoverMetabaseDatabases: discoverMetabaseDatabaseList },
+          io,
         });
         if (databaseId === 'back') return 'back';
         state.metabaseDatabaseId = databaseId;
@@ -1790,15 +1800,25 @@ async function validateSourceConnectionAndMapping(input: {
   io: KtxCliIo;
   deps: KtxSetupSourcesDeps;
 }): Promise<ValidateResult> {
-  const validation = await validateSource(
-    input.source,
-    { projectDir: input.args.projectDir, connectionId: input.connectionId, connection: input.connection },
-    input.deps,
-  );
+  const validateSpinner = createCliSpinner(input.io);
+  validateSpinner.start(`Validating ${sourceLabel(input.source)} source…`);
+  let validation: SourceValidationResult;
+  try {
+    validation = await validateSource(
+      input.source,
+      { projectDir: input.args.projectDir, connectionId: input.connectionId, connection: input.connection },
+      input.deps,
+    );
+  } catch (error) {
+    validateSpinner.error(`${sourceLabel(input.source)} source validation failed`);
+    throw error;
+  }
   if (!validation.ok) {
+    validateSpinner.error(`${sourceLabel(input.source)} source validation failed`);
     input.io.stderr.write(`${validation.message}\n`);
     return { status: 'failed' };
   }
+  validateSpinner.stop(`${sourceLabel(input.source)} source validated`);
 
   if (input.source === 'metabase' || input.source === 'looker') {
     input.prompts.log?.(`Validating ${sourceLabel(input.source)} mapping...`);

@@ -1,6 +1,6 @@
 import { createPythonSemanticLayerComputePort, type KtxSemanticLayerComputePort } from './context/daemon/semantic-layer-compute.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { createClackPromptAdapter, createStaticCliSpinner, type KtxCliSpinner } from './clack.js';
+import { createClackPromptAdapter, createCliSpinner, type KtxCliSpinner } from './clack.js';
 import {
   installManagedPythonRuntime,
   readManagedPythonRuntimeStatus,
@@ -105,7 +105,7 @@ export async function ensureManagedPythonCommandRuntime(
     }
   }
 
-  const progress = (options.spinner ?? (() => createStaticCliSpinner(options.io)))();
+  const progress = (options.spinner ?? (() => createCliSpinner(options.io)))();
   progress.start(`Installing ktx Python runtime (${feature}) with uv...`);
   try {
     const installed = await installRuntime({

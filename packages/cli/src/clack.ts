@@ -81,32 +81,68 @@ class KtxCliPromptCancelledError extends Error {
 }
 
 export function createClackSpinner(): KtxCliSpinner {
-  return spinner();
+  // clack colors the animated spinner frame magenta by default; styleFrame
+  // (typed in SpinnerOptions, absent from the README) recolors it ktx orange.
+  return spinner({ styleFrame: orange });
 }
 
-function magenta(text: string): string {
-  return ansiColor(text, 35, 39);
+// ktx mascot orange (#FF8A4C) via 24-bit truecolor.
+function orange(text: string): string {
+  if (!ansiEnabled()) {
+    return text;
+  }
+  return `${ESC}[38;2;255;138;76m${text}${ESC}[39m`;
 }
 
 function red(text: string): string {
   return ansiColor(text, 31, 39);
 }
 
+/**
+ * Stderr-only, non-animated spinner. Use this instead of {@link createCliSpinner}
+ * when the next step reads stdin in raw mode (an Ink TUI or a keypress wait):
+ * the animated clack spinner seizes stdin via `@clack/core`'s `block()` and
+ * leaves it dirty, which the following raw-mode reader misreads as a stray key.
+ */
 export function createStaticCliSpinner(io: KtxCliSpinnerIo): KtxCliSpinner {
   return {
     start(message) {
-      io.stderr.write(`${magenta('◐')}  ${message}\n`);
+      io.stderr.write(`${orange('◐')}  ${message}\n`);
     },
     message(message) {
-      io.stderr.write(`${magenta('│')}  ${message}\n`);
+      io.stderr.write(`${orange('│')}  ${message}\n`);
     },
     stop(message) {
-      io.stderr.write(`${magenta('◇')}  ${message}\n`);
+      io.stderr.write(`${orange('◇')}  ${message}\n`);
     },
     error(message) {
       io.stderr.write(`${red('■')}  ${message}\n`);
     },
   };
+}
+
+/**
+ * Animated spinner in an interactive terminal, static `◐/◇/■` lines otherwise
+ * (scripts, CI, piped output) so logs stay clean and uncluttered by frames.
+ */
+export function createCliSpinner(io: KtxCliIo): KtxCliSpinner {
+  return io.stdout.isTTY === true ? createClackSpinner() : createStaticCliSpinner(io);
+}
+
+export async function runWithCliSpinner<T>(
+  spinner: KtxCliSpinner,
+  text: { start: string; success: string; failure: string },
+  run: () => Promise<T>,
+): Promise<T> {
+  spinner.start(text.start);
+  try {
+    const value = await run();
+    spinner.stop(text.success);
+    return value;
+  } catch (error) {
+    spinner.error(text.failure);
+    throw error;
+  }
 }
 
 export function createClackPromptAdapter(): KtxCliPromptAdapter {

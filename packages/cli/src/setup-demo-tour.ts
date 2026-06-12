@@ -1,4 +1,5 @@
 import type { KtxCliIo } from './cli-runtime.js';
+import { createStaticCliSpinner, runWithCliSpinner } from './clack.js';
 import type {
   ContextBuildTargetState,
   ContextBuildViewState,
@@ -348,7 +349,14 @@ export async function runDemoTour(
   const ensureProject = deps.ensureProject ?? ensureSeededDemoProject;
 
   const projectDir = defaultDemoProjectDir();
-  await ensureProject({ projectDir, force: false, io, cliVersion: args.cliVersion });
+  // Static (stderr-only) spinner: the demo navigation below reads stdin in raw mode,
+  // and an animated clack spinner would leave stdin dirty so the first keypress wait
+  // sees a stray key and skips the intro.
+  await runWithCliSpinner(
+    createStaticCliSpinner(io),
+    { start: 'Preparing demo project…', success: 'Demo project ready', failure: 'Could not prepare demo project' },
+    () => ensureProject({ projectDir, force: false, io, cliVersion: args.cliVersion }),
+  );
 
   io.stdout.write(renderDemoBanner(projectDir) + '\n');
   io.stdout.write(`\n│  ${dim('Press Enter to continue, Escape to go back')}\n└\n`);

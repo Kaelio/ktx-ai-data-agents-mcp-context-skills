@@ -5,7 +5,7 @@ import { type KtxLocalProject, loadKtxProject } from './context/project/project.
 import { markKtxSetupStateStepComplete, readKtxSetupState } from './context/project/setup-config.js';
 import { serializeKtxProjectConfig } from './context/project/config.js';
 import type { KtxCliIo } from './cli-runtime.js';
-import { errorMessage, writePrefixedLines } from './clack.js';
+import { createCliSpinner, errorMessage, writePrefixedLines } from './clack.js';
 import { formatErrorDetail } from './telemetry/scrubber.js';
 import { buildPublicIngestPlan } from './public-ingest.js';
 import { runKtxConnection } from './connection.js';
@@ -320,13 +320,22 @@ async function testRequiredConnections(
   project: KtxLocalProject,
   targets: KtxSetupContextTargets,
   testConnection: (projectDir: string, connectionId: string, io: KtxCliIo) => Promise<number>,
+  io: KtxCliIo,
 ): Promise<ConnectionGateResult> {
   const failures: ConnectionGateFailure[] = [];
-  for (const connectionId of requiredConnectionIds(targets)) {
+  const connectionIds = requiredConnectionIds(targets);
+  for (const [index, connectionId] of connectionIds.entries()) {
+    const driver = connectorTypeLabel(project, connectionId);
+    const counter = connectionIds.length > 1 ? ` (${index + 1}/${connectionIds.length})` : '';
+    const spinner = createCliSpinner(io);
+    spinner.start(`Testing connection ${connectionId}${counter}…`);
     const buffered: BufferedCommandIo = createBufferedCommandIo();
     const exitCode = await testConnection(projectDir, connectionId, buffered);
-    if (exitCode !== 0) {
-      failures.push({ connectionId, driver: connectorTypeLabel(project, connectionId) });
+    if (exitCode === 0) {
+      spinner.stop(`Connection ${connectionId} (${driver}) is reachable`);
+    } else {
+      spinner.error(`Connection ${connectionId} (${driver}) is not reachable`);
+      failures.push({ connectionId, driver });
     }
   }
   return failures.length === 0 ? { ok: true } : { ok: false, failures };
@@ -826,7 +835,7 @@ export async function runKtxSetupContextStep(
     // error text.
     const testConnection = deps.testConnection ?? defaultGateTestConnection;
     while (true) {
-      const gate = await testRequiredConnections(args.projectDir, project, targets, testConnection);
+      const gate = await testRequiredConnections(args.projectDir, project, targets, testConnection, io);
       if (gate.ok) {
         return await runBuild(args, io, deps, project, targets);
       }
