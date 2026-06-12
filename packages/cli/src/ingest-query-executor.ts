@@ -1,4 +1,6 @@
+import { executeFederatedQuery } from './connectors/duckdb/federated-executor.js';
 import type { KtxSqlQueryExecutionInput, KtxSqlQueryExecutorPort } from './context/connections/query-executor.js';
+import { deriveFederatedConnection, FEDERATED_CONNECTION_ID } from './context/connections/federation.js';
 import type { KtxLocalProject } from './context/project/project.js';
 import type { KtxScanConnector, KtxScanContext } from './context/scan/types.js';
 import { createKtxCliScanConnector } from './local-scan-connectors.js';
@@ -7,6 +9,7 @@ type CreateConnector = typeof createKtxCliScanConnector;
 
 export interface KtxCliIngestQueryExecutorDeps {
   createConnector?: CreateConnector;
+  executeFederated?: typeof executeFederatedQuery;
 }
 
 async function cleanupConnector(connector: KtxScanConnector | null): Promise<void> {
@@ -20,6 +23,15 @@ export function createKtxCliIngestQueryExecutor(
   const createConnector = deps.createConnector ?? createKtxCliScanConnector;
   return {
     async execute(input: KtxSqlQueryExecutionInput) {
+      if (input.connectionId === FEDERATED_CONNECTION_ID) {
+        const descriptor = deriveFederatedConnection(project.config.connections);
+        if (!descriptor) {
+          throw new Error('Federated execution requested but fewer than 2 attach-compatible connections exist.');
+        }
+        const runFederated = deps.executeFederated ?? executeFederatedQuery;
+        return runFederated(descriptor.members, input);
+      }
+
       let connector: KtxScanConnector | null = null;
       try {
         connector = await createConnector(project, input.connectionId);
