@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { GitHubIcon } from "@/components/github-icon";
 
 const REPO = "kaelio/ktx";
-const REPO_URL = `https://github.com/${REPO}`;
+export const GITHUB_REPO_URL = `https://github.com/${REPO}`;
 const API_URL = `https://api.github.com/repos/${REPO}`;
 
 async function fetchStarCount(): Promise<number | null> {
@@ -41,53 +41,42 @@ function StarGlyph() {
   );
 }
 
-async function StarsContent() {
+async function StarsInner() {
   const count = await fetchStarCount();
-  const label =
-    count === null
-      ? "Star ktx on GitHub"
-      : `Star ktx on GitHub — ${count.toLocaleString("en-US")} stars`;
-
   return (
-    <a
-      href={REPO_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={label}
-      className="ktx-stars"
-    >
-      <span className="ktx-stars-seg ktx-stars-seg--label">
-        <GitHubIcon className="ktx-stars-gh" />
-        <span className="ktx-stars-text">Star</span>
-      </span>
-      {count !== null && (
-        <span className="ktx-stars-seg ktx-stars-seg--count">
+    <span className="ktx-stars">
+      <GitHubIcon className="ktx-stars-gh" />
+      {count !== null ? (
+        <span className="ktx-stars-count-wrap">
           <StarGlyph />
           <span className="ktx-stars-count">{formatStars(count)}</span>
         </span>
+      ) : (
+        <span className="ktx-stars-count">Star</span>
       )}
-    </a>
+    </span>
   );
 }
 
 function StarsSkeleton() {
   return (
-    <span className="ktx-stars ktx-stars--skeleton" aria-hidden="true">
-      <span className="ktx-stars-seg ktx-stars-seg--label">
-        <GitHubIcon className="ktx-stars-gh" />
-        <span className="ktx-stars-text">Star</span>
-      </span>
-      <span className="ktx-stars-seg ktx-stars-seg--count">
-        <span className="ktx-stars-skeleton-bar" />
-      </span>
+    <span className="ktx-stars" aria-hidden="true">
+      <GitHubIcon className="ktx-stars-gh" />
+      <span className="ktx-stars-skeleton-bar" />
     </span>
   );
 }
 
+/**
+ * Footer star widget — GitHub mark + live count. Rendered as the `icon` of a
+ * fumadocs `type: "icon"` link, so it lands in the sidebar footer pill beside
+ * the Slack icon and the theme toggle. fumadocs supplies the surrounding <a>
+ * (href + aria-label), so this renders inner content only — no anchor.
+ */
 export function GitHubStars() {
   return (
     <Suspense fallback={<StarsSkeleton />}>
-      <StarsContent />
+      <StarsInner />
     </Suspense>
   );
 }

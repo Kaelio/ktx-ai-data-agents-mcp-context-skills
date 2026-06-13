@@ -161,6 +161,7 @@ describe('setup Anthropic model step', () => {
   it('configures Claude Code backend and validates local auth', async () => {
     const io = makeIo();
     const authProbe = vi.fn(async () => ({ ok: true as const }));
+    const { events: spinnerEvents, spinner } = makeSpinnerEvents();
 
     const result = await runKtxSetupAnthropicModelStep(
       {
@@ -170,7 +171,7 @@ describe('setup Anthropic model step', () => {
         skipLlm: false,
       },
       io.io,
-      { claudeCodeAuthProbe: authProbe },
+      { claudeCodeAuthProbe: authProbe, spinner },
     );
 
     expect(result.status).toBe('ready');
@@ -183,17 +184,26 @@ describe('setup Anthropic model step', () => {
     expect(authProbe).toHaveBeenNthCalledWith(1, expect.objectContaining({ projectDir: tempDir, model: 'sonnet' }));
     expect(authProbe).toHaveBeenNthCalledWith(2, expect.objectContaining({ projectDir: tempDir, model: 'haiku' }));
     expect(authProbe).toHaveBeenNthCalledWith(3, expect.objectContaining({ projectDir: tempDir, model: 'opus' }));
+    expect(spinnerEvents).toEqual([
+      'start:Checking Claude subscription LLM (sonnet).',
+      'stop:LLM test passed (Claude subscription, sonnet)',
+      'start:Checking Claude subscription LLM (haiku).',
+      'stop:LLM test passed (Claude subscription, haiku)',
+      'start:Checking Claude subscription LLM (opus).',
+      'stop:LLM test passed (Claude subscription, opus)',
+    ]);
   });
 
   it('does not prompt for a Claude Code model during interactive setup', async () => {
     const io = makeIo();
     const prompts = makePromptAdapter({ selectValues: ['claude-code'] });
     const authProbe = vi.fn(async () => ({ ok: true as const }));
+    const { spinner } = makeSpinnerEvents();
 
     const result = await runKtxSetupAnthropicModelStep(
       { projectDir: tempDir, inputMode: 'auto', skipLlm: false },
       io.io,
-      { prompts, claudeCodeAuthProbe: authProbe },
+      { prompts, claudeCodeAuthProbe: authProbe, spinner },
     );
 
     expect(result.status).toBe('ready');
@@ -214,6 +224,7 @@ describe('setup Anthropic model step', () => {
   it('configures Codex backend and validates local auth', async () => {
     const io = makeIo();
     const codexAuthProbe = vi.fn(async () => ({ ok: true as const }));
+    const { events: spinnerEvents, spinner } = makeSpinnerEvents();
 
     const result = await runKtxSetupAnthropicModelStep(
       {
@@ -223,7 +234,7 @@ describe('setup Anthropic model step', () => {
         skipLlm: false,
       },
       io.io,
-      { codexAuthProbe },
+      { codexAuthProbe, spinner },
     );
 
     expect(result.status).toBe('ready');
@@ -234,6 +245,10 @@ describe('setup Anthropic model step', () => {
     });
     expect(codexAuthProbe).toHaveBeenCalledTimes(1);
     expect(codexAuthProbe).toHaveBeenCalledWith(expect.objectContaining({ projectDir: tempDir, model: 'gpt-5.5' }));
+    expect(spinnerEvents).toEqual([
+      'start:Checking Codex LLM (gpt-5.5).',
+      'stop:LLM test passed (Codex, gpt-5.5)',
+    ]);
     // The warning carries the clack gutter so it renders inside the setup frame.
     expect(io.stderr()).toContain('│  Codex backend isolation is limited');
     expect(io.stderr()).toContain('may still load user Codex config');
@@ -242,6 +257,7 @@ describe('setup Anthropic model step', () => {
   it('defaults the Codex model to gpt-5.5 when none is provided non-interactively', async () => {
     const io = makeIo();
     const codexAuthProbe = vi.fn(async () => ({ ok: true as const }));
+    const { spinner } = makeSpinnerEvents();
 
     const result = await runKtxSetupAnthropicModelStep(
       {
@@ -251,7 +267,7 @@ describe('setup Anthropic model step', () => {
         skipLlm: false,
       },
       io.io,
-      { codexAuthProbe },
+      { codexAuthProbe, spinner },
     );
 
     expect(result.status).toBe('ready');
@@ -283,6 +299,7 @@ describe('setup Anthropic model step', () => {
       'utf-8',
     );
     const io = makeIo();
+    const { spinner } = makeSpinnerEvents();
 
     const result = await runKtxSetupAnthropicModelStep(
       {
@@ -294,6 +311,7 @@ describe('setup Anthropic model step', () => {
       io.io,
       {
         claudeCodeAuthProbe: async () => ({ ok: true as const }),
+        spinner,
       },
     );
 

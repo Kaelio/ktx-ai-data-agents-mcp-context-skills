@@ -761,7 +761,7 @@ describe('setup sources step', () => {
     expect(testPrompts.multiselect).toHaveBeenCalledWith(
       expect.objectContaining({
         message:
-          'Which context sources should ktx ingest?\nUse Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+          'Which context sources should ktx ingest?\nUp/Down to move, Tab to select or unselect, Enter to confirm, Escape to go back, Ctrl+C to exit.',
       }),
     );
     const options = vi.mocked(testPrompts.multiselect).mock.calls[0]?.[0].options ?? [];

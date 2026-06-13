@@ -1,7 +1,9 @@
 import { parseDottedTableEntry } from './context/scan/enabled-tables.js';
 import type { KtxTableListEntry } from './context/scan/types.js';
 import type { KtxCliIo } from './cli-runtime.js';
+import { createStaticCliSpinner } from './clack.js';
 import { profileMark } from './startup-profile.js';
+import { withSearchableMultiselectNavigation } from './prompt-navigation.js';
 import {
   buildInitialState,
   buildPickerTree,
@@ -275,7 +277,9 @@ export async function pickDatabaseScope(
   let selectedSchemas = initialStageOneSchemas(args);
   while (true) {
     const pickedSchemas = await args.prompts.autocompleteMultiselect({
-      message: `Choose ${args.schemaNounPlural} to enable for ${args.connectionId}\nType to filter. Space to select. Enter when done.`,
+      message: withSearchableMultiselectNavigation(
+        `Choose ${args.schemaNounPlural} to enable for ${args.connectionId}`,
+      ),
       placeholder: `Search ${args.schemaNounPlural}`,
       options: schemaOptions(args),
       initialValues: selectedSchemas,
@@ -286,7 +290,7 @@ export async function pickDatabaseScope(
     }
     selectedSchemas = pickedSchemas;
     if (selectedSchemas.length === 0) {
-      io.stderr.write(`Nothing selected - type to filter, or Escape to skip ${args.schemaNoun} scope.\n`);
+      io.stderr.write(`Nothing selected - type to search, or Escape to skip ${args.schemaNoun} scope.\n`);
       continue;
     }
 
@@ -304,7 +308,19 @@ export async function pickDatabaseScope(
       continue;
     }
 
-    const discovered = await args.listTablesForSchemas(selectedSchemas);
+    // Static (stderr-only) spinner: the stage-two table picker below is a raw-mode
+    // Ink TUI, and an animated clack spinner would leave stdin dirty so Ink reads a
+    // stray Escape and exits immediately.
+    const tablesSpinner = createStaticCliSpinner(io);
+    tablesSpinner.start(`Listing tables in ${selectedSchemas.length} ${selectedNoun}…`);
+    let discovered: KtxTableListEntry[];
+    try {
+      discovered = await args.listTablesForSchemas(selectedSchemas);
+    } catch (error) {
+      tablesSpinner.error('Could not list tables');
+      throw error;
+    }
+    tablesSpinner.stop(`Found ${discovered.length} ${discovered.length === 1 ? 'table' : 'tables'}`);
     if (action === 'save' && args.existing.enabledTables.length === 0) {
       return {
         kind: 'selected',

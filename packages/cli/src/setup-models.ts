@@ -313,13 +313,13 @@ function buildVertexHealthConfig(vertex: { project?: string; location: string },
   };
 }
 
-type LlmHealthProvider = 'Anthropic API' | 'Vertex AI';
+type LlmCheckProvider = 'Anthropic API' | 'Vertex AI' | 'Claude subscription' | 'Codex';
 
-function llmHealthCheckStartText(provider: LlmHealthProvider, model: string): string {
+function llmCheckStartText(provider: LlmCheckProvider, model: string): string {
   return `Checking ${provider} LLM (${model}).`;
 }
 
-function startLlmHealthCheckProgress(
+function startLlmCheckProgress(
   spinner: KtxCliSpinner,
   message: string,
 ): { succeed(msg: string): void; fail(msg: string): void } {
@@ -334,30 +334,26 @@ function startLlmHealthCheckProgress(
   };
 }
 
-async function runLlmHealthCheckWithProgress(
-  config: KtxLlmConfig,
-  provider: LlmHealthProvider,
+async function validateModelWithProgress(
+  provider: LlmCheckProvider,
   model: string,
-  healthCheck: (config: KtxLlmConfig) => Promise<KtxLlmHealthCheckResult>,
   deps: KtxSetupModelDeps,
-): Promise<KtxLlmHealthCheckResult> {
-  const progress = startLlmHealthCheckProgress(
-    (deps.spinner ?? createClackSpinner)(),
-    llmHealthCheckStartText(provider, model),
-  );
-  let health: KtxLlmHealthCheckResult;
+  run: () => Promise<PresetModelValidationResult>,
+): Promise<PresetModelValidationResult> {
+  const progress = startLlmCheckProgress((deps.spinner ?? createClackSpinner)(), llmCheckStartText(provider, model));
+  let result: PresetModelValidationResult;
   try {
-    health = await healthCheck(config);
+    result = await run();
   } catch (error) {
     progress.fail('LLM test failed');
     throw error;
   }
-  if (health.ok) {
+  if (result.ok) {
     progress.succeed(`LLM test passed (${provider}, ${model})`);
   } else {
     progress.fail('LLM test failed');
   }
-  return health;
+  return result;
 }
 
 function formatVertexHealthFailure(message: string, vertex: { project?: string; location: string }): string {
@@ -857,14 +853,8 @@ export async function runKtxSetupAnthropicModelStep(
       const preset = presetForBackend('vertex');
       const validation = await validatePresetModels(
         preset,
-        async (model) =>
-          runLlmHealthCheckWithProgress(
-            buildVertexHealthConfig(vertex.values, model),
-            'Vertex AI',
-            model,
-            healthCheck,
-            deps,
-          ),
+        (model) =>
+          validateModelWithProgress('Vertex AI', model, deps, () => healthCheck(buildVertexHealthConfig(vertex.values, model))),
         io,
       );
       if (validation.status !== 'ready') {
@@ -889,7 +879,10 @@ export async function runKtxSetupAnthropicModelStep(
       const probe = deps.claudeCodeAuthProbe ?? runClaudeCodeAuthProbe;
       const validation = await validatePresetModels(
         preset,
-        async (model) => probe({ projectDir: args.projectDir, model, env: deps.env ?? process.env }),
+        (model) =>
+          validateModelWithProgress('Claude subscription', model, deps, () =>
+            probe({ projectDir: args.projectDir, model, env: deps.env ?? process.env }),
+          ),
         io,
       );
       if (validation.status !== 'ready') {
@@ -912,7 +905,11 @@ export async function runKtxSetupAnthropicModelStep(
     if (backendChoice.backend === 'codex') {
       const preset = presetForBackend('codex');
       const probe = deps.codexAuthProbe ?? runCodexAuthProbe;
-      const validation = await validatePresetModels(preset, async (model) => probe({ projectDir: args.projectDir, model }), io);
+      const validation = await validatePresetModels(
+        preset,
+        (model) => validateModelWithProgress('Codex', model, deps, () => probe({ projectDir: args.projectDir, model })),
+        io,
+      );
       if (validation.status !== 'ready') {
         io.stderr.write(`${validation.message}\n`);
         return { status: 'failed', projectDir: args.projectDir };
@@ -937,13 +934,9 @@ export async function runKtxSetupAnthropicModelStep(
     const preset = presetForBackend('anthropic');
     const validation = await validatePresetModels(
       preset,
-      async (model) =>
-        runLlmHealthCheckWithProgress(
-          buildAnthropicHealthConfig(credential.value, model),
-          'Anthropic API',
-          model,
-          healthCheck,
-          deps,
+      (model) =>
+        validateModelWithProgress('Anthropic API', model, deps, () =>
+          healthCheck(buildAnthropicHealthConfig(credential.value, model)),
         ),
       io,
     );

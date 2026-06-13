@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { withMenuOptionSpacing, withMultiselectNavigation, withTextInputNavigation } from '../src/prompt-navigation.js';
+import {
+  FLAT_MULTISELECT_NAVIGATION_HINT,
+  MULTISELECT_NAVIGATION_FRAGMENTS,
+  SEARCHABLE_MULTISELECT_NAVIGATION_HINT,
+  TREE_PICKER_NAVIGATION_HINT,
+  withMenuOptionSpacing,
+  withMultiselectNavigation,
+  withSearchableMultiselectNavigation,
+  withTextInputNavigation,
+} from '../src/prompt-navigation.js';
 
 describe('prompt navigation helpers', () => {
   it('leaves compact single-line menu prompts unchanged', () => {
@@ -18,8 +27,54 @@ describe('prompt navigation helpers', () => {
 
   it('keeps multiselect navigation copy multiline so menu renderers can separate it from options', () => {
     expect(withMultiselectNavigation('Which sources?')).toBe(
-      'Which sources?\nUse Up/Down to move, Space to select or unselect, Enter to confirm, Escape to go back, or Ctrl+C to exit.',
+      'Which sources?\nUp/Down to move, Tab to select or unselect, Enter to confirm, Escape to go back, Ctrl+C to exit.',
     );
+  });
+
+  it('appends the searchable hint for autocomplete multiselect prompts', () => {
+    expect(withSearchableMultiselectNavigation('Choose schemas')).toBe(
+      'Choose schemas\nUp/Down to move, Tab to select or unselect, Type to search, Enter to confirm, Escape to go back, Ctrl+C to exit.',
+    );
+  });
+
+  it('does not duplicate the searchable hint when applied twice', () => {
+    const once = withSearchableMultiselectNavigation('Choose schemas');
+    expect(withSearchableMultiselectNavigation(once)).toBe(once);
+  });
+
+  it('matches the approved hint wording for each multi-select surface', () => {
+    expect(FLAT_MULTISELECT_NAVIGATION_HINT).toBe(
+      'Up/Down to move, Tab to select or unselect, Enter to confirm, Escape to go back, Ctrl+C to exit.',
+    );
+    expect(SEARCHABLE_MULTISELECT_NAVIGATION_HINT).toBe(
+      'Up/Down to move, Tab to select or unselect, Type to search, Enter to confirm, Escape to go back, Ctrl+C to exit.',
+    );
+    expect(TREE_PICKER_NAVIGATION_HINT).toBe(
+      'Up/Down to move, Right/Left to expand or collapse, Tab to select or unselect, Type to search, Enter to confirm, Escape to clear search or go back, Ctrl+C to exit.',
+    );
+  });
+
+  it('composes every hint from the shared fragment vocabulary so wording cannot drift', () => {
+    const hints = [
+      FLAT_MULTISELECT_NAVIGATION_HINT,
+      SEARCHABLE_MULTISELECT_NAVIGATION_HINT,
+      TREE_PICKER_NAVIGATION_HINT,
+    ];
+    const sharedFragments = [
+      MULTISELECT_NAVIGATION_FRAGMENTS.move,
+      MULTISELECT_NAVIGATION_FRAGMENTS.select,
+      MULTISELECT_NAVIGATION_FRAGMENTS.confirm,
+      MULTISELECT_NAVIGATION_FRAGMENTS.exit,
+    ];
+    for (const fragment of sharedFragments) {
+      for (const hint of hints) {
+        expect(hint).toContain(fragment);
+      }
+    }
+    expect(MULTISELECT_NAVIGATION_FRAGMENTS.select).toBe('Tab to select or unselect');
+    for (const hint of hints) {
+      expect(hint).not.toContain('Space');
+    }
   });
 
   it('adds a blank separator between text input helper copy and the editable value', () => {

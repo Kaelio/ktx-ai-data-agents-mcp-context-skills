@@ -21,7 +21,7 @@ function makeIo() {
   return {
     io: {
       stdout: {
-        isTTY: true,
+        isTTY: false,
         write: (chunk: string) => {
           stdout += chunk;
         },
@@ -185,7 +185,7 @@ describe('setup embeddings step', () => {
     expect(io.stdout()).toContain('Embeddings ready: yes');
   });
 
-  it('uses a short non-animated local embeddings health-check status by default', async () => {
+  it('uses a short non-animated local embeddings health-check status when stdout is not a TTY', async () => {
     const io = makeIo();
     const healthCheck = vi.fn(async () => ({ ok: true as const }));
     const prompts = makePromptAdapter({ selectValues: ['sentence-transformers'] });

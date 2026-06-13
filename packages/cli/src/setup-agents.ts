@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
@@ -17,6 +17,7 @@ import {
   type KtxSetupPromptOption,
 } from './setup-prompts.js';
 import { readKtxMcpDaemonStatus } from './managed-mcp-daemon.js';
+import { withMultiselectNavigation } from './prompt-navigation.js';
 
 export type KtxAgentTarget = 'claude-code' | 'claude-desktop' | 'codex' | 'cursor' | 'opencode' | 'universal';
 export type KtxAgentScope = 'project' | 'global' | 'local';
@@ -34,13 +35,26 @@ export interface KtxSetupAgentsArgs {
   mode: KtxAgentInstallMode;
   skipAgents: boolean;
   showNextActions?: boolean;
+  installRoot?: string;
+  cwd?: string;
 }
+
+/** The directory project-scoped agent files land in; equals projectDir unless an install root is chosen. */
+interface KtxAgentInstall {
+  target: KtxAgentTarget;
+  scope: KtxAgentScope;
+  mode: KtxAgentInstallMode;
+  installRoot: string;
+}
+
+/** Install shape for formatting helpers; installRoot falls back to projectDir when absent. */
+type KtxAgentInstallLike = Omit<KtxAgentInstall, 'installRoot'> & { installRoot?: string };
 
 export type KtxSetupAgentsResult =
   | {
       status: 'ready';
       projectDir: string;
-      installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>;
+      installs: KtxAgentInstall[];
       nextActions?: string;
     }
   | { status: 'skipped'; projectDir: string }
@@ -52,7 +66,7 @@ export interface KtxAgentInstallManifest {
   version: 1;
   projectDir: string;
   installedAt: string;
-  installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>;
+  installs: KtxAgentInstall[];
   entries: Array<
     | {
         kind: 'file';
@@ -82,14 +96,6 @@ const MCP_DAEMON_REQUIRED_NOTICE = 'mcp-daemon-required';
 interface KtxCliLauncher {
   command: string;
   args: string[];
-}
-
-function writeSetupInfo(io: KtxCliIo, message: string): void {
-  if (isWritableTtyOutput(io.stdout)) {
-    log.info(message, { output: io.stdout });
-    return;
-  }
-  io.stdout.write(`${message}\n`);
 }
 
 function writeSetupStep(io: KtxCliIo, message: string): void {
@@ -265,7 +271,11 @@ function universalMcpSnippet(endpoint: KtxMcpEndpointInfo): string {
   ].join('\n');
 }
 
-function claudeConfigPath(projectDir: string, scope: KtxAgentScope): { path: string; jsonPath: string[] } {
+function claudeConfigPath(
+  projectDir: string,
+  installRoot: string,
+  scope: KtxAgentScope,
+): { path: string; jsonPath: string[] } {
   const home = process.env.HOME ?? '';
   if (scope === 'global') {
     return { path: join(home, '.claude.json'), jsonPath: ['mcpServers', 'ktx'] };
@@ -273,13 +283,13 @@ function claudeConfigPath(projectDir: string, scope: KtxAgentScope): { path: str
   if (scope === 'local') {
     return { path: join(home, '.claude.json'), jsonPath: ['projects', resolve(projectDir), 'mcpServers', 'ktx'] };
   }
-  return { path: join(resolve(projectDir), '.mcp.json'), jsonPath: ['mcpServers', 'ktx'] };
+  return { path: join(resolve(installRoot), '.mcp.json'), jsonPath: ['mcpServers', 'ktx'] };
 }
 
-function cursorConfigPath(projectDir: string, scope: KtxAgentScope): { path: string; jsonPath: string[] } {
+function cursorConfigPath(installRoot: string, scope: KtxAgentScope): { path: string; jsonPath: string[] } {
   const home = process.env.HOME ?? '';
   return {
-    path: scope === 'global' ? join(home, '.cursor/mcp.json') : join(resolve(projectDir), '.cursor/mcp.json'),
+    path: scope === 'global' ? join(home, '.cursor/mcp.json') : join(resolve(installRoot), '.cursor/mcp.json'),
     jsonPath: ['mcpServers', 'ktx'],
   };
 }
@@ -318,6 +328,7 @@ function claudeDesktopMcpEntry(input: { projectDir: string; env?: NodeJS.Process
 
 async function installMcpClientConfig(input: {
   projectDir: string;
+  installRoot: string;
   target: KtxAgentTarget;
   scope: KtxAgentScope;
 }): Promise<KtxMcpClientInstallResult> {
@@ -342,11 +353,11 @@ async function installMcpClientConfig(input: {
   }
 
   if (input.target === 'claude-code') {
-    const config = claudeConfigPath(input.projectDir, input.scope);
+    const config = claudeConfigPath(input.projectDir, input.installRoot, input.scope);
     await writeJsonKey(config.path, config.jsonPath, claudeMcpEntry(endpoint));
     entries.push({ kind: 'json-key', path: config.path, jsonPath: config.jsonPath });
   } else if (input.target === 'cursor') {
-    const config = cursorConfigPath(input.projectDir, input.scope);
+    const config = cursorConfigPath(input.installRoot, input.scope);
     await writeJsonKey(config.path, config.jsonPath, cursorMcpEntry(endpoint));
     entries.push({ kind: 'json-key', path: config.path, jsonPath: config.jsonPath });
   } else if (input.target === 'codex') {
@@ -355,7 +366,7 @@ async function installMcpClientConfig(input: {
     const path =
       input.scope === 'global'
         ? '~/.config/opencode/opencode.json'
-        : relative(input.projectDir, join(input.projectDir, 'opencode.json'));
+        : relative(input.installRoot, join(input.installRoot, 'opencode.json'));
     snippets.push(`Add this OpenCode MCP snippet to ${path}:\n${opencodeSnippet(endpoint)}`);
   } else if (input.target === 'universal') {
     snippets.push(`Use this universal MCP endpoint with unsupported MCP clients:\n${universalMcpSnippet(endpoint)}`);
@@ -366,11 +377,12 @@ async function installMcpClientConfig(input: {
 
 function plannedMcpJsonEntries(input: {
   projectDir: string;
+  installRoot: string;
   target: KtxAgentTarget;
   scope: KtxAgentScope;
 }): InstallEntry[] {
   if (input.target === 'claude-code') {
-    const config = claudeConfigPath(input.projectDir, input.scope);
+    const config = claudeConfigPath(input.projectDir, input.installRoot, input.scope);
     return [{ kind: 'json-key', path: config.path, jsonPath: config.jsonPath }];
   }
   if (input.target === 'claude-desktop') {
@@ -378,7 +390,7 @@ function plannedMcpJsonEntries(input: {
     return [{ kind: 'json-key', path: config.path, jsonPath: config.jsonPath }];
   }
   if (input.target === 'cursor') {
-    const config = cursorConfigPath(input.projectDir, input.scope);
+    const config = cursorConfigPath(input.installRoot, input.scope);
     return [{ kind: 'json-key', path: config.path, jsonPath: config.jsonPath }];
   }
   return [];
@@ -402,6 +414,7 @@ export function plannedKtxAgentFiles(input: {
   target: KtxAgentTarget;
   scope: KtxAgentScope;
   mode: KtxAgentInstallMode;
+  installRoot?: string;
 }): InstallEntry[] {
   const withAdminCli = input.mode === 'mcp-cli';
 
@@ -454,7 +467,7 @@ export function plannedKtxAgentFiles(input: {
     throw new Error(`Global ${input.target} installation is not supported; omit --global.`);
   }
 
-  const root = resolve(input.projectDir);
+  const root = resolve(input.installRoot ?? input.projectDir);
   const analyticsEntries: Partial<Record<KtxAgentTarget, InstallEntry[]>> = {
     'claude-code': [
       { kind: 'file', path: join(root, '.claude/skills/ktx-analytics/SKILL.md'), role: 'analytics-skill' },
@@ -657,7 +670,8 @@ function mergeManifest(
 ): KtxAgentInstallManifest {
   const installMap = new Map<string, KtxAgentInstallManifest['installs'][number]>();
   for (const install of [...(existing?.installs ?? []), ...installs]) {
-    installMap.set(`${install.target}:${install.scope}:${install.mode}`, install);
+    const installRoot = install.installRoot ?? resolve(projectDir);
+    installMap.set(`${install.target}:${install.scope}:${install.mode}:${installRoot}`, { ...install, installRoot });
   }
   const entryMap = new Map<string, InstallEntry>();
   for (const entry of [...(existing?.entries ?? []), ...entries]) {
@@ -695,6 +709,7 @@ interface KtxSetupAgentsPromptAdapter {
     options: KtxSetupPromptOption[];
     required?: boolean;
   }): Promise<string[]>;
+  text(options: { message: string; placeholder?: string }): Promise<string | undefined>;
   cancel(message: string): void;
 }
 
@@ -793,16 +808,29 @@ function formatInlinePath(path: string): string {
   return path;
 }
 
+function installSummaryTitle(install: KtxAgentInstallLike, projectDir: string): string {
+  const name = targetDisplayName(install.target);
+  if (install.scope !== 'project') {
+    return `${name} · ${scopeDisplayName(install.scope)}`;
+  }
+  const installRoot = resolve(install.installRoot ?? projectDir);
+  if (installRoot === resolve(projectDir)) {
+    return `${name} · ${scopeDisplayName('project')}`;
+  }
+  return `${name} · ${formatInlinePath(installRoot)}`;
+}
+
 /** @internal */
 export function formatInstallSummaryLines(
-  installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>,
+  installs: KtxAgentInstallLike[],
   entries: InstallEntry[],
   projectDir: string,
 ): InstallSummaryEntry[] {
   const entriesByTarget = new Map<KtxAgentTarget, InstallEntry[]>();
   for (const install of installs) {
+    const installRoot = install.installRoot ?? projectDir;
     const plannedFilePaths = new Set(
-      plannedKtxAgentFiles({ projectDir, ...install })
+      plannedKtxAgentFiles({ projectDir, ...install, installRoot })
         .filter((entry) => entry.kind === 'file')
         .map((entry) => entry.path),
     );
@@ -813,7 +841,10 @@ export function formatInstallSummaryLines(
   }
   const mcpEntriesByTarget = new Map<KtxAgentTarget, InstallEntry[]>();
   for (const install of installs) {
-    const plannedMcpKeys = new Set(plannedMcpJsonEntries({ projectDir, ...install }).map(entryKey));
+    const installRoot = install.installRoot ?? projectDir;
+    const plannedMcpKeys = new Set(
+      plannedMcpJsonEntries({ projectDir, installRoot, target: install.target, scope: install.scope }).map(entryKey),
+    );
     mcpEntriesByTarget.set(
       install.target,
       entries.filter((entry) => entry.kind === 'json-key' && plannedMcpKeys.has(entryKey(entry))),
@@ -863,7 +894,7 @@ export function formatInstallSummaryLines(
     }
 
     return {
-      title: `${targetDisplayName(install.target)} · ${scopeDisplayName(install.scope)}`,
+      title: installSummaryTitle(install, projectDir),
       lines,
     };
   });
@@ -871,7 +902,7 @@ export function formatInstallSummaryLines(
 
 function claudeDesktopSkillBundlePathsForInstalls(
   projectDir: string,
-  installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>,
+  installs: KtxAgentInstallLike[],
 ): string[] {
   return installs
     .filter((install) => install.target === 'claude-desktop')
@@ -946,9 +977,13 @@ function manualActionFromSnippet(snippet: string): {
   };
 }
 
+function openFromDirectoryLabel(installRoot: string, projectDir: string): string {
+  return resolve(installRoot) === resolve(projectDir) ? 'the ktx project directory' : 'the install directory';
+}
+
 function formatAgentNextActions(input: {
   projectDir: string;
-  installs: Array<{ target: KtxAgentTarget; scope: KtxAgentScope; mode: KtxAgentInstallMode }>;
+  installs: KtxAgentInstallLike[];
   notices: string[];
   snippets: string[];
 }): string {
@@ -990,10 +1025,11 @@ function formatAgentNextActions(input: {
   if (claudeCodeInstall) {
     lines.push(`${step}. Open Claude Code`);
     if (claudeCodeInstall.scope === 'project') {
-      lines.push('  Open Claude Code from the ktx project directory:');
+      const installRoot = resolve(claudeCodeInstall.installRoot ?? projectDir);
+      lines.push(`  Open Claude Code from ${openFromDirectoryLabel(installRoot, projectDir)}:`);
       lines.push('');
       lines.push('  RUN:');
-      lines.push(`  cd ${shellScriptQuote(projectDir)}`);
+      lines.push(`  cd ${shellScriptQuote(installRoot)}`);
       lines.push('  claude');
     } else {
       lines.push('  RUN:');
@@ -1007,10 +1043,11 @@ function formatAgentNextActions(input: {
   if (cursorInstall) {
     lines.push(`${step}. Open Cursor`);
     if (cursorInstall.scope === 'project') {
-      lines.push('  Open Cursor from the ktx project directory:');
+      const installRoot = resolve(cursorInstall.installRoot ?? projectDir);
+      lines.push(`  Open Cursor from ${openFromDirectoryLabel(installRoot, projectDir)}:`);
       lines.push('');
       lines.push('  OPEN:');
-      lines.push(`  ${projectDir}`);
+      lines.push(`  ${installRoot}`);
     } else {
       lines.push('  Open Cursor.');
     }
@@ -1048,6 +1085,7 @@ function formatAgentNextActions(input: {
 
 async function installTarget(input: {
   projectDir: string;
+  installRoot: string;
   target: KtxAgentTarget;
   scope: KtxAgentScope;
   mode: KtxAgentInstallMode;
@@ -1083,6 +1121,72 @@ async function markAgentsComplete(projectDir: string): Promise<void> {
   await markKtxSetupStateStepComplete(projectDir, 'agents');
 }
 
+// A typed path never passes through a shell, so expand a leading ~ here; HOME
+// matches formatInlinePath so the ~/… hints shown in the menu round-trip.
+function resolveTypedInstallDir(cwd: string, raw: string): string {
+  const home = process.env.HOME;
+  if (home && (raw === '~' || raw.startsWith('~/'))) {
+    return resolve(home, raw.slice(2));
+  }
+  return resolve(cwd, raw);
+}
+
+async function ensureInstallDir(resolvedPath: string): Promise<string> {
+  if (existsSync(resolvedPath)) {
+    if (!(await stat(resolvedPath)).isDirectory()) {
+      throw new Error(`Install directory path is a file, not a directory: ${resolvedPath}`);
+    }
+    return resolvedPath;
+  }
+  await mkdir(resolvedPath, { recursive: true });
+  return resolvedPath;
+}
+
+async function promptInstallDirectory(input: {
+  prompts: KtxSetupAgentsPromptAdapter;
+  io: KtxCliIo;
+  cwd: string;
+  projectRoot: string;
+  scopeTargets: KtxAgentTarget[];
+}): Promise<{ scope: KtxAgentScope; installRoot: string } | 'back'> {
+  const { prompts, io, cwd, projectRoot, scopeTargets } = input;
+  const options: KtxSetupPromptOption[] = [
+    { value: 'project', label: 'ktx project directory', hint: formatInlinePath(projectRoot) },
+    ...(cwd !== projectRoot
+      ? [{ value: 'current', label: 'Current directory', hint: formatInlinePath(cwd) }]
+      : []),
+    { value: 'custom', label: 'Custom directory…', hint: 'Enter a path' },
+    ...(scopeTargets.every(targetSupportsGlobalScope)
+      ? [
+          {
+            value: 'global',
+            label: 'Global scope (user config)',
+            hint: 'Agents can load this ktx project from any working directory.',
+          },
+        ]
+      : []),
+  ];
+  const choice = await prompts.select({
+    message: `Where should ktx install agent config?\n\nktx project: ${projectRoot}`,
+    options,
+  });
+  if (choice === 'back') return 'back';
+  if (choice === 'global') return { scope: 'global', installRoot: projectRoot };
+  if (choice === 'current') return { scope: 'project', installRoot: cwd };
+  if (choice === 'project') return { scope: 'project', installRoot: projectRoot };
+  while (true) {
+    const typed = await prompts.text({ message: 'Enter the directory to install agent config into' });
+    if (typed === undefined) return 'back';
+    const trimmed = typed.trim();
+    if (trimmed === '') continue;
+    try {
+      return { scope: 'project', installRoot: await ensureInstallDir(resolveTypedInstallDir(cwd, trimmed)) };
+    } catch (error) {
+      io.stderr.write(`${errorMessage(error)}\n`);
+    }
+  }
+}
+
 export async function runKtxSetupAgentsStep(
   args: KtxSetupAgentsArgs,
   io: KtxCliIo,
@@ -1097,9 +1201,6 @@ export async function runKtxSetupAgentsStep(
   }
 
   const prompts = deps.prompts ?? createPromptAdapter();
-  if (args.inputMode === 'auto' && args.target === undefined) {
-    writeSetupInfo(io, 'Space to select, Enter to confirm, Esc to go back.');
-  }
   const mode =
     args.inputMode === 'disabled'
       ? args.mode
@@ -1135,7 +1236,7 @@ export async function runKtxSetupAgentsStep(
       : args.inputMode === 'disabled'
         ? []
         : ((await prompts.multiselect({
-            message: 'Which agent targets should ktx install?',
+            message: withMultiselectNavigation('Which agent targets should ktx install?'),
             options: [
               { value: 'claude-code', label: 'Claude Code' },
               { value: 'claude-desktop', label: 'Claude Desktop' },
@@ -1156,31 +1257,31 @@ export async function runKtxSetupAgentsStep(
     return { status: 'missing-input', projectDir: args.projectDir };
   }
 
+  const cwd = resolve(args.cwd ?? process.cwd());
+  const projectRoot = resolve(args.projectDir);
   const scopeTargets = targets.filter((target) => target !== 'claude-desktop');
-  const selectedScope =
-    args.inputMode !== 'disabled' &&
-    args.scope === 'project' &&
-    scopeTargets.length > 0 &&
-    scopeTargets.every(targetSupportsGlobalScope)
-      ? ((await prompts.select({
-          message: `Where should ktx install supported agent config?\n\nktx project: ${resolve(args.projectDir)}`,
-          options: [
-            {
-              value: 'project',
-              label: 'Project scope (ktx project directory)',
-              hint: 'Only agents opened from this ktx project path load the project-scoped config.',
-            },
-            {
-              value: 'global',
-              label: 'Global scope (user config)',
-              hint: 'Agents can load this ktx project from any working directory.',
-            },
-          ],
-        })) as KtxAgentScope | 'back')
-      : args.scope;
-  if (selectedScope === 'back') return { status: 'back', projectDir: args.projectDir };
 
-  const installs = targets.map((target) => ({ target, scope: effectiveInstallScope(target, selectedScope), mode }));
+  let selectedScope: KtxAgentScope = args.scope;
+  let installRoot = projectRoot;
+  if (args.installRoot !== undefined) {
+    try {
+      installRoot = await ensureInstallDir(resolveTypedInstallDir(cwd, args.installRoot));
+    } catch (error) {
+      writePrefixedLines((chunk) => io.stderr.write(chunk), errorMessage(error));
+      return { status: 'failed', projectDir: args.projectDir };
+    }
+    selectedScope = 'project';
+  } else if (args.inputMode !== 'disabled' && args.scope === 'project' && scopeTargets.length > 0) {
+    const decision = await promptInstallDirectory({ prompts, io, cwd, projectRoot, scopeTargets });
+    if (decision === 'back') return { status: 'back', projectDir: args.projectDir };
+    selectedScope = decision.scope;
+    installRoot = decision.installRoot;
+  }
+
+  const installs: KtxAgentInstall[] = targets.map((target) => {
+    const scope = effectiveInstallScope(target, selectedScope);
+    return { target, scope, mode, installRoot: scope === 'project' ? installRoot : projectRoot };
+  });
   const entries: InstallEntry[] = [];
   const snippets: string[] = [];
   const notices = new Set<string>();
@@ -1190,6 +1291,7 @@ export async function runKtxSetupAgentsStep(
       entries.push(...targetEntries);
       const mcpResult = await installMcpClientConfig({
         projectDir: args.projectDir,
+        installRoot: install.installRoot,
         target: install.target,
         scope: install.scope,
       });
