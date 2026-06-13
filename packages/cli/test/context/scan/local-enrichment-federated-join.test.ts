@@ -12,16 +12,19 @@ import type { KtxSchemaSnapshot } from '../../../src/context/scan/types.js';
 
 // `writeLocalScanManifestShards` commits its output via git; the file is
 // already on disk before the commit call, so the stub only returns commit info.
-const stubGit = {
+const stubGitCommitFile: Pick<GitService, 'commitFile'> = {
   commitFile: async () => ({
     commitHash: 'stub',
+    shortHash: 'stub',
     message: 'stub',
     author: 'ktx',
     authorEmail: 'ktx@example.com',
     timestamp: new Date().toISOString(),
+    committedDate: new Date().toISOString(),
     created: true,
   }),
-} as unknown as GitService;
+};
+const stubGit = stubGitCommitFile as GitService;
 
 function fakeProject(projectDir: string, connections: KtxLocalProject['config']['connections']): KtxLocalProject {
   const fileStore = new LocalGitFileStore({ rootDir: projectDir, git: stubGit });
@@ -51,16 +54,33 @@ const EXISTING_BOOKS_SHARD = `tables:
 
 const booksSnapshot: KtxSchemaSnapshot = {
   connectionId: 'pg_books',
+  driver: 'postgres',
+  extractedAt: new Date().toISOString(),
+  scope: {},
+  metadata: {},
   tables: [
     {
       name: 'books',
       catalog: null,
       db: 'public',
-      columns: [{ name: 'id', dimensionType: 'number', primaryKey: true }],
+      kind: 'table',
+      comment: null,
+      estimatedRows: null,
+      columns: [
+        {
+          name: 'id',
+          nativeType: 'integer',
+          normalizedType: 'integer',
+          dimensionType: 'number',
+          nullable: false,
+          primaryKey: true,
+          comment: null,
+        },
+      ],
       foreignKeys: [],
     },
   ],
-} as unknown as KtxSchemaSnapshot;
+};
 
 describe('writeLocalScanManifestShards federated cross-DB joins', () => {
   let tempDir: string;
