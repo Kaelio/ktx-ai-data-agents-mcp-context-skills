@@ -21,8 +21,8 @@ describe('federated cross-catalog join (live DuckDB)', () => {
     reviews.close();
 
     const members: FederatedMember[] = [
-      { connectionId: 'books_db', driver: 'sqlite', url: booksPath },
-      { connectionId: 'reviews_db', driver: 'sqlite', url: reviewsPath },
+      { connectionId: 'books_db', driver: 'sqlite', projectDir: dir, connection: { driver: 'sqlite', path: booksPath } },
+      { connectionId: 'reviews_db', driver: 'sqlite', projectDir: dir, connection: { driver: 'sqlite', path: reviewsPath } },
     ];
 
     try {
@@ -60,8 +60,8 @@ describe('federated cross-catalog join (live DuckDB)', () => {
     reviews.exec('CREATE TABLE reviews (book_id INTEGER, stars INTEGER); INSERT INTO reviews VALUES (1, 5), (1, 3);');
     reviews.close();
     const members: FederatedMember[] = [
-      { connectionId: 'books-db', driver: 'sqlite', url: booksPath },
-      { connectionId: 'reviews-db', driver: 'sqlite', url: reviewsPath },
+      { connectionId: 'books-db', driver: 'sqlite', projectDir: dir, connection: { driver: 'sqlite', path: booksPath } },
+      { connectionId: 'reviews-db', driver: 'sqlite', projectDir: dir, connection: { driver: 'sqlite', path: reviewsPath } },
     ];
     try {
       const result = await executeFederatedQuery(members, {

@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { buildAttachStatements } from '../../../src/connectors/duckdb/federated-executor.js';
 import { attachTypeForDriver, type FederatedMember } from '../../../src/context/connections/federation.js';
 
-const member = (connectionId: string, driver: string, url: string | undefined): FederatedMember => ({
-  connectionId,
-  driver,
-  url,
-});
+const member = (
+  connectionId: string,
+  driver: string,
+  connection: FederatedMember['connection'],
+): FederatedMember => ({ connectionId, driver, projectDir: '/proj', connection });
 
 describe('attachTypeForDriver', () => {
   it('maps drivers to DuckDB attach extension types', () => {
@@ -24,8 +24,8 @@ describe('buildAttachStatements', () => {
   it('loads each driver type once, then emits READ_ONLY ATTACH aliased by connectionId, resolving env refs', () => {
     const stmts = buildAttachStatements(
       [
-        member('pg_books', 'postgres', 'env:PG_URL'),
-        member('sqlite_reviews', 'sqlite', '/data/reviews.db'),
+        member('pg_books', 'postgres', { driver: 'postgres', url: 'env:PG_URL' }),
+        member('sqlite_reviews', 'sqlite', { driver: 'sqlite', path: '/data/reviews.db' }),
       ],
       { PG_URL: 'postgresql://localhost/books' },
     );
@@ -40,8 +40,8 @@ describe('buildAttachStatements', () => {
   it('loads a shared driver type only once across members', () => {
     const stmts = buildAttachStatements(
       [
-        member('pg_a', 'postgres', 'postgresql://h/a'),
-        member('pg_b', 'postgres', 'postgresql://h/b'),
+        member('pg_a', 'postgres', { driver: 'postgres', url: 'postgresql://h/a' }),
+        member('pg_b', 'postgres', { driver: 'postgres', url: 'postgresql://h/b' }),
       ],
       {},
     );
@@ -53,16 +53,18 @@ describe('buildAttachStatements', () => {
   });
 
   it('quotes a hyphenated connection id as a DuckDB identifier', () => {
-    const stmts = buildAttachStatements([member('postgres-warehouse', 'postgres', 'postgresql://h/db')], {});
+    const stmts = buildAttachStatements(
+      [member('postgres-warehouse', 'postgres', { driver: 'postgres', url: 'postgresql://h/db' })],
+      {},
+    );
     expect(stmts.at(-1)).toBe(`ATTACH 'postgresql://h/db' AS "postgres-warehouse" (TYPE postgres, READ_ONLY);`);
   });
 
-  it('throws if a member url is missing', () => {
-    expect(() => buildAttachStatements([member('pg', 'postgres', undefined)], {})).toThrow(/no url/i);
-  });
-
-  it('escapes single quotes in a member url', () => {
-    const stmts = buildAttachStatements([member('pg', 'postgres', "postgresql://u:it's@h/db")], {});
+  it('escapes single quotes in a resolved attach target', () => {
+    const stmts = buildAttachStatements(
+      [member('pg', 'postgres', { driver: 'postgres', url: "postgresql://u:it's@h/db" })],
+      {},
+    );
     expect(stmts.at(-1)).toBe('ATTACH \'postgresql://u:it\'\'s@h/db\' AS "pg" (TYPE postgres, READ_ONLY);');
   });
 });

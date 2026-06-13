@@ -1,5 +1,5 @@
 import { DuckDBInstance } from '@duckdb/node-api';
-import { resolveStringReference } from '../shared/string-reference.js';
+import { federatedAttachTarget } from './federated-attach.js';
 import type {
   KtxSqlQueryExecutionInput,
   KtxSqlQueryExecutionResult,
@@ -12,18 +12,11 @@ function quoteDuckdbIdentifier(id: string): string {
   return `"${id.replaceAll('"', '""')}"`;
 }
 
-function memberUrl(member: FederatedMember, env: NodeJS.ProcessEnv): string {
-  if (member.url === undefined || member.url.length === 0) {
-    throw new Error(`Federated member "${member.connectionId}" has no url in ktx.yaml.`);
-  }
-  return resolveStringReference(member.url, env);
-}
-
 /** @internal */
 export function buildAttachStatements(members: FederatedMember[], env: NodeJS.ProcessEnv): string[] {
   const attachments = members.map((member) => ({
     type: attachTypeForDriver(member.driver),
-    url: memberUrl(member, env),
+    url: federatedAttachTarget(member, env),
     alias: member.connectionId,
   }));
 
