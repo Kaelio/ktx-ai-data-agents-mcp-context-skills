@@ -74,6 +74,17 @@ describe('federatedAttachTarget', () => {
     expect(target).toContain('password=p');
   });
 
+  it('quotes mysql values containing spaces', () => {
+    const target = federatedAttachTarget(
+      member({
+        driver: 'mysql',
+        connection: { driver: 'mysql', host: 'h', database: 'app', username: 'u', password: 'pass word' },
+      }),
+      {},
+    );
+    expect(target).toContain("password='pass word'");
+  });
+
   it('throws for an unsupported driver', () => {
     expect(() => federatedAttachTarget(member({ driver: 'snowflake', connection: { driver: 'snowflake' } }), {})).toThrow(
       /cannot be attached/i,

@@ -6,8 +6,8 @@ import {
 } from '../mysql/connector.js';
 import { attachTypeForDriver, type FederatedMember } from '../../context/connections/federation.js';
 
-function pgKeyword(value: string): string {
-  // libpq keyword values quote with single quotes and backslash-escape.
+function kvKeyword(value: string): string {
+  // libpq/DuckDB key-value values quote with single quotes and backslash-escape.
   return /[\s'\\]/.test(value) ? `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'` : value;
 }
 
@@ -21,11 +21,11 @@ function postgresAttachString(member: FederatedMember, env: NodeJS.ProcessEnv): 
     return cfg.connectionString;
   }
   const parts: string[] = [];
-  if (cfg.host) parts.push(`host=${pgKeyword(cfg.host)}`);
+  if (cfg.host) parts.push(`host=${kvKeyword(cfg.host)}`);
   if (cfg.port) parts.push(`port=${cfg.port}`);
-  if (cfg.database) parts.push(`dbname=${pgKeyword(cfg.database)}`);
-  if (cfg.user) parts.push(`user=${pgKeyword(cfg.user)}`);
-  if (cfg.password) parts.push(`password=${pgKeyword(cfg.password)}`);
+  if (cfg.database) parts.push(`dbname=${kvKeyword(cfg.database)}`);
+  if (cfg.user) parts.push(`user=${kvKeyword(cfg.user)}`);
+  if (cfg.password) parts.push(`password=${kvKeyword(cfg.password)}`);
   return parts.join(' ');
 }
 
@@ -36,13 +36,13 @@ function mysqlAttachString(member: FederatedMember, env: NodeJS.ProcessEnv): str
     env,
   });
   const parts: string[] = [
-    `host=${cfg.host}`,
+    `host=${kvKeyword(cfg.host)}`,
     `port=${cfg.port}`,
-    `database=${cfg.database}`,
-    `user=${cfg.user}`,
+    `database=${kvKeyword(cfg.database)}`,
+    `user=${kvKeyword(cfg.user)}`,
   ];
   if (cfg.password) {
-    parts.push(`password=${cfg.password}`);
+    parts.push(`password=${kvKeyword(cfg.password)}`);
   }
   return parts.join(' ');
 }
