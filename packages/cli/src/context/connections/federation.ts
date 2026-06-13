@@ -4,22 +4,18 @@ import type { KtxProjectConnectionConfig } from '../project/config.js';
 export const FEDERATED_CONNECTION_ID = '_ktx_federated';
 
 /**
- * Maps each attach-compatible driver to the DuckDB extension that attaches it.
- * The keys are the single source of truth for federation membership: a driver
- * participates iff it appears here.
+ * Drivers DuckDB can ATTACH for federation. The driver name doubles as the
+ * DuckDB extension/TYPE name, so this set is the single source of truth for
+ * both membership (a driver participates iff it appears here) and attach type.
  */
-const ATTACH_TYPE_BY_DRIVER: Record<string, string> = {
-  postgres: 'postgres',
-  mysql: 'mysql',
-  sqlite: 'sqlite',
-};
+const ATTACH_COMPATIBLE_DRIVERS = new Set(['postgres', 'mysql', 'sqlite']);
 
 export function attachTypeForDriver(driver: string): string {
-  const type = ATTACH_TYPE_BY_DRIVER[driver.toLowerCase()];
-  if (!type) {
+  const normalized = driver.toLowerCase();
+  if (!ATTACH_COMPATIBLE_DRIVERS.has(normalized)) {
     throw new Error(`Driver "${driver}" cannot be attached by DuckDB federation.`);
   }
-  return type;
+  return normalized;
 }
 
 export interface FederatedMember {
@@ -45,7 +41,7 @@ export function deriveFederatedConnection(
   projectDir: string,
 ): FederatedConnectionDescriptor | null {
   const members: FederatedMember[] = Object.entries(connections)
-    .filter(([, config]) => config.driver.toLowerCase() in ATTACH_TYPE_BY_DRIVER)
+    .filter(([, config]) => ATTACH_COMPATIBLE_DRIVERS.has(config.driver.toLowerCase()))
     .map(([connectionId, config]) => ({
       connectionId,
       driver: config.driver.toLowerCase(),
