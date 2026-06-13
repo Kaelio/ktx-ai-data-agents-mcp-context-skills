@@ -1,5 +1,7 @@
 import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
 import { KtxQueryError, isNativeProgrammingFault } from '../../errors.js';
+import { executeProjectReadOnlySql } from '../../context/connections/project-sql-executor.js';
+import { FEDERATED_CONNECTION_ID } from '../../context/connections/federation.js';
 import { localConnectionInfoFromConfig } from '../../context/connections/local-warehouse-descriptor.js';
 import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
@@ -38,21 +40,45 @@ async function executeValidatedReadOnlySql(
   onProgress?: KtxMcpProgressCallback,
 ): Promise<KtxSqlExecutionResponse> {
   await onProgress?.({ progress: 0, message: 'Validating SQL' });
+  if (!options.sqlAnalysis) {
+    throw new Error('sql_execution requires parser-backed SQL validation.');
+  }
+  const createConnector = options.localScan?.createConnector;
+  if (!createConnector) {
+    throw new Error('sql_execution requires a local scan connector factory.');
+  }
+
+  if (input.connectionId === FEDERATED_CONNECTION_ID) {
+    const validation = await options.sqlAnalysis.validateReadOnly(input.sql, sqlAnalysisDialectForDriver('duckdb'));
+    if (!validation.ok) {
+      throw new Error(validation.error ?? 'SQL is not read-only.');
+    }
+    await onProgress?.({ progress: 0.3, message: 'Executing' });
+    const result = await executeProjectReadOnlySql({
+      project,
+      input: {
+        connectionId: input.connectionId,
+        projectDir: project.projectDir,
+        connection: undefined,
+        sql: input.sql,
+        maxRows: input.maxRows,
+      },
+      createConnector,
+      runId: 'mcp-sql-execution',
+    });
+    const rowCount = result.rowCount ?? result.rows.length;
+    await onProgress?.({ progress: 1, message: `Fetched ${rowCount} rows` });
+    return { headers: result.headers, rows: result.rows, rowCount };
+  }
+
   const connectionId = assertSafeConnectionId(input.connectionId);
   const connection = project.config.connections[connectionId];
   if (!connection) {
     throw new Error(`Connection "${connectionId}" is not configured in ktx.yaml`);
   }
-  if (!options.sqlAnalysis) {
-    throw new Error('sql_execution requires parser-backed SQL validation.');
-  }
   const validation = await options.sqlAnalysis.validateReadOnly(input.sql, sqlAnalysisDialectForDriver(connection.driver));
   if (!validation.ok) {
     throw new Error(validation.error ?? 'SQL is not read-only.');
-  }
-  const createConnector = options.localScan?.createConnector;
-  if (!createConnector) {
-    throw new Error('sql_execution requires a local scan connector factory.');
   }
 
   let connector: KtxScanConnector | null = null;
