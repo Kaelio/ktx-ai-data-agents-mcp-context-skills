@@ -67,6 +67,20 @@ For the example above:
 These fully qualified names are what you write in a source's `table:` field
 and in any cross-database join's `to:` field.
 
+## Source names in the federated view
+
+When you list or search semantic-layer sources under the federated connection,
+each source's `name` is prefixed with its member connection id — for example
+`pg_books.books` and `sqlite_reviews.reviews`. The prefix keeps names unique
+when two members own a table with the same name: a `users` table in each of
+`pg_app` and `sqlite_app` surfaces as `pg_app.users` and `sqlite_app.users`
+rather than colliding on a bare `users`.
+
+Each source file's physical `table:` field is unchanged — it still uses the
+fully qualified form from the previous section. The member prefix applies only
+to the source `name` as seen through the federated connection, not to the
+per-member view of the same source.
+
 ## Declaring a cross-database join
 
 In v1, cross-database joins are declared explicitly in a source's `joins:`
