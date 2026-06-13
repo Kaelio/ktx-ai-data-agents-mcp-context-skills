@@ -62,8 +62,9 @@ function mysqlAttachString(member: FederatedMember, env: NodeJS.ProcessEnv): str
  * resolver so federation and standalone scans agree on config interpretation.
  */
 export function federatedAttachTarget(member: FederatedMember, env: NodeJS.ProcessEnv): string {
-  const type = attachTypeForDriver(member.driver);
-  switch (type) {
+  // attachTypeForDriver throws on unsupported drivers, so the cases below are
+  // exhaustive; the trailing throw exists only to satisfy the string return type.
+  switch (attachTypeForDriver(member.driver)) {
     case 'sqlite':
       return sqliteDatabasePathFromConfig({
         connectionId: member.connectionId,
@@ -74,7 +75,6 @@ export function federatedAttachTarget(member: FederatedMember, env: NodeJS.Proce
       return postgresAttachString(member, env);
     case 'mysql':
       return mysqlAttachString(member, env);
-    default:
-      throw new Error(`Driver "${member.driver}" cannot be attached by DuckDB federation.`);
   }
+  throw new Error(`Driver "${member.driver}" cannot be attached by DuckDB federation.`);
 }

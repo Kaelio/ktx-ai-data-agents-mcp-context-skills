@@ -12,10 +12,6 @@ export interface ExecuteProjectReadOnlySqlDeps {
   runId?: string;
 }
 
-async function cleanupConnector(connector: KtxScanConnector | null): Promise<void> {
-  await connector?.cleanup?.();
-}
-
 /**
  * Single resolve-and-execute path for project read-only SQL. The federated
  * connection is derived from declared state here so every executor entry point
@@ -56,6 +52,6 @@ export async function executeProjectReadOnlySql(
       rowCount: result.rowCount,
     };
   } finally {
-    await cleanupConnector(connector);
+    await connector?.cleanup?.();
   }
 }

@@ -203,31 +203,27 @@ async function federatedSiblingTargets(
     return new Set();
   }
   const siblings = descriptor.members.filter((member) => member.connectionId !== connectionId);
-  const targets = new Set<string>();
-  for (const sibling of siblings) {
-    let files: string[];
-    try {
-      files = (await project.fileStore.listFiles(schemaDir(sibling.connectionId))).files.filter(isSlYamlPath);
-    } catch {
-      continue;
-    }
-    for (const file of files) {
-      try {
-        const { content } = await project.fileStore.readFile(file);
-        const shard = YAML.parse(content) as LiveDatabaseManifestShard | null;
-        for (const entry of Object.values(shard?.tables ?? {})) {
-          // entry.table is buildTableRef's member-local ref (1-3 parts:
-          // table / schema.table / catalog.schema.table), never connectionId-
-          // prefixed — so prefixing with the member id yields the fully-qualified
-          // `to:` form authored in cross-DB joins.
-          targets.add(`${sibling.connectionId}.${entry.table}`);
-        }
-      } catch {
-        continue;
-      }
-    }
-  }
-  return targets;
+  const perSibling = await Promise.all(siblings.map((sibling) => siblingJoinTargets(project, sibling.connectionId)));
+  return new Set(perSibling.flat());
+}
+
+async function siblingJoinTargets(project: KtxLocalProject, connectionId: string): Promise<string[]> {
+  const listed = await project.fileStore.listFiles(schemaDir(connectionId)).catch(() => ({ files: [] }));
+  const files = listed.files.filter(isSlYamlPath);
+  const perFile = await Promise.all(
+    files.map(async (file) => {
+      const shard = await project.fileStore
+        .readFile(file)
+        .then(({ content }) => YAML.parse(content) as LiveDatabaseManifestShard | null)
+        .catch(() => null);
+      // entry.table is buildTableRef's member-local ref (1-3 parts:
+      // table / schema.table / catalog.schema.table), never connectionId-
+      // prefixed — so prefixing with the member id yields the fully-qualified
+      // `to:` form authored in cross-DB joins.
+      return Object.values(shard?.tables ?? {}).map((entry) => `${connectionId}.${entry.table}`);
+    }),
+  );
+  return perFile.flat();
 }
 
 async function loadExistingManifestState(

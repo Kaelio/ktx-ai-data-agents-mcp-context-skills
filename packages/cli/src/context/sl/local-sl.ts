@@ -178,11 +178,10 @@ export async function loadLocalSlSourceRecords(
     const perMember = await Promise.all(
       descriptor.members.map(async (member) => {
         const records = await loadSingleConnectionSourceRecords(project, member.connectionId);
-        return records.map((record) => ({
-          ...record,
-          name: `${member.connectionId}.${record.name}`,
-          source: { ...record.source, name: `${member.connectionId}.${record.source.name}` },
-        }));
+        return records.map((record) => {
+          const name = `${member.connectionId}.${record.name}`;
+          return { ...record, name, source: { ...record.source, name } };
+        });
       }),
     );
     return perMember.flat();
