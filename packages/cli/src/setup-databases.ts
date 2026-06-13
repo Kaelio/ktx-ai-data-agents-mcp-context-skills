@@ -1174,7 +1174,7 @@ async function writeConnectionConfig(input: {
   }
 
   if (input.io) {
-    const federationNotice = federationNoticeFor(config.connections);
+    const federationNotice = federationNoticeFor(config.connections, input.projectDir);
     if (federationNotice) {
       writeSetupSection(input.io, 'Federated connection available', [federationNotice]);
     }
@@ -1184,8 +1184,9 @@ async function writeConnectionConfig(input: {
 /** @internal */
 export function federationNoticeFor(
   connections: Record<string, KtxProjectConnectionConfig>,
+  projectDir: string,
 ): string | null {
-  const descriptor = deriveFederatedConnection(connections);
+  const descriptor = deriveFederatedConnection(connections, projectDir);
   if (!descriptor) {
     return null;
   }

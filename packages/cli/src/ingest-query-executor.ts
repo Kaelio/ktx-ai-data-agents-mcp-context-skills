@@ -24,7 +24,7 @@ export function createKtxCliIngestQueryExecutor(
   return {
     async execute(input: KtxSqlQueryExecutionInput) {
       if (input.connectionId === FEDERATED_CONNECTION_ID) {
-        const descriptor = deriveFederatedConnection(project.config.connections);
+        const descriptor = deriveFederatedConnection(project.config.connections, project.projectDir);
         if (!descriptor) {
           throw new Error('Federated execution requested but fewer than 2 attach-compatible connections exist.');
         }

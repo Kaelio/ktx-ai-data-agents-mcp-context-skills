@@ -171,7 +171,7 @@ export async function loadLocalSlSourceRecords(
   input: { connectionId: string },
 ): Promise<LocalSlSourceRecord[]> {
   if (input.connectionId === FEDERATED_CONNECTION_ID) {
-    const descriptor = deriveFederatedConnection(project.config.connections);
+    const descriptor = deriveFederatedConnection(project.config.connections, project.projectDir);
     if (!descriptor) {
       return [];
     }
