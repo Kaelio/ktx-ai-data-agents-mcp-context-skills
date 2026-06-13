@@ -249,7 +249,7 @@ export function buildJoinsByTable(
       continue;
     }
     for (const join of tableJoins) {
-      if (tableNames.has(join.to)) {
+      if (tableNames.has(join.to) || federatedSiblingTargets.has(join.to)) {
         addJoinOnce(joinsByTable, tableName, join);
       }
     }
