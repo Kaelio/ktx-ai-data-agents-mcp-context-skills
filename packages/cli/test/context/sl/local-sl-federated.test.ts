@@ -75,10 +75,22 @@ describe('federated semantic-layer source loading', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('unions member source records for _ktx_federated', async () => {
+  it('namespaces member source records by connection id for _ktx_federated', async () => {
     const records = await loadLocalSlSourceRecords(project, { connectionId: '_ktx_federated' });
     const names = records.map((r) => r.source.name).sort();
-    expect(names).toEqual(['books', 'reviews']);
+    expect(names).toEqual(['pg_books.books', 'sqlite_reviews.reviews']);
+  });
+
+  it('keeps colliding member table names distinct via namespacing', async () => {
+    const collide = fakeProject(join(tempDir, 'collide'), {
+      pg_a: { driver: 'postgres' },
+      sqlite_b: { driver: 'sqlite' },
+    });
+    const usersManifest = `tables:\n  users:\n    table: public.users\n    columns:\n      - name: id\n        type: number\n`;
+    await seedManifest(collide, 'semantic-layer/pg_a/_schema/public.yaml', usersManifest);
+    await seedManifest(collide, 'semantic-layer/sqlite_b/_schema/main.yaml', usersManifest);
+    const records = await loadLocalSlSourceRecords(collide, { connectionId: '_ktx_federated' });
+    expect(records.map((r) => r.source.name).sort()).toEqual(['pg_a.users', 'sqlite_b.users']);
   });
 
   it('reads from member dirs, never a literal _ktx_federated dir', async () => {
