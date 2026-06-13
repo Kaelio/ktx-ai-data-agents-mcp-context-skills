@@ -1,8 +1,11 @@
 import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-executor.js';
 import { KtxQueryError, isNativeProgrammingFault } from '../../errors.js';
 import { executeProjectReadOnlySql } from '../../context/connections/project-sql-executor.js';
-import { FEDERATED_CONNECTION_ID } from '../../context/connections/federation.js';
-import { localConnectionInfoFromConfig } from '../../context/connections/local-warehouse-descriptor.js';
+import { FEDERATED_CONNECTION_ID, federatedConnectionListing } from '../../context/connections/federation.js';
+import {
+  type LocalConnectionInfo,
+  localConnectionInfoFromConfig,
+} from '../../context/connections/local-warehouse-descriptor.js';
 import type { KtxEmbeddingPort } from '../../context/core/embedding.js';
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
@@ -134,12 +137,21 @@ export function createLocalProjectMcpContextPorts(
   const ports: KtxMcpContextPorts = {
     connections: {
       async list() {
-        return Object.entries(project.config.connections)
+        const configured = Object.entries(project.config.connections)
           .map(([id, config]) => localConnectionInfoFromConfig(id, config))
-          .filter(
-            (connection): connection is { id: string; name: string; connectionType: string } => connection !== null,
-          )
+          .filter((connection): connection is LocalConnectionInfo => connection !== null)
           .sort((a, b) => a.id.localeCompare(b.id));
+        const federated = federatedConnectionListing(project.config.connections, project.projectDir);
+        if (federated) {
+          configured.push({
+            id: federated.id,
+            name: federated.id,
+            connectionType: 'DUCKDB',
+            members: federated.members,
+            hint: federated.hint,
+          });
+        }
+        return configured;
       },
     },
     knowledge: {
