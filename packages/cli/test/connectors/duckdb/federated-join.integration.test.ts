@@ -49,6 +49,43 @@ describe('federated cross-catalog join (live DuckDB)', () => {
     }
   });
 
+  it('returns integer columns as JSON-safe numbers, not bigint', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ktx-fed-bigint-'));
+    const booksPath = join(dir, 'books.db');
+    const reviewsPath = join(dir, 'reviews.db');
+
+    const books = new Database(booksPath);
+    books.exec("CREATE TABLE books (id INTEGER, title TEXT); INSERT INTO books VALUES (1, 'Dune'), (2, 'Foundation');");
+    books.close();
+
+    const reviews = new Database(reviewsPath);
+    reviews.exec('CREATE TABLE reviews (book_id INTEGER, stars INTEGER); INSERT INTO reviews VALUES (1, 5), (1, 4), (2, 2);');
+    reviews.close();
+
+    const members: FederatedMember[] = [
+      { connectionId: 'books_db', driver: 'sqlite', projectDir: dir, connection: { driver: 'sqlite', path: booksPath } },
+      { connectionId: 'reviews_db', driver: 'sqlite', projectDir: dir, connection: { driver: 'sqlite', path: reviewsPath } },
+    ];
+
+    try {
+      const result = await executeFederatedQuery(members, {
+        connectionId: '_ktx_federated',
+        connection: undefined,
+        sql: 'SELECT b.id, count(*) AS n FROM books_db.books b JOIN reviews_db.reviews r ON b.id = r.book_id GROUP BY b.id ORDER BY b.id',
+      });
+      for (const row of result.rows) {
+        for (const cell of row) {
+          expect(typeof cell).not.toBe('bigint');
+        }
+      }
+      expect(() => JSON.stringify(result)).not.toThrow();
+      expect(result.rows[0][0]).toBe(1);
+      expect(Number(result.rows[0][1])).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('joins catalogs whose connection ids contain hyphens', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ktx-fed-hyphen-'));
     const booksPath = join(dir, 'books.db');

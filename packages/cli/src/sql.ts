@@ -74,10 +74,7 @@ function formatValue(value: unknown): string {
 }
 
 function printJson(output: SqlExecutionOutput, io: KtxCliIo): void {
-  // DuckDB-backed results carry integer columns as bigint, which JSON.stringify
-  // cannot serialize; emit them as JSON numbers to match the plain/pretty paths.
-  const json = JSON.stringify(output, (_key, value) => (typeof value === 'bigint' ? Number(value) : value), 2);
-  io.stdout.write(`${json}\n`);
+  io.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
 function printPlain(output: SqlExecutionOutput, io: KtxCliIo): void {

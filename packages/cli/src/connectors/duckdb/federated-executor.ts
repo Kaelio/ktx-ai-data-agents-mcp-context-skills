@@ -12,6 +12,13 @@ function quoteDuckdbIdentifier(id: string): string {
   return `"${id.replaceAll('"', '""')}"`;
 }
 
+// DuckDB returns integer columns as JS bigint, which JSON.stringify cannot
+// serialize. Coerce to Number so every federated-result consumer (CLI, MCP,
+// ingest, SL) gets a JSON-safe value. Integers beyond 2^53 lose precision.
+function toJsonSafeRows(rows: unknown[][]): unknown[][] {
+  return rows.map((row) => row.map((cell) => (typeof cell === 'bigint' ? Number(cell) : cell)));
+}
+
 /** @internal */
 export function buildAttachStatements(members: FederatedMember[], env: NodeJS.ProcessEnv): string[] {
   const attachments = members.map((member) => ({
@@ -46,7 +53,7 @@ export async function executeFederatedQuery(
         await connection.run(statement);
       }
       const reader = await connection.runAndReadAll(sql);
-      const rows = normalizeQueryRows(reader.getRows());
+      const rows = toJsonSafeRows(normalizeQueryRows(reader.getRows()));
       const headers = reader.columnNames();
       return {
         headers,
