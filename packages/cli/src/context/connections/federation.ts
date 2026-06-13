@@ -57,3 +57,31 @@ export function deriveFederatedConnection(
   }
   return { id: FEDERATED_CONNECTION_ID, driver: 'duckdb', members };
 }
+
+export interface FederatedConnectionListing {
+  id: typeof FEDERATED_CONNECTION_ID;
+  driver: 'duckdb';
+  members: string[];
+  hint: string;
+}
+
+/**
+ * Listing-facing view of the virtual federated connection for `ktx connection`
+ * and MCP `connection_list`. Derived from the same declared state as
+ * deriveFederatedConnection, so both surfaces describe one connection.
+ */
+export function federatedConnectionListing(
+  connections: Record<string, KtxProjectConnectionConfig>,
+  projectDir: string,
+): FederatedConnectionListing | null {
+  const descriptor = deriveFederatedConnection(connections, projectDir);
+  if (!descriptor) {
+    return null;
+  }
+  return {
+    id: FEDERATED_CONNECTION_ID,
+    driver: 'duckdb',
+    members: descriptor.members.map((member) => member.connectionId),
+    hint: 'Cross-database queries run here. Name tables connectionId.schema.table (or connectionId.table for sqlite).',
+  };
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveFederatedConnection,
+  federatedConnectionListing,
   FEDERATED_CONNECTION_ID,
 } from '../../../src/context/connections/federation.js';
 
@@ -50,5 +51,30 @@ describe('deriveFederatedConnection', () => {
       '/proj',
     );
     expect(result?.members).toHaveLength(2);
+  });
+});
+
+describe('federatedConnectionListing', () => {
+  it('returns null with fewer than 2 attach-compatible connections', () => {
+    expect(
+      federatedConnectionListing({ books_db: { driver: 'sqlite', path: './b.db' } }, '/tmp/p'),
+    ).toBeNull();
+  });
+
+  it('returns id, driver, member ids and a usage hint with 2+ members', () => {
+    const listing = federatedConnectionListing(
+      {
+        books_db: { driver: 'sqlite', path: './b.db' },
+        reviews_db: { driver: 'sqlite', path: './r.db' },
+        snow: { driver: 'snowflake', account: 'x' },
+      },
+      '/tmp/p',
+    );
+    expect(listing).not.toBeNull();
+    expect(listing!.id).toBe(FEDERATED_CONNECTION_ID);
+    expect(listing!.driver).toBe('duckdb');
+    expect(listing!.members).toEqual(['books_db', 'reviews_db']);
+    expect(listing!.hint).toContain('Cross-database');
+    expect(listing!.hint).toContain('connectionId.table');
   });
 });
