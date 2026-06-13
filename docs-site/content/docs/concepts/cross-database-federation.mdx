@@ -103,6 +103,30 @@ The `to:` value is the fully qualified federated table reference. The `on:`
 value is the join predicate expressed in terms of the tables' own column names.
 The `relationship:` value tells **ktx** how to aggregate safely across the join.
 
+## Querying the federated connection directly
+
+Beyond declared joins, the federated connection is addressable by its id,
+`_ktx_federated`, anywhere **ktx** runs read-only SQL. The same id works for the
+`ktx sql` command and for a data agent calling the `sql_execution` MCP tool, so
+both surfaces can run a cross-database query without a source file:
+
+```bash
+ktx sql -c _ktx_federated \
+  "SELECT b.title, avg(r.rating) AS avg_rating
+   FROM pg_books.public.books b
+   JOIN sqlite_reviews.reviews r ON b.id = r.book_id
+   GROUP BY b.title"
+```
+
+Table names follow the rules from
+[Table naming in federated queries](#table-naming-in-federated-queries):
+three-part `connectionId.schema.table` for postgres and mysql, two-part
+`connectionId.table` for sqlite. The `_ktx_federated` id is virtual — it is
+never written to `ktx.yaml` and only exists when two or more attach-compatible
+connections are declared. It surfaces in `ktx connection` and in the agent's
+connection list so the id is discoverable. Querying a single member database
+directly with its own connection id (`ktx sql -c pg_books ...`) is unchanged.
+
 ## Federated queries are read-only
 
 DuckDB attaches every member database with read-only access. Federated queries
