@@ -85,6 +85,39 @@ describe('federatedAttachTarget', () => {
     expect(target).toContain("password='pass word'");
   });
 
+  it('emits sslmode=require for a postgres member configured with discrete fields and ssl', () => {
+    const target = federatedAttachTarget(
+      member({
+        driver: 'postgres',
+        connection: { driver: 'postgres', host: 'h', database: 'db', username: 'u', ssl: true },
+      }),
+      {},
+    );
+    expect(target).toContain('sslmode=require');
+  });
+
+  it('passes through the postgres search_path as options', () => {
+    const target = federatedAttachTarget(
+      member({
+        driver: 'postgres',
+        connection: { driver: 'postgres', host: 'h', database: 'db', username: 'u', schema: 'analytics' },
+      }),
+      {},
+    );
+    expect(target).toContain('search_path=analytics');
+  });
+
+  it('emits ssl_mode=REQUIRED for a mysql member with ssl', () => {
+    const target = federatedAttachTarget(
+      member({
+        driver: 'mysql',
+        connection: { driver: 'mysql', host: 'h', database: 'db', username: 'u', ssl: true },
+      }),
+      {},
+    );
+    expect(target).toContain('ssl_mode=REQUIRED');
+  });
+
   it('throws for an unsupported driver', () => {
     expect(() => federatedAttachTarget(member({ driver: 'snowflake', connection: { driver: 'snowflake' } }), {})).toThrow(
       /cannot be attached/i,

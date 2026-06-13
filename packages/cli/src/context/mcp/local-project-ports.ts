@@ -65,6 +65,11 @@ async function executeValidatedReadOnlySql(
       },
       createConnector,
       runId: 'mcp-sql-execution',
+    }).catch((error: unknown) => {
+      if (isNativeProgrammingFault(error)) {
+        throw error;
+      }
+      throw new KtxQueryError(error instanceof Error ? error.message : String(error), { cause: error });
     });
     const rowCount = result.rowCount ?? result.rows.length;
     await onProgress?.({ progress: 1, message: `Fetched ${rowCount} rows` });

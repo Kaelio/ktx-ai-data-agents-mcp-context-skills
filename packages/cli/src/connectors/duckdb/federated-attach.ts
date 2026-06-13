@@ -26,6 +26,12 @@ function postgresAttachString(member: FederatedMember, env: NodeJS.ProcessEnv): 
   if (cfg.database) parts.push(`dbname=${kvKeyword(cfg.database)}`);
   if (cfg.user) parts.push(`user=${kvKeyword(cfg.user)}`);
   if (cfg.password) parts.push(`password=${kvKeyword(cfg.password)}`);
+  if (cfg.ssl) {
+    parts.push('sslmode=require');
+  }
+  if (cfg.options) {
+    parts.push(`options=${kvKeyword(cfg.options)}`);
+  }
   return parts.join(' ');
 }
 
@@ -43,6 +49,9 @@ function mysqlAttachString(member: FederatedMember, env: NodeJS.ProcessEnv): str
   ];
   if (cfg.password) {
     parts.push(`password=${kvKeyword(cfg.password)}`);
+  }
+  if (cfg.ssl) {
+    parts.push('ssl_mode=REQUIRED');
   }
   return parts.join(' ');
 }

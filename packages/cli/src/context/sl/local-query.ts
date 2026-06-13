@@ -119,7 +119,10 @@ export async function compileLocalSlQuery(
       ...response.plan,
       execution: {
         mode: 'executed',
-        driver: project.config.connections[connectionId]?.driver ?? 'unknown',
+        driver:
+          connectionId === FEDERATED_CONNECTION_ID
+            ? 'duckdb'
+            : (project.config.connections[connectionId]?.driver ?? 'unknown'),
         maxRows,
         rowCount: execution.rowCount,
       },

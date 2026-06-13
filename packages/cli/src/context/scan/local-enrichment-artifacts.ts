@@ -216,10 +216,10 @@ async function federatedSiblingTargets(
         const { content } = await project.fileStore.readFile(file);
         const shard = YAML.parse(content) as LiveDatabaseManifestShard | null;
         for (const entry of Object.values(shard?.tables ?? {})) {
-          // entry.table is buildTableRef's member-local form — `schema.table`
-          // (postgres/mysql) or `table` (sqlite), never connectionId-prefixed —
-          // so prefixing with the member id yields the fully-qualified `to:`
-          // form authored in cross-DB joins (connectionId.schema.table / connectionId.table).
+          // entry.table is buildTableRef's member-local ref (1-3 parts:
+          // table / schema.table / catalog.schema.table), never connectionId-
+          // prefixed — so prefixing with the member id yields the fully-qualified
+          // `to:` form authored in cross-DB joins.
           targets.add(`${sibling.connectionId}.${entry.table}`);
         }
       } catch {
