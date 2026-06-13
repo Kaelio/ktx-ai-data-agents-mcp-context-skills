@@ -25,8 +25,8 @@ export function attachTypeForDriver(driver: string): string {
 export interface FederatedMember {
   connectionId: string;
   driver: string;
-  /** Raw `url` from ktx.yaml; may carry an `env:`/`file:` reference, resolved at execution time. */
-  url: string | undefined;
+  projectDir: string;
+  connection: KtxProjectConnectionConfig;
 }
 
 export interface FederatedConnectionDescriptor {
@@ -42,17 +42,16 @@ export interface FederatedConnectionDescriptor {
  */
 export function deriveFederatedConnection(
   connections: Record<string, KtxProjectConnectionConfig>,
+  projectDir: string,
 ): FederatedConnectionDescriptor | null {
   const members: FederatedMember[] = Object.entries(connections)
     .filter(([, config]) => config.driver.toLowerCase() in ATTACH_TYPE_BY_DRIVER)
-    .map(([connectionId, config]) => {
-      const url = 'url' in config ? config.url : undefined;
-      return {
-        connectionId,
-        driver: config.driver.toLowerCase(),
-        url: typeof url === 'string' ? url : undefined,
-      };
-    });
+    .map(([connectionId, config]) => ({
+      connectionId,
+      driver: config.driver.toLowerCase(),
+      projectDir,
+      connection: config,
+    }));
   if (members.length < 2) {
     return null;
   }

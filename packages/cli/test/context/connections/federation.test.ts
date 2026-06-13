@@ -4,20 +4,21 @@ import {
   FEDERATED_CONNECTION_ID,
 } from '../../../src/context/connections/federation.js';
 
-const conns = (entries: Record<string, { driver: string }>) => entries as never;
+const conns = (entries: Record<string, { driver: string; [k: string]: unknown }>) => entries as never;
 
 describe('deriveFederatedConnection', () => {
   it('returns null with zero compatible members', () => {
-    expect(deriveFederatedConnection(conns({ snow: { driver: 'snowflake' } }))).toBeNull();
+    expect(deriveFederatedConnection(conns({ snow: { driver: 'snowflake' } }), '/proj')).toBeNull();
   });
 
   it('returns null with exactly one compatible member', () => {
-    expect(deriveFederatedConnection(conns({ pg: { driver: 'postgres' } }))).toBeNull();
+    expect(deriveFederatedConnection(conns({ pg: { driver: 'postgres' } }), '/proj')).toBeNull();
   });
 
   it('derives a descriptor with two compatible members', () => {
     const result = deriveFederatedConnection(
       conns({ pg: { driver: 'postgres' }, lite: { driver: 'sqlite' } }),
+      '/proj',
     );
     expect(result).not.toBeNull();
     expect(result?.id).toBe(FEDERATED_CONNECTION_ID);
@@ -25,9 +26,20 @@ describe('deriveFederatedConnection', () => {
     expect(result?.members.map((m) => m.connectionId).sort()).toEqual(['lite', 'pg']);
   });
 
+  it('carries each member connection config and projectDir', () => {
+    const result = deriveFederatedConnection(
+      conns({ pg: { driver: 'postgres', host: 'h' }, lite: { driver: 'sqlite', path: './a.db' } }),
+      '/proj',
+    );
+    const pg = result?.members.find((m) => m.connectionId === 'pg');
+    expect(pg?.connection).toEqual({ driver: 'postgres', host: 'h' });
+    expect(pg?.projectDir).toBe('/proj');
+  });
+
   it('excludes incompatible members from the group', () => {
     const result = deriveFederatedConnection(
       conns({ pg: { driver: 'postgres' }, my: { driver: 'mysql' }, snow: { driver: 'snowflake' } }),
+      '/proj',
     );
     expect(result?.members.map((m) => m.connectionId).sort()).toEqual(['my', 'pg']);
   });
@@ -35,6 +47,7 @@ describe('deriveFederatedConnection', () => {
   it('is case-insensitive on driver names', () => {
     const result = deriveFederatedConnection(
       conns({ pg: { driver: 'POSTGRES' }, lite: { driver: 'SQLite' } }),
+      '/proj',
     );
     expect(result?.members).toHaveLength(2);
   });
