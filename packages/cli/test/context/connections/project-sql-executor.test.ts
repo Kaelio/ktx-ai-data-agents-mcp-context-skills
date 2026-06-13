@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { executeFederatedQuery } from '../../../src/connectors/duckdb/federated-executor.js';
 import { executeProjectReadOnlySql } from '../../../src/context/connections/project-sql-executor.js';
 import type { KtxLocalProject } from '../../../src/context/project/project.js';
+import type { KtxScanConnector } from '../../../src/context/scan/types.js';
 
 function fakeProject(connections: Record<string, { driver: string }>): KtxLocalProject {
   return {
@@ -71,5 +72,45 @@ describe('executeProjectReadOnlySql — federated routing', () => {
     expect(result.rows).toEqual([['v']]);
     expect(connector.executeReadOnly).toHaveBeenCalledOnce();
     expect(connector.cleanup).toHaveBeenCalledOnce();
+  });
+});
+
+function connectorReturning(result: {
+  headers: string[];
+  headerTypes?: string[];
+  rows: unknown[][];
+  totalRows: number;
+  rowCount: number | null;
+}): KtxScanConnector {
+  return {
+    driver: 'sqlite',
+    capabilities: { readOnlySql: true },
+    async executeReadOnly() {
+      return result;
+    },
+  } as unknown as KtxScanConnector;
+}
+
+describe('executeProjectReadOnlySql headerTypes', () => {
+  it('forwards connector headerTypes on the non-federated branch', async () => {
+    const project = {
+      projectDir: '/tmp/p',
+      config: { connections: { books_db: { driver: 'sqlite', path: './b.db' } } },
+    } as never;
+
+    const result = await executeProjectReadOnlySql({
+      project,
+      input: { connectionId: 'books_db', connection: undefined, sql: 'SELECT 1', maxRows: 10 },
+      createConnector: () =>
+        connectorReturning({
+          headers: ['id'],
+          headerTypes: ['INTEGER'],
+          rows: [[1]],
+          totalRows: 1,
+          rowCount: 1,
+        }),
+    });
+
+    expect(result.headerTypes).toEqual(['INTEGER']);
   });
 });

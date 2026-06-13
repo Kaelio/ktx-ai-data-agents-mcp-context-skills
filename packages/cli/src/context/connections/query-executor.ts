@@ -10,6 +10,7 @@ export interface KtxSqlQueryExecutionInput {
 
 export interface KtxSqlQueryExecutionResult {
   headers: string[];
+  headerTypes?: string[];
   rows: unknown[][];
   totalRows: number;
   command: string;

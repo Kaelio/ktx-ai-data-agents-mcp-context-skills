@@ -46,6 +46,7 @@ export async function executeProjectReadOnlySql(
     );
     return {
       headers: result.headers,
+      ...(result.headerTypes ? { headerTypes: result.headerTypes } : {}),
       rows: result.rows,
       totalRows: result.totalRows,
       command: 'SELECT',
