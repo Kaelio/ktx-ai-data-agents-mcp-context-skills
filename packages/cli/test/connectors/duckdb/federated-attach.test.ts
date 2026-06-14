@@ -78,11 +78,11 @@ describe('federatedAttachTarget', () => {
     const target = federatedAttachTarget(
       member({
         driver: 'mysql',
-        connection: { driver: 'mysql', host: 'h', database: 'app', username: 'u', password: 'pass word' },
+        connection: { driver: 'mysql', host: 'h', database: 'app', username: 'u', password: 'pass word' }, // pragma: allowlist secret
       }),
       {},
     );
-    expect(target).toContain("password='pass word'");
+    expect(target).toContain("password='pass word'"); // pragma: allowlist secret
   });
 
   it('emits sslmode=require for a postgres member configured with discrete fields and ssl', () => {

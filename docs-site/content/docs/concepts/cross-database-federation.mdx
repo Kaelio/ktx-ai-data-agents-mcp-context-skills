@@ -43,7 +43,7 @@ A minimal `ktx.yaml` that triggers federation:
 connections:
   - id: pg_books
     driver: postgres
-    url: "postgres://user:pass@localhost:5432/books"
+    url: "postgres://user:pass@localhost:5432/books" # pragma: allowlist secret
   - id: sqlite_reviews
     driver: sqlite
     path: ./data/reviews.db
