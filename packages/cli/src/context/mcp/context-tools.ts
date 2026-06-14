@@ -56,7 +56,7 @@ const toolAnnotations = {
 
 const toolDescriptions = {
   connection_list:
-    'List configured read-only data connections available to this ktx project. Use this before connection-scoped tools when the project may have multiple warehouses.',
+    'List configured read-only data connections available to this ktx project. Use this before connection-scoped tools when the project may have multiple warehouses. A "_ktx_federated" entry (when present) queries all its member databases together; use its id for cross-database joins.',
   discover_data:
     'Search across ktx wiki pages, semantic-layer sources, measures, dimensions, raw tables, and columns. Example: discover_data({ query: "monthly orders by customer", connectionId: "warehouse", kinds: ["sl_source", "table"] }).',
   wiki_search:
@@ -227,6 +227,8 @@ const connectionListOutputSchema = z.object({
       id: z.string(),
       name: z.string(),
       connectionType: z.string(),
+      members: z.array(z.string()).optional(),
+      hint: z.string().optional(),
     }),
   ),
 });

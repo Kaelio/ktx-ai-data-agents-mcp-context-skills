@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { deriveFederatedConnection } from './context/connections/federation.js';
 import { getDriverRegistration } from './context/connections/drivers.js';
 import { createLocalKtxLlmRuntimeFromConfig } from './context/llm/local-config.js';
 import type { KtxLlmRuntimePort } from './context/llm/runtime-port.js';
@@ -1171,6 +1172,26 @@ async function writeConnectionConfig(input: {
   if (queryHistory?.enabled === true) {
     await ensureHistoricSqlIngestDefaults(input.projectDir);
   }
+
+  if (input.io) {
+    const federationNotice = federationNoticeFor(config.connections, input.projectDir);
+    if (federationNotice) {
+      writeSetupSection(input.io, 'Federated connection available', [federationNotice]);
+    }
+  }
+}
+
+/** @internal */
+export function federationNoticeFor(
+  connections: Record<string, KtxProjectConnectionConfig>,
+  projectDir: string,
+): string | null {
+  const descriptor = deriveFederatedConnection(connections, projectDir);
+  if (!descriptor) {
+    return null;
+  }
+  const names = descriptor.members.map((m) => m.connectionId).join(', ');
+  return `Detected ${descriptor.members.length} attach-compatible databases (${names}). They're queryable together as one federated connection. Declare cross-database joins in a source's \`joins:\` list.`;
 }
 
 async function disableConnectionQueryHistory(projectDir: string, connectionId: string): Promise<void> {

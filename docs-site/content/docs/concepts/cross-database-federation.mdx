@@ -1,0 +1,143 @@
+---
+title: Cross-database federation
+description: How ktx federates postgres, mysql, and sqlite connections so a single semantic query can join across them without copying data.
+---
+
+Cross-database federation lets a single semantic-layer query join tables that
+live in different databases. **ktx** achieves this by embedding DuckDB and
+using its `ATTACH` mechanism to connect each member database read-only. The
+join executes inside DuckDB at query time — live data, no ETL, no copy.
+
+Federation activates automatically when a `ktx.yaml` file declares two or more
+attach-compatible connections. There is nothing to configure and no federation
+block to add. With zero or one compatible connection the behavior is unchanged.
+
+## Which connections participate
+
+The v1 federation engine supports three drivers:
+
+| Driver | Participates in federation |
+|--------|---------------------------|
+| `postgres` | Yes |
+| `mysql` | Yes |
+| `sqlite` | Yes |
+| `snowflake` | No — standalone connection |
+| `bigquery` | No — standalone connection |
+| `clickhouse` | No — standalone connection |
+| `sqlserver` | No — standalone connection |
+
+Non-participating connections continue to work exactly as they did. They are
+queried independently; they do not appear as federation members.
+
+## How it activates
+
+**ktx** inspects the connections in `ktx.yaml` at startup. When it finds two or
+more connections whose driver is `postgres`, `mysql`, or `sqlite`, it
+instantiates the DuckDB federation engine and attaches each one read-only.
+There is no `federation:` key, no opt-in flag, and no connection-level setting
+to enable. The engine is derived entirely from what is already declared.
+
+A minimal `ktx.yaml` that triggers federation:
+
+```yaml
+connections:
+  - id: pg_books
+    driver: postgres
+    url: "postgres://user:pass@localhost:5432/books" # pragma: allowlist secret
+  - id: sqlite_reviews
+    driver: sqlite
+    path: ./data/reviews.db
+```
+
+Two attach-compatible connections are present, so federation is active.
+
+## Table naming in federated queries
+
+Inside a federated query, postgres and mysql tables use a three-part name:
+`connectionId.schema.table`. SQLite tables, which have no schema layer in
+DuckDB, use the two-part form `connectionId.table`. In both cases the
+connection's `id` field in `ktx.yaml` becomes the catalog name inside DuckDB.
+
+For the example above:
+
+- `pg_books.public.books` — the `books` table in the `public` schema of the
+  postgres connection
+- `sqlite_reviews.reviews` — the `reviews` table in the sqlite connection
+
+These fully qualified names are what you write in a source's `table:` field
+and in any cross-database join's `to:` field.
+
+## Source names in the federated view
+
+When you list or search semantic-layer sources under the federated connection,
+each source's `name` is prefixed with its member connection id — for example
+`pg_books.books` and `sqlite_reviews.reviews`. The prefix keeps names unique
+when two members own a table with the same name: a `users` table in each of
+`pg_app` and `sqlite_app` surfaces as `pg_app.users` and `sqlite_app.users`
+rather than colliding on a bare `users`.
+
+Each source file's physical `table:` field is unchanged — it still uses the
+fully qualified form from the previous section. The member prefix applies only
+to the source `name` as seen through the federated connection, not to the
+per-member view of the same source.
+
+## Declaring a cross-database join
+
+In v1, cross-database joins are declared explicitly in a source's `joins:`
+block. **ktx** validates the join at ingest time, resolves both sides, and
+executes it through the federation engine at query time.
+
+The example below shows a `books` source (owned by the postgres connection)
+declaring a one-to-many join to the `reviews` table in the sqlite connection:
+
+```yaml
+name: books
+table: pg_books.public.books
+joins:
+  - to: sqlite_reviews.reviews
+    on: "id = book_id"
+    relationship: one_to_many
+```
+
+The `to:` value is the fully qualified federated table reference. The `on:`
+value is the join predicate expressed in terms of the tables' own column names.
+The `relationship:` value tells **ktx** how to aggregate safely across the join.
+
+## Querying the federated connection directly
+
+Beyond declared joins, the federated connection is addressable by its id,
+`_ktx_federated`, anywhere **ktx** runs read-only SQL. The same id works for the
+`ktx sql` command and for a data agent calling the `sql_execution` MCP tool, so
+both surfaces can run a cross-database query without a source file:
+
+```bash
+ktx sql -c _ktx_federated \
+  "SELECT b.title, avg(r.rating) AS avg_rating
+   FROM pg_books.public.books b
+   JOIN sqlite_reviews.reviews r ON b.id = r.book_id
+   GROUP BY b.title"
+```
+
+Table names follow the rules from
+[Table naming in federated queries](#table-naming-in-federated-queries):
+three-part `connectionId.schema.table` for postgres and mysql, two-part
+`connectionId.table` for sqlite. The `_ktx_federated` id is virtual — it is
+never written to `ktx.yaml` and only exists when two or more attach-compatible
+connections are declared. It surfaces in `ktx connection` and in the agent's
+connection list so the id is discoverable. Querying a single member database
+directly with its own connection id (`ktx sql -c pg_books ...`) is unchanged.
+
+## Federated queries are read-only
+
+DuckDB attaches every member database with read-only access. Federated queries
+are `SELECT`/`WITH` only. No writes, no DDL, and no mutations reach any member
+database through the federation engine.
+
+## Current limitations
+
+- **Declared joins only.** Automatic discovery of cross-database relationships
+  is not available in v1. Intra-database relationship discovery for each member
+  connection is unchanged.
+- **postgres, mysql, and sqlite only.** Other drivers (snowflake, bigquery,
+  clickhouse, sqlserver) do not participate in federation in this version. They
+  remain usable as standalone connections.

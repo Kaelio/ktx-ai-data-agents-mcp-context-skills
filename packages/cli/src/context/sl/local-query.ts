@@ -2,6 +2,7 @@ import type { KtxSqlQueryExecutorPort } from '../../context/connections/query-ex
 import type { KtxSemanticLayerComputePort } from '../../context/daemon/semantic-layer-compute.js';
 import type { KtxMcpProgressCallback } from '../mcp/types.js';
 import type { KtxLocalProject } from '../../context/project/project.js';
+import { FEDERATED_CONNECTION_ID } from '../connections/federation.js';
 import { sqlAnalysisDialectForDriver } from '../sql-analysis/dialect.js';
 import { loadLocalSlSourceRecords } from './local-sl.js';
 import { toResolvedWire } from './semantic-layer.service.js';
@@ -27,6 +28,9 @@ export interface CompileLocalSlQueryResult extends SemanticLayerQueryExecutionRe
 }
 
 function resolveLocalConnectionId(project: KtxLocalProject, requested: string | undefined): string {
+  if (requested === FEDERATED_CONNECTION_ID) {
+    return requested;
+  }
   if (requested) {
     return assertSafeConnectionId(requested);
   }
@@ -41,7 +45,7 @@ async function loadComputableSources(
   project: KtxLocalProject,
   connectionId: string,
 ): Promise<ReturnType<typeof toResolvedWire>[]> {
-  return (await loadLocalSlSourceRecords(project, { connectionId: assertSafeConnectionId(connectionId) }))
+  return (await loadLocalSlSourceRecords(project, { connectionId }))
     .filter((record) => record.source.table || record.source.sql)
     .map((record) => toResolvedWire(record.source));
 }
@@ -58,7 +62,9 @@ export async function compileLocalSlQuery(
 ): Promise<CompileLocalSlQueryResult> {
   await options.onProgress?.({ progress: 0, message: 'Compiling query' });
   const connectionId = resolveLocalConnectionId(project, options.connectionId);
-  const dialect = sqlAnalysisDialectForDriver(project.config.connections[connectionId]?.driver);
+  const driver =
+    connectionId === FEDERATED_CONNECTION_ID ? 'duckdb' : project.config.connections[connectionId]?.driver;
+  const dialect = sqlAnalysisDialectForDriver(driver);
   const sources = await loadComputableSources(project, connectionId);
 
   await options.onProgress?.({ progress: 0.3, message: 'Generating SQL' });
@@ -113,7 +119,7 @@ export async function compileLocalSlQuery(
       ...response.plan,
       execution: {
         mode: 'executed',
-        driver: project.config.connections[connectionId]?.driver ?? 'unknown',
+        driver: driver ?? 'unknown',
         maxRows,
         rowCount: execution.rowCount,
       },
